@@ -16,6 +16,7 @@ Environment variables:
 - `GITHUB_WEBHOOK_SECRET` - secret used to verify `X-Hub-Signature-256` on `POST /webhooks/github`; set the same value in the GitHub webhook settings. Without it the endpoint returns 503
 - `ALLOW_UNSIGNED_WEBHOOKS` - `true` accepts unsigned webhooks when no secret is set (local development only; default `false`)
 - `MAX_BODY_BYTES` - maximum webhook request body size (default `1048576`)
+- `LOG_LEVEL` - `debug`, `info`, `warn` or `error` (default `info`); logs are JSON on stdout
 - `DEFAULT_NOTIFY_EMAIL` - comma-separated email recipients for critical alerts
 - `SMTP_HOST`
 - `SMTP_PORT`

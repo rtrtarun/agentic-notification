@@ -8,7 +8,7 @@ See [docs/orchestration-platform.md](docs/orchestration-platform.md) for the ful
 
 ## Current milestone
 
-**Milestone 12** — Deduplication, grouping and threading. See [docs/milestone-12.md](docs/milestone-12.md).
+**Milestone 13** — Security and production hardening. See [docs/milestone-13.md](docs/milestone-13.md).
 
 ## Included
 

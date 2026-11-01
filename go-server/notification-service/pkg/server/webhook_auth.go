@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 
@@ -42,7 +41,7 @@ func (s *Server) webhookAuthMiddleware(next http.Handler) http.Handler {
 		}
 
 		if secret != "" && !validSignature(secret, body, r.Header.Get(signatureHeader)) {
-			log.Printf("rejected webhook with invalid signature remote=%s", r.RemoteAddr)
+			s.logFor(r.Context()).Warn("rejected webhook with invalid signature", "remote", r.RemoteAddr)
 			util.WriteJSON(w, http.StatusUnauthorized, util.ErrorResponse{Error: "invalid signature"})
 			return
 		}

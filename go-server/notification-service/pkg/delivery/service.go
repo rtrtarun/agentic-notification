@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/example/notification-service/pkg/notification"
@@ -14,11 +15,11 @@ func NewService(provider Provider) *Service {
 	return &Service{provider: provider}
 }
 
-func (s *Service) Send(req notification.NotificationRequest) error {
+func (s *Service) Send(ctx context.Context, req notification.NotificationRequest) error {
 	if s.provider == nil {
 		return fmt.Errorf("no delivery provider configured")
 	}
-	return s.provider.Send(req)
+	return s.provider.Send(ctx, req)
 }
 
 func (s *Service) ProviderName() string {

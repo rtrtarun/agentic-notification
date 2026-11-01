@@ -1,15 +1,15 @@
 package event
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 )
 
 type SQLExecutor interface {
-	Exec(query string, args ...any) (sql.Result, error)
-	Query(query string, args ...any) (*sql.Rows, error)
-	QueryRow(query string, args ...any) *sql.Row
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 }
 
 type PostgresRepository struct {
@@ -20,7 +20,7 @@ func NewPostgresRepository(queryer SQLExecutor) *PostgresRepository {
 	return &PostgresRepository{queryer: queryer}
 }
 
-func (r *PostgresRepository) Save(evt Event) error {
+func (r *PostgresRepository) Save(ctx context.Context, evt Event) error {
 	payload, err := json.Marshal(evt.Payload)
 	if err != nil {
 		return fmt.Errorf("marshal payload: %w", err)
@@ -44,7 +44,8 @@ func (r *PostgresRepository) Save(evt Event) error {
 		attentionClass = AttentionStandard
 	}
 
-	_, err = r.queryer.Exec(
+	_, err = r.queryer.ExecContext(
+		ctx,
 		`INSERT INTO events (
 			id, source, event_type, repository,
 			attention_class, decision_status, decision_reason,
@@ -69,8 +70,8 @@ func (r *PostgresRepository) Save(evt Event) error {
 	return err
 }
 
-func (r *PostgresRepository) List() ([]Event, error) {
-	rows, err := r.queryer.Query(`
+func (r *PostgresRepository) List(ctx context.Context) ([]Event, error) {
+	rows, err := r.queryer.QueryContext(ctx, `
 		SELECT id, source, event_type, repository,
 		       attention_class, decision_status, decision_reason,
 		       decision_model_version, decision_confidence, decision_matched_rule,
@@ -117,6 +118,9 @@ func (r *PostgresRepository) List() ([]Event, error) {
 		}
 
 		results = append(results, evt)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate events: %w", err)
 	}
 	return results, nil
 }

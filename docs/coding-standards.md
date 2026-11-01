@@ -16,7 +16,7 @@ These standards apply to all code in this repository. Items marked **[CI]** are 
 - **[CI]** `gofmt` clean and `go vet ./...` passes. Tests run with `-race`.
 - Exported identifiers have doc comments starting with the identifier name.
 - Return errors; never `panic` outside `main`. Wrap with context: `fmt.Errorf("persist event: %w", err)`. Never discard an error silently.
-- Accept `context.Context` as the first parameter of anything that does I/O (DB, HTTP, delivery) and honor cancellation. **[Gap]** I/O methods currently take no context.
+- Accept `context.Context` as the first parameter of anything that does I/O (DB, HTTP, delivery) and honor cancellation. Done for the repository, delivery, pipeline, notification and learning packages (the in-memory feedback recorder takes none yet).
 - Every outbound HTTP call uses a client with a timeout and a context. No `http.DefaultClient`.
 - No magic values: statuses, classes, header names and defaults are named constants.
 - Prefer small interfaces (1–3 methods), accept interfaces, return structs.
@@ -25,7 +25,7 @@ These standards apply to all code in this repository. Items marked **[CI]** are 
 
 ## 3. Logging and observability
 
-- Structured logging only (`log/slog`, JSON in production) with stable keys: `event_id`, `thread_id`, `attention_class`, `decision_status`, `request_id`. **[Gap]** the server uses `log.Printf`.
+- Structured logging only (`log/slog`, JSON in production) with stable keys: `event_id`, `thread_id`, `attention_class`, `decision_status`, `request_id`. Logger is built in `main` and injected.
 - Never log payload bodies, credentials, or recipient addresses at info level.
 - Every service exposes `/health` and `/metrics`.
 - Every decision is logged at write time with its reason; decisions are never recomputed later.

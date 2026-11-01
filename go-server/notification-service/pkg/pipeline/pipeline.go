@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/example/notification-service/pkg/dedup"
@@ -43,13 +44,13 @@ func (p *Pipeline) WithDeduper(d dedup.Deduper) *Pipeline {
 	return p
 }
 
-func (p *Pipeline) Handle(evt event.Event) (event.Event, error) {
+func (p *Pipeline) Handle(ctx context.Context, evt event.Event) (event.Event, error) {
 	evt = p.applyPolicy(evt)
 	duplicate := p.applyDedup(&evt)
 
 	switch evt.AttentionClass {
 	case event.AttentionCritical:
-		if err := p.deliverCritical(evt); err != nil {
+		if err := p.deliverCritical(ctx, evt); err != nil {
 			return evt, fmt.Errorf("deliver critical event: %w", err)
 		}
 		evt.DecisionState.Status = event.DecisionSent
@@ -62,7 +63,7 @@ func (p *Pipeline) Handle(evt event.Event) (event.Event, error) {
 		}
 	}
 
-	if err := p.eventRepo.Save(evt); err != nil {
+	if err := p.eventRepo.Save(ctx, evt); err != nil {
 		return evt, fmt.Errorf("persist event: %w", err)
 	}
 	return evt, nil
@@ -102,14 +103,14 @@ func (p *Pipeline) applyPolicy(evt event.Event) event.Event {
 	return evt
 }
 
-func (p *Pipeline) deliverCritical(evt event.Event) error {
+func (p *Pipeline) deliverCritical(ctx context.Context, evt event.Event) error {
 	title := fmt.Sprintf("[CRITICAL] %s/%s", evt.Source, evt.EventType)
 	message := fmt.Sprintf(
 		"Critical alert\nSource: %s\nEvent: %s\nRepository: %s\nReason: %s",
 		evt.Source, evt.EventType, evt.Repository, evt.DecisionState.Reason,
 	)
 
-	return p.deliverySvc.Send(notification.NotificationRequest{
+	return p.deliverySvc.Send(ctx, notification.NotificationRequest{
 		Agent: notification.AgentInfo{
 			Name:  "attention-orchestration",
 			Group: evt.Source,

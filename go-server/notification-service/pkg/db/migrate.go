@@ -1,26 +1,32 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 
 	_ "github.com/lib/pq"
 )
 
-func Connect(databaseURL string) (*sql.DB, error) {
+func Connect(ctx context.Context, databaseURL string) (*sql.DB, error) {
 	db, err := sql.Open("postgres", databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("open database: %w", err)
 	}
-	if err := db.Ping(); err != nil {
+	if err := db.PingContext(ctx); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 	return db, nil
 }
 
+// Execer runs a statement; *sql.DB satisfies it.
+type Execer interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 // Migrate creates the schema. Every statement is idempotent.
-func Migrate(db *sql.DB) error {
+func Migrate(ctx context.Context, db Execer) error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS events (
 			id                     TEXT PRIMARY KEY,
@@ -42,7 +48,7 @@ func Migrate(db *sql.DB) error {
 		`CREATE INDEX IF NOT EXISTS events_thread_id_idx ON events (thread_id)`,
 	}
 	for _, stmt := range statements {
-		if _, err := db.Exec(stmt); err != nil {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("migrate events table: %w", err)
 		}
 	}

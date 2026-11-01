@@ -1,6 +1,6 @@
 # Milestone 13: Security and Production Hardening
 
-**Status: in progress — step 1 (webhook signature) done; steps 2–5 pending.**
+**Status: complete — all five steps implemented and tested.**
 
 ## Goals
 
@@ -26,10 +26,10 @@ Delivered in this order, one commit per step, each runnable and tested.
 | # | Step | Files |
 |---|---|---|
 | 1 ✅ | Webhook HMAC verification + body limit (1 MiB) | `pkg/server/webhook_auth.go`, `pkg/config/config.go`, `pkg/server/server.go` |
-| 2 | Generic client errors; request-id middleware | `pkg/server/server.go`, `pkg/util/util.go` |
-| 3 | `log/slog` everywhere | `cmd/notification-service/main.go`, `pkg/server/server.go` |
-| 4 | Context propagation | `pkg/event`, `pkg/delivery`, `pkg/pipeline`, `pkg/notification/impl`, `pkg/learning` |
-| 5 | Tests for `config`, `db` (migration SQL via fake executor), `notification/impl` | `*_test.go` |
+| 2 ✅ | Generic client errors; request-id middleware | `pkg/server/server.go`, `pkg/util/util.go` |
+| 3 ✅ | `log/slog` everywhere | `cmd/notification-service/main.go`, `pkg/server/server.go` |
+| 4 ✅ | Context propagation | `pkg/event`, `pkg/delivery`, `pkg/pipeline`, `pkg/notification/impl`, `pkg/learning` |
+| 5 ✅ | Tests for `config`, `db` (migration SQL via fake executor), `notification/impl` | `*_test.go` |
 
 ## Database Changes
 
@@ -59,6 +59,7 @@ pkg/db/migrate_test.go
 - **Interface churn from adding `ctx`:** touches many signatures. Mitigation: dedicated step, compiler-driven, tests must pass before commit.
 - **Body restore bug** (handler reads empty body): covered by a middleware test that asserts the handler sees the original bytes.
 - **Implemented (step 1):** `pkg/server/webhook_auth.go`; `GITHUB_WEBHOOK_SECRET`, `ALLOW_UNSIGNED_WEBHOOKS`, `MAX_BODY_BYTES` in `pkg/config`; 10 tests in `webhook_auth_test.go`. `docker-compose.yml` sets a local dev secret.
+- **Implemented (steps 2-5):** `requestid.go` (request ID middleware, `logFor`), generic 500s with `notification.ErrInvalidRequest` mapped to 400, `log/slog` JSON logging built in `main` (`LOG_LEVEL`), `context.Context` on `event.Repository`, `delivery.Provider/Service`, `pipeline.Handle`, `notification.NotificationService` and `learning.Summarize`, `db.Migrate/Connect`. New `pkg/mail` provides cancellable SMTP (stdlib `smtp.SendMail` cannot be cancelled). `Server.Run(ctx)` now shuts down gracefully on SIGINT/SIGTERM and sets `ReadHeaderTimeout`. Tests added for `config`, `db`, `notification/impl`, `mail`, request IDs, error mapping, shutdown and cancellation.
 - **Replay attacks:** signatures don't prevent replay of a captured valid delivery. Mitigation: track `X-GitHub-Delivery` IDs in the deduper; noted as follow-up, not in this milestone.
 
 ## Tests
@@ -73,13 +74,13 @@ pkg/db/migrate_test.go
 
 ## Acceptance Criteria
 
-- [ ] Unsigned or wrongly signed webhooks never reach the pipeline.
-- [ ] Verification uses constant-time comparison on the raw body.
-- [ ] No `log.Printf` remains; logs are JSON with stable keys.
-- [ ] All I/O methods take `context.Context`; cancellation is tested.
-- [ ] Client errors never leak internal error text.
-- [ ] `config`, `db`, `notification/impl` have tests.
-- [ ] `gofmt`, `go vet`, `go test -race` pass; CHANGELOG, README and standards doc updated (remove the **[Gap]** markers as each is closed).
+- [x] Unsigned or wrongly signed webhooks never reach the pipeline.
+- [x] Verification uses constant-time comparison on the raw body.
+- [x] No `log.Printf` remains; logs are JSON with stable keys.
+- [x] All I/O methods take `context.Context`; cancellation is tested.
+- [x] Client errors never leak internal error text.
+- [x] `config`, `db`, `notification/impl` have tests.
+- [x] `gofmt`, `go vet`, `go test -race` pass; CHANGELOG, README and standards doc updated (remove the **[Gap]** markers as each is closed).
 
 ## Out of scope
 

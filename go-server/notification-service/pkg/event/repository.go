@@ -1,10 +1,13 @@
 package event
 
-import "sync"
+import (
+	"context"
+	"sync"
+)
 
 type Repository interface {
-	Save(event Event) error
-	List() ([]Event, error)
+	Save(ctx context.Context, event Event) error
+	List(ctx context.Context) ([]Event, error)
 }
 
 type InMemoryRepository struct {
@@ -16,14 +19,20 @@ func NewInMemoryRepository() *InMemoryRepository {
 	return &InMemoryRepository{}
 }
 
-func (r *InMemoryRepository) Save(evt Event) error {
+func (r *InMemoryRepository) Save(ctx context.Context, evt Event) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.events = append(r.events, evt)
 	return nil
 }
 
-func (r *InMemoryRepository) List() ([]Event, error) {
+func (r *InMemoryRepository) List(ctx context.Context) ([]Event, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	out := make([]Event, len(r.events))

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strconv"
 	"strings"
@@ -25,6 +26,7 @@ type Config struct {
 	GitHubWebhookSecret   string
 	AllowUnsignedWebhooks bool
 	MaxBodyBytes          int64
+	LogLevel              slog.Level
 }
 
 func LoadConfig() (*Config, error) {
@@ -70,6 +72,13 @@ func LoadConfig() (*Config, error) {
 		maxBody = n
 	}
 
+	logLevel := slog.LevelInfo
+	if v := os.Getenv("LOG_LEVEL"); v != "" {
+		if err := logLevel.UnmarshalText([]byte(v)); err != nil {
+			return nil, fmt.Errorf("invalid LOG_LEVEL: %q", v)
+		}
+	}
+
 	allowUnsigned := false
 	if v := os.Getenv("ALLOW_UNSIGNED_WEBHOOKS"); v != "" {
 		b, err := strconv.ParseBool(v)
@@ -96,6 +105,7 @@ func LoadConfig() (*Config, error) {
 		GitHubWebhookSecret:   os.Getenv("GITHUB_WEBHOOK_SECRET"),
 		AllowUnsignedWebhooks: allowUnsigned,
 		MaxBodyBytes:          maxBody,
+		LogLevel:              logLevel,
 	}, nil
 }
 

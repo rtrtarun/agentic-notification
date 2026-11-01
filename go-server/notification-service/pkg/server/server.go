@@ -1,9 +1,11 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync/atomic"
 	"time"
@@ -22,8 +24,18 @@ import (
 	"github.com/example/notification-service/pkg/util"
 )
 
+const (
+	readHeaderTimeout = 10 * time.Second
+	shutdownTimeout   = 10 * time.Second
+	githubEventHeader = "X-GitHub-Event"
+	errInternal       = "internal error"
+	errInvalidPayload = "invalid request payload"
+	errMethod         = "method not allowed"
+)
+
 type Server struct {
 	cfg                *config.Config
+	logger             *slog.Logger
 	service            notification.NotificationService
 	deliveryService    *delivery.Service
 	eventRepo          event.Repository
@@ -48,18 +60,23 @@ func (r *statusRecorder) WriteHeader(code int) {
 	r.ResponseWriter.WriteHeader(code)
 }
 
-func NewServer(cfg *config.Config) (*Server, error) {
+// NewServer wires the service. ctx bounds start-up work such as the database connection.
+func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*Server, error) {
+	if logger == nil {
+		logger = slog.Default()
+	}
+
 	var provider delivery.Provider = &delivery.StubProvider{}
 	if cfg != nil && cfg.SMTPHost != "" && cfg.SMTPSender != "" {
 		provider = delivery.NewSMTPProvider(cfg)
 	}
 
-	eventRepo, err := initEventRepository(cfg)
+	eventRepo, err := initEventRepository(ctx, cfg, logger)
 	if err != nil {
 		return nil, fmt.Errorf("init event repository: %w", err)
 	}
 
-	rules, err := loadPolicyRules(cfg)
+	rules, err := loadPolicyRules(cfg, logger)
 	if err != nil {
 		return nil, fmt.Errorf("load policy rules: %w", err)
 	}
@@ -69,6 +86,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 
 	s := &Server{
 		cfg:              cfg,
+		logger:           logger,
 		service:          impl.NewNotificationService(cfg),
 		deliveryService:  deliverySvc,
 		eventRepo:        eventRepo,
@@ -88,71 +106,96 @@ func NewServer(cfg *config.Config) (*Server, error) {
 	return s, nil
 }
 
-func initEventRepository(cfg *config.Config) (event.Repository, error) {
+func initEventRepository(ctx context.Context, cfg *config.Config, logger *slog.Logger) (event.Repository, error) {
 	if cfg == nil || cfg.DatabaseURL == "" {
 		return event.NewInMemoryRepository(), nil
 	}
 
-	sqlDB, err := db.Connect(cfg.DatabaseURL)
+	sqlDB, err := db.Connect(ctx, cfg.DatabaseURL)
 	if err != nil {
 		return nil, err
 	}
-	if err := db.Migrate(sqlDB); err != nil {
+	if err := db.Migrate(ctx, sqlDB); err != nil {
 		sqlDB.Close()
 		return nil, err
 	}
-	log.Printf("connected to PostgreSQL and ran migrations")
+	logger.Info("connected to PostgreSQL and ran migrations")
 	return event.NewPostgresRepository(sqlDB), nil
 }
 
-func loadPolicyRules(cfg *config.Config) ([]policy.Rule, error) {
+func loadPolicyRules(cfg *config.Config, logger *slog.Logger) ([]policy.Rule, error) {
 	if cfg != nil && cfg.RulesPath != "" {
 		rules, err := policy.LoadRulesFromFile(cfg.RulesPath)
 		if err != nil {
 			return nil, err
 		}
-		log.Printf("loaded %d policy rules from %s", len(rules), cfg.RulesPath)
+		logger.Info("loaded policy rules", "count", len(rules), "path", cfg.RulesPath)
 		return rules, nil
 	}
-	log.Printf("using %d built-in default policy rules", len(policy.DefaultRules()))
-	return policy.DefaultRules(), nil
+	rules := policy.DefaultRules()
+	logger.Info("using built-in default policy rules", "count", len(rules))
+	return rules, nil
 }
 
-func (s *Server) Run() error {
+// Handler returns the HTTP handler with all routes and middleware attached.
+func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/notify", s.corsMiddleware(s.authMiddleware(s.loggingMiddleware(http.HandlerFunc(s.notifyHandler)))))
 	mux.Handle("/health", s.corsMiddleware(s.authMiddleware(s.loggingMiddleware(http.HandlerFunc(s.healthHandler)))))
 	mux.Handle("/metrics", s.corsMiddleware(s.authMiddleware(s.loggingMiddleware(http.HandlerFunc(s.metricsHandler)))))
 	mux.Handle("/webhooks/github", s.corsMiddleware(s.loggingMiddleware(s.webhookAuthMiddleware(http.HandlerFunc(s.githubWebhookHandler)))))
 	mux.Handle("/feedback", s.corsMiddleware(s.authMiddleware(s.loggingMiddleware(http.HandlerFunc(s.feedbackHandler)))))
+	return requestIDMiddleware(mux)
+}
 
+// Run serves HTTP until ctx is cancelled, then shuts down gracefully,
+// letting in-flight requests finish for up to shutdownTimeout.
+func (s *Server) Run(ctx context.Context) error {
 	s.http = &http.Server{
-		Addr:    s.cfg.Address,
-		Handler: mux,
+		Addr:              s.cfg.Address,
+		Handler:           s.Handler(),
+		ReadHeaderTimeout: readHeaderTimeout,
 	}
 
 	if s.cfg.GitHubWebhookSecret == "" && s.cfg.AllowUnsignedWebhooks {
-		log.Printf("WARNING: GITHUB_WEBHOOK_SECRET unset; accepting unsigned webhooks (ALLOW_UNSIGNED_WEBHOOKS=true)")
+		s.logFor(ctx).Warn("GITHUB_WEBHOOK_SECRET unset; accepting unsigned webhooks (ALLOW_UNSIGNED_WEBHOOKS=true)")
 	}
-	log.Printf("notification service listening on %s", s.cfg.Address)
-	return s.http.ListenAndServe()
+
+	shutdownDone := make(chan error, 1)
+	go func() {
+		<-ctx.Done()
+		// The parent context is already cancelled, so shutdown needs its own deadline.
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		shutdownDone <- s.http.Shutdown(shutdownCtx)
+	}()
+
+	s.logFor(ctx).Info("notification service listening", "address", s.cfg.Address)
+	if err := s.http.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return <-shutdownDone
 }
 
 func (s *Server) notifyHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: "method not allowed"})
+		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: errMethod})
 		return
 	}
 
 	var req notification.NotificationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "invalid request payload"})
+		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: errInvalidPayload})
 		return
 	}
 
-	if err := s.service.Send(req); err != nil {
-		log.Printf("notification error: %v", err)
-		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: err.Error()})
+	if err := s.service.Send(r.Context(), req); err != nil {
+		if errors.Is(err, notification.ErrInvalidRequest) {
+			util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: err.Error()})
+			return
+		}
+		s.logFor(r.Context()).Error("send notification failed", "error", err)
+		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: errInternal})
 		return
 	}
 
@@ -176,13 +219,13 @@ func (s *Server) metricsHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) feedbackHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: "method not allowed"})
+		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: errMethod})
 		return
 	}
 
 	var fb feedback.EventFeedback
 	if err := json.NewDecoder(r.Body).Decode(&fb); err != nil {
-		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "invalid request payload"})
+		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: errInvalidPayload})
 		return
 	}
 	if fb.EventID == "" || fb.Action == "" {
@@ -191,7 +234,8 @@ func (s *Server) feedbackHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := s.feedbackRecorder.Record(fb); err != nil {
-		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: err.Error()})
+		s.logFor(r.Context()).Error("record feedback failed", "error", err)
+		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: errInternal})
 		return
 	}
 
@@ -200,11 +244,11 @@ func (s *Server) feedbackHandler(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) githubWebhookHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: "method not allowed"})
+		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: errMethod})
 		return
 	}
 
-	eventType := r.Header.Get("X-GitHub-Event")
+	eventType := r.Header.Get(githubEventHeader)
 	if eventType == "" {
 		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "missing github event header"})
 		return
@@ -212,28 +256,35 @@ func (s *Server) githubWebhookHandler(w http.ResponseWriter, r *http.Request) {
 
 	var payload map[string]interface{}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "invalid request payload"})
+		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: errInvalidPayload})
 		return
 	}
 
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
-		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "invalid request payload"})
+		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: errInvalidPayload})
 		return
 	}
 
 	normalized, err := s.normalizeGitHubEvent(eventType, payloadBytes)
 	if err != nil {
-		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: err.Error()})
+		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: errInvalidPayload})
 		return
 	}
 
-	result, err := s.eventPipeline.Handle(normalized)
+	result, err := s.eventPipeline.Handle(r.Context(), normalized)
 	if err != nil {
-		log.Printf("pipeline error: %v", err)
-		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: err.Error()})
+		s.logFor(r.Context()).Error("pipeline failed",
+			"event_id", normalized.ID, "event_type", eventType, "error", err)
+		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: errInternal})
 		return
 	}
+
+	s.logFor(r.Context()).Info("event processed",
+		"event_id", result.ID,
+		"thread_id", result.ThreadID,
+		"attention_class", result.AttentionClass,
+		"decision_status", result.DecisionState.Status)
 
 	util.WriteJSON(w, http.StatusAccepted, map[string]interface{}{
 		"status":         "accepted",
@@ -274,9 +325,12 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 		start := time.Now()
 		s.requestsTotal.Add(1)
 		recorder := &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
-		log.Printf("incoming request method=%s path=%s remote=%s", r.Method, r.URL.Path, r.RemoteAddr)
 		next.ServeHTTP(recorder, r)
-		log.Printf("completed request method=%s path=%s status=%d duration=%s", r.Method, r.URL.Path, recorder.statusCode, time.Since(start))
+		s.logFor(r.Context()).Info("request completed",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", recorder.statusCode,
+			"duration_ms", time.Since(start).Milliseconds())
 	})
 }
 
@@ -296,7 +350,8 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Request-ID")
+		w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID")
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)
 			return

@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -80,7 +81,7 @@ func TestGitHubWebhookHandlerRunsPipeline(t *testing.T) {
 		t.Fatalf("expected standard attention class, got %v", resp["attentionClass"])
 	}
 
-	stored, err := repo.List()
+	stored, err := repo.List(context.Background())
 	if err != nil {
 		t.Fatalf("list events: %v", err)
 	}

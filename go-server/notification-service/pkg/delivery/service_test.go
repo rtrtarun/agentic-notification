@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"context"
 	"testing"
 
 	"github.com/example/notification-service/pkg/notification"
@@ -8,7 +9,7 @@ import (
 
 type fakeProvider struct{}
 
-func (f *fakeProvider) Send(req notification.NotificationRequest) error {
+func (f *fakeProvider) Send(_ context.Context, req notification.NotificationRequest) error {
 	return nil
 }
 
@@ -18,7 +19,7 @@ func (f *fakeProvider) Name() string {
 
 func TestServiceUsesConfiguredProvider(t *testing.T) {
 	service := NewService(&fakeProvider{})
-	if err := service.Send(notification.NotificationRequest{Agent: notification.AgentInfo{Name: "agent"}, Title: "hello", Message: "world"}); err != nil {
+	if err := service.Send(context.Background(), notification.NotificationRequest{Agent: notification.AgentInfo{Name: "agent"}, Title: "hello", Message: "world"}); err != nil {
 		t.Fatalf("expected delivery success, got %v", err)
 	}
 	if service.ProviderName() != "fake" {

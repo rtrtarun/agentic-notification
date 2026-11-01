@@ -1,6 +1,8 @@
 package pipeline
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -15,7 +17,7 @@ type recordingProvider struct {
 	sent []notification.NotificationRequest
 }
 
-func (r *recordingProvider) Send(req notification.NotificationRequest) error {
+func (r *recordingProvider) Send(_ context.Context, req notification.NotificationRequest) error {
 	r.sent = append(r.sent, req)
 	return nil
 }
@@ -41,7 +43,7 @@ func TestPipelineDeliversCriticalEvents(t *testing.T) {
 		Then: policy.RuleOutcome{AttentionClass: "critical", Reason: "security vulnerability"},
 	}})
 
-	result, err := p.Handle(event.Event{
+	result, err := p.Handle(context.Background(), event.Event{
 		ID: "evt-1", Source: "github", EventType: "security_advisory", Repository: "octo/repo",
 	})
 	if err != nil {
@@ -58,7 +60,7 @@ func TestPipelineDeliversCriticalEvents(t *testing.T) {
 		t.Fatalf("expected 1 delivery, got %d", len(provider.sent))
 	}
 
-	stored, _ := repo.List()
+	stored, _ := repo.List(context.Background())
 	if len(stored) != 1 {
 		t.Fatalf("expected 1 stored event, got %d", len(stored))
 	}
@@ -71,7 +73,7 @@ func TestPipelineQueuesStandardEvents(t *testing.T) {
 		Then: policy.RuleOutcome{AttentionClass: "standard", Reason: "default routing"},
 	}})
 
-	result, err := p.Handle(event.Event{
+	result, err := p.Handle(context.Background(), event.Event{
 		ID: "evt-2", Source: "github", EventType: "pull_request", Repository: "octo/repo",
 	})
 	if err != nil {
@@ -85,7 +87,7 @@ func TestPipelineQueuesStandardEvents(t *testing.T) {
 		t.Fatalf("expected no delivery for standard event, got %d", len(provider.sent))
 	}
 
-	stored, _ := repo.List()
+	stored, _ := repo.List(context.Background())
 	if len(stored) != 1 {
 		t.Fatalf("expected 1 stored event, got %d", len(stored))
 	}
@@ -101,7 +103,7 @@ func TestPipelineDefaultsToStandardWhenNoRuleMatches(t *testing.T) {
 		Then: policy.RuleOutcome{AttentionClass: "critical", Reason: "jira alert"},
 	}})
 
-	result, err := p.Handle(event.Event{ID: "evt-3", Source: "github", EventType: "star"})
+	result, err := p.Handle(context.Background(), event.Event{ID: "evt-3", Source: "github", EventType: "star"})
 	if err != nil {
 		t.Fatalf("handle event: %v", err)
 	}
@@ -132,8 +134,8 @@ func prEvt(id string) event.Event {
 func TestPipelineMergesDuplicateStandardEvents(t *testing.T) {
 	p, repo, _ := newDedupPipeline(nil)
 
-	first, _ := p.Handle(prEvt("evt-1"))
-	second, err := p.Handle(prEvt("evt-2"))
+	first, _ := p.Handle(context.Background(), prEvt("evt-1"))
+	second, err := p.Handle(context.Background(), prEvt("evt-2"))
 	if err != nil {
 		t.Fatalf("handle: %v", err)
 	}
@@ -147,7 +149,7 @@ func TestPipelineMergesDuplicateStandardEvents(t *testing.T) {
 	if first.ThreadID == "" || first.ThreadID != second.ThreadID {
 		t.Fatalf("expected shared thread id, got %q / %q", first.ThreadID, second.ThreadID)
 	}
-	if stored, _ := repo.List(); len(stored) != 2 {
+	if stored, _ := repo.List(context.Background()); len(stored) != 2 {
 		t.Fatalf("expected both events persisted, got %d", len(stored))
 	}
 }
@@ -159,13 +161,27 @@ func TestPipelineNeverMergesCriticalEvents(t *testing.T) {
 		Then: policy.RuleOutcome{AttentionClass: "critical", Reason: "always page"},
 	}})
 
-	p.Handle(prEvt("evt-1"))
-	second, _ := p.Handle(prEvt("evt-2"))
+	p.Handle(context.Background(), prEvt("evt-1"))
+	second, _ := p.Handle(context.Background(), prEvt("evt-2"))
 
 	if second.DecisionState.Status != event.DecisionSent || second.MergedInto != "" {
 		t.Fatalf("critical event must be sent, not merged: %+v", second)
 	}
 	if len(provider.sent) != 2 {
 		t.Fatalf("expected 2 deliveries, got %d", len(provider.sent))
+	}
+}
+
+func TestPipelineStopsWhenContextCancelled(t *testing.T) {
+	p, repo, _ := newTestPipeline(nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := p.Handle(ctx, event.Event{ID: "evt-c", Source: "github", EventType: "star"})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	if stored, _ := repo.List(context.Background()); len(stored) != 0 {
+		t.Fatalf("cancelled request must not persist, got %d events", len(stored))
 	}
 }
