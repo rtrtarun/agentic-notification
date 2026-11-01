@@ -24,6 +24,7 @@ See [docs/orchestration-platform.md](docs/orchestration-platform.md) for the ful
 - [go-server/notification-service](go-server/notification-service) — Go API service
 - [apps/web](apps/web) — Vite + React + TypeScript frontend shell
 - [docs/](docs/) — architecture and milestone plans
+- [docs/coding-standards.md](docs/coding-standards.md) — production code standards
 
 ## Run locally
 
