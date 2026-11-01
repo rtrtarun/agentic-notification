@@ -123,7 +123,7 @@ func (s *Server) Run() error {
 	mux.Handle("/notify", s.corsMiddleware(s.authMiddleware(s.loggingMiddleware(http.HandlerFunc(s.notifyHandler)))))
 	mux.Handle("/health", s.corsMiddleware(s.authMiddleware(s.loggingMiddleware(http.HandlerFunc(s.healthHandler)))))
 	mux.Handle("/metrics", s.corsMiddleware(s.authMiddleware(s.loggingMiddleware(http.HandlerFunc(s.metricsHandler)))))
-	mux.Handle("/webhooks/github", s.corsMiddleware(s.loggingMiddleware(http.HandlerFunc(s.githubWebhookHandler))))
+	mux.Handle("/webhooks/github", s.corsMiddleware(s.loggingMiddleware(s.webhookAuthMiddleware(http.HandlerFunc(s.githubWebhookHandler)))))
 	mux.Handle("/feedback", s.corsMiddleware(s.authMiddleware(s.loggingMiddleware(http.HandlerFunc(s.feedbackHandler)))))
 
 	s.http = &http.Server{
@@ -131,6 +131,9 @@ func (s *Server) Run() error {
 		Handler: mux,
 	}
 
+	if s.cfg.GitHubWebhookSecret == "" && s.cfg.AllowUnsignedWebhooks {
+		log.Printf("WARNING: GITHUB_WEBHOOK_SECRET unset; accepting unsigned webhooks (ALLOW_UNSIGNED_WEBHOOKS=true)")
+	}
 	log.Printf("notification service listening on %s", s.cfg.Address)
 	return s.http.ListenAndServe()
 }

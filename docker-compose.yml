@@ -27,6 +27,7 @@ services:
       RULES_PATH: /app/config/rules.yaml
       DEFAULT_NOTIFY_EMAIL: ops@example.com
       API_KEY: local-dev-key
+      GITHUB_WEBHOOK_SECRET: local-dev-webhook-secret
     depends_on:
       - postgres
 

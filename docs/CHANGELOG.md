@@ -5,6 +5,7 @@ Every change to this repository is recorded here, newest first. Milestone-level 
 ## Unreleased
 
 ### Added
+- Milestone 13 step 1: GitHub webhook signature verification (`X-Hub-Signature-256`, constant-time HMAC over the raw body), 1 MiB body limit, fail-closed when `GITHUB_WEBHOOK_SECRET` is unset. New env vars `GITHUB_WEBHOOK_SECRET`, `ALLOW_UNSIGNED_WEBHOOKS`, `MAX_BODY_BYTES`. **Breaking:** GitHub webhooks without a secret now get 503; set the secret in GitHub or use `ALLOW_UNSIGNED_WEBHOOKS=true` locally.
 - `docs/milestone-13.md`: proposed security and production hardening plan (webhook signature first). Plan only; no code.
 - `docs/CHANGELOG.md` and the rule that every change is documented in `docs/`.
 

@@ -9,19 +9,22 @@ import (
 )
 
 type Config struct {
-	Address            string
-	APIKey             string
-	DatabaseURL        string
-	RulesPath          string
-	DedupWindow        time.Duration
-	DefaultNotifyEmail string
-	SMTPHost           string
-	SMTPPort           int
-	SMTPUsername       string
-	SMTPPassword       string
-	SMTPSender         string
-	SlackWebhookURL    string
-	TeamsWebhookURL    string
+	Address               string
+	APIKey                string
+	DatabaseURL           string
+	RulesPath             string
+	DedupWindow           time.Duration
+	DefaultNotifyEmail    string
+	SMTPHost              string
+	SMTPPort              int
+	SMTPUsername          string
+	SMTPPassword          string
+	SMTPSender            string
+	SlackWebhookURL       string
+	TeamsWebhookURL       string
+	GitHubWebhookSecret   string
+	AllowUnsignedWebhooks bool
+	MaxBodyBytes          int64
 }
 
 func LoadConfig() (*Config, error) {
@@ -58,20 +61,41 @@ func LoadConfig() (*Config, error) {
 		smtpPort = p
 	}
 
+	maxBody := int64(1 << 20)
+	if v := os.Getenv("MAX_BODY_BYTES"); v != "" {
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil || n < 1 {
+			return nil, fmt.Errorf("invalid MAX_BODY_BYTES: %q", v)
+		}
+		maxBody = n
+	}
+
+	allowUnsigned := false
+	if v := os.Getenv("ALLOW_UNSIGNED_WEBHOOKS"); v != "" {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid ALLOW_UNSIGNED_WEBHOOKS: %q", v)
+		}
+		allowUnsigned = b
+	}
+
 	return &Config{
-		Address:            ":" + strconv.Itoa(port),
-		APIKey:             os.Getenv("API_KEY"),
-		DatabaseURL:        os.Getenv("DATABASE_URL"),
-		RulesPath:          os.Getenv("RULES_PATH"),
-		DedupWindow:        dedupWindow,
-		DefaultNotifyEmail: os.Getenv("DEFAULT_NOTIFY_EMAIL"),
-		SMTPHost:           os.Getenv("SMTP_HOST"),
-		SMTPPort:           smtpPort,
-		SMTPUsername:       os.Getenv("SMTP_USERNAME"),
-		SMTPPassword:       os.Getenv("SMTP_PASSWORD"),
-		SMTPSender:         os.Getenv("SMTP_SENDER"),
-		SlackWebhookURL:    os.Getenv("SLACK_WEBHOOK_URL"),
-		TeamsWebhookURL:    os.Getenv("TEAMS_WEBHOOK_URL"),
+		Address:               ":" + strconv.Itoa(port),
+		APIKey:                os.Getenv("API_KEY"),
+		DatabaseURL:           os.Getenv("DATABASE_URL"),
+		RulesPath:             os.Getenv("RULES_PATH"),
+		DedupWindow:           dedupWindow,
+		DefaultNotifyEmail:    os.Getenv("DEFAULT_NOTIFY_EMAIL"),
+		SMTPHost:              os.Getenv("SMTP_HOST"),
+		SMTPPort:              smtpPort,
+		SMTPUsername:          os.Getenv("SMTP_USERNAME"),
+		SMTPPassword:          os.Getenv("SMTP_PASSWORD"),
+		SMTPSender:            os.Getenv("SMTP_SENDER"),
+		SlackWebhookURL:       os.Getenv("SLACK_WEBHOOK_URL"),
+		TeamsWebhookURL:       os.Getenv("TEAMS_WEBHOOK_URL"),
+		GitHubWebhookSecret:   os.Getenv("GITHUB_WEBHOOK_SECRET"),
+		AllowUnsignedWebhooks: allowUnsigned,
+		MaxBodyBytes:          maxBody,
 	}, nil
 }
 

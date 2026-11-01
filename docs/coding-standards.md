@@ -34,8 +34,8 @@ These standards apply to all code in this repository. Items marked **[CI]** are 
 
 - Every public endpoint is documented (path, auth, request, response, errors) in the milestone doc or `api/`.
 - Return JSON errors with a consistent shape and correct status codes.
-- Protected routes require the API key. The GitHub webhook must verify `X-Hub-Signature-256`. **[Gap]** signature verification is not implemented.
-- Limit request body size and validate all input.
+- Protected routes require the API key. The GitHub webhook verifies `X-Hub-Signature-256` (constant-time HMAC over the raw body).
+- Request bodies are size-limited (`MAX_BODY_BYTES`) on the webhook; apply the same to other routes. Validate all input.
 
 ## 5. Database
 

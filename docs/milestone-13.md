@@ -1,6 +1,6 @@
 # Milestone 13: Security and Production Hardening
 
-**Status: proposed — awaiting approval. No code written.**
+**Status: in progress — step 1 (webhook signature) done; steps 2–5 pending.**
 
 ## Goals
 
@@ -25,7 +25,7 @@ Delivered in this order, one commit per step, each runnable and tested.
 
 | # | Step | Files |
 |---|---|---|
-| 1 | Webhook HMAC verification + body limit (1 MiB) | `pkg/server/webhook_auth.go`, `pkg/config/config.go`, `pkg/server/server.go` |
+| 1 ✅ | Webhook HMAC verification + body limit (1 MiB) | `pkg/server/webhook_auth.go`, `pkg/config/config.go`, `pkg/server/server.go` |
 | 2 | Generic client errors; request-id middleware | `pkg/server/server.go`, `pkg/util/util.go` |
 | 3 | `log/slog` everywhere | `cmd/notification-service/main.go`, `pkg/server/server.go` |
 | 4 | Context propagation | `pkg/event`, `pkg/delivery`, `pkg/pipeline`, `pkg/notification/impl`, `pkg/learning` |
@@ -58,6 +58,7 @@ pkg/db/migrate_test.go
 - **Breaking existing webhooks:** GitHub hooks configured without a secret will start failing. Mitigation: document setting the secret in GitHub; `ALLOW_UNSIGNED_WEBHOOKS` for local dev.
 - **Interface churn from adding `ctx`:** touches many signatures. Mitigation: dedicated step, compiler-driven, tests must pass before commit.
 - **Body restore bug** (handler reads empty body): covered by a middleware test that asserts the handler sees the original bytes.
+- **Implemented (step 1):** `pkg/server/webhook_auth.go`; `GITHUB_WEBHOOK_SECRET`, `ALLOW_UNSIGNED_WEBHOOKS`, `MAX_BODY_BYTES` in `pkg/config`; 10 tests in `webhook_auth_test.go`. `docker-compose.yml` sets a local dev secret.
 - **Replay attacks:** signatures don't prevent replay of a captured valid delivery. Mitigation: track `X-GitHub-Delivery` IDs in the deduper; noted as follow-up, not in this milestone.
 
 ## Tests
