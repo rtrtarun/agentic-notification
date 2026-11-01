@@ -5,6 +5,7 @@ Every change to this repository is recorded here, newest first. Milestone-level 
 ## Unreleased
 
 ### Added
+- `docs/milestone-13.md`: proposed security and production hardening plan (webhook signature first). Plan only; no code.
 - `docs/CHANGELOG.md` and the rule that every change is documented in `docs/`.
 
 ### Changed
