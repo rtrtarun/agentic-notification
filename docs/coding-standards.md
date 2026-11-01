@@ -62,9 +62,10 @@ These standards apply to all code in this repository. Items marked **[CI]** are 
 - LF line endings, UTF-8 (`.gitattributes`, `.editorconfig`). **[CI]** formatting check.
 - No build output or secrets committed (`target/`, `dist/`, `node_modules/`, `.env*`).
 - Every package has a `README.md`; every milestone has `docs/milestone-N.md`.
-- Commits are small, imperative, and reference the milestone. One milestone per PR, reviewed before the next begins.
+- Every change is documented in `docs/` in the same commit: update `docs/CHANGELOG.md`, and the relevant milestone doc or package README.
+- Commits are small, imperative, and reference the milestone. Commit messages never include a Co-Authored-By trailer. One milestone per PR, reviewed before the next begins.
 - Dependencies are pinned through `go.sum` / lockfiles; add a dependency only when the standard library is insufficient.
 
 ## 9. Definition of done
 
-A change is done when: it builds, `gofmt`/`vet`/tests (`-race`) pass, new behaviour has tests, public APIs and packages are documented, logs are structured, and no item in this document is violated without a recorded reason.
+A change is done when: it builds, `gofmt`/`vet`/tests (`-race`) pass, new behaviour has tests, public APIs and packages are documented, logs are structured, documentation in `docs/` (including `CHANGELOG.md`) is updated, and no item in this document is violated without a recorded reason.

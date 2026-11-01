@@ -25,6 +25,7 @@ See [docs/orchestration-platform.md](docs/orchestration-platform.md) for the ful
 - [apps/web](apps/web) — Vite + React + TypeScript frontend shell
 - [docs/](docs/) — architecture and milestone plans
 - [docs/coding-standards.md](docs/coding-standards.md) — production code standards
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) — running record of every change
 
 ## Run locally
 
