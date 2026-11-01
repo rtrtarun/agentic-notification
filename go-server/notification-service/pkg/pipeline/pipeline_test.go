@@ -2,7 +2,9 @@ package pipeline
 
 import (
 	"testing"
+	"time"
 
+	"github.com/example/notification-service/pkg/dedup"
 	"github.com/example/notification-service/pkg/delivery"
 	"github.com/example/notification-service/pkg/event"
 	"github.com/example/notification-service/pkg/notification"
@@ -112,5 +114,58 @@ func TestPipelineDefaultsToStandardWhenNoRuleMatches(t *testing.T) {
 	}
 	if len(provider.sent) != 0 {
 		t.Fatalf("expected no delivery")
+	}
+}
+
+func newDedupPipeline(rules []policy.Rule) (*Pipeline, *event.InMemoryRepository, *recordingProvider) {
+	p, repo, provider := newTestPipeline(rules)
+	return p.WithDeduper(dedup.NewMemoryDeduper(time.Minute)), repo, provider
+}
+
+func prEvt(id string) event.Event {
+	return event.Event{
+		ID: id, Source: "github", EventType: "pull_request", Repository: "octo/repo",
+		Payload: map[string]interface{}{"number": float64(1), "action": "opened"},
+	}
+}
+
+func TestPipelineMergesDuplicateStandardEvents(t *testing.T) {
+	p, repo, _ := newDedupPipeline(nil)
+
+	first, _ := p.Handle(prEvt("evt-1"))
+	second, err := p.Handle(prEvt("evt-2"))
+	if err != nil {
+		t.Fatalf("handle: %v", err)
+	}
+
+	if first.DecisionState.Status != event.DecisionQueued {
+		t.Fatalf("expected first queued, got %s", first.DecisionState.Status)
+	}
+	if second.DecisionState.Status != event.DecisionMerged || second.MergedInto != "evt-1" {
+		t.Fatalf("expected merged into evt-1, got %+v", second)
+	}
+	if first.ThreadID == "" || first.ThreadID != second.ThreadID {
+		t.Fatalf("expected shared thread id, got %q / %q", first.ThreadID, second.ThreadID)
+	}
+	if stored, _ := repo.List(); len(stored) != 2 {
+		t.Fatalf("expected both events persisted, got %d", len(stored))
+	}
+}
+
+func TestPipelineNeverMergesCriticalEvents(t *testing.T) {
+	p, _, provider := newDedupPipeline([]policy.Rule{{
+		Name: "all-prs",
+		When: policy.RuleCondition{Source: "github", EventType: "pull_request"},
+		Then: policy.RuleOutcome{AttentionClass: "critical", Reason: "always page"},
+	}})
+
+	p.Handle(prEvt("evt-1"))
+	second, _ := p.Handle(prEvt("evt-2"))
+
+	if second.DecisionState.Status != event.DecisionSent || second.MergedInto != "" {
+		t.Fatalf("critical event must be sent, not merged: %+v", second)
+	}
+	if len(provider.sent) != 2 {
+		t.Fatalf("expected 2 deliveries, got %d", len(provider.sent))
 	}
 }

@@ -19,9 +19,10 @@ func Connect(databaseURL string) (*sql.DB, error) {
 	return db, nil
 }
 
+// Migrate creates the schema. Every statement is idempotent.
 func Migrate(db *sql.DB) error {
-	_, err := db.Exec(`
-		CREATE TABLE IF NOT EXISTS events (
+	statements := []string{
+		`CREATE TABLE IF NOT EXISTS events (
 			id                     TEXT PRIMARY KEY,
 			source                 TEXT NOT NULL,
 			event_type             TEXT NOT NULL,
@@ -34,10 +35,16 @@ func Migrate(db *sql.DB) error {
 			decision_matched_rule  TEXT,
 			payload                JSONB NOT NULL DEFAULT '{}',
 			created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW()
-		)
-	`)
-	if err != nil {
-		return fmt.Errorf("migrate events table: %w", err)
+		)`,
+		`ALTER TABLE events ADD COLUMN IF NOT EXISTS dedup_key TEXT`,
+		`ALTER TABLE events ADD COLUMN IF NOT EXISTS thread_id TEXT`,
+		`ALTER TABLE events ADD COLUMN IF NOT EXISTS merged_into TEXT`,
+		`CREATE INDEX IF NOT EXISTS events_thread_id_idx ON events (thread_id)`,
+	}
+	for _, stmt := range statements {
+		if _, err := db.Exec(stmt); err != nil {
+			return fmt.Errorf("migrate events table: %w", err)
+		}
 	}
 	return nil
 }

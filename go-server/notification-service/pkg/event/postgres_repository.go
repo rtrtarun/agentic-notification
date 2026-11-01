@@ -49,8 +49,8 @@ func (r *PostgresRepository) Save(evt Event) error {
 			id, source, event_type, repository,
 			attention_class, decision_status, decision_reason,
 			decision_model_version, decision_confidence, decision_matched_rule,
-			payload
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+			payload, dedup_key, thread_id, merged_into
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
 		evt.ID,
 		evt.Source,
 		evt.EventType,
@@ -62,6 +62,9 @@ func (r *PostgresRepository) Save(evt Event) error {
 		decisionConfidence,
 		decisionMatchedRule,
 		string(payload),
+		nullString(evt.DedupKey),
+		nullString(evt.ThreadID),
+		nullString(evt.MergedInto),
 	)
 	return err
 }
@@ -71,7 +74,7 @@ func (r *PostgresRepository) List() ([]Event, error) {
 		SELECT id, source, event_type, repository,
 		       attention_class, decision_status, decision_reason,
 		       decision_model_version, decision_confidence, decision_matched_rule,
-		       payload
+		       payload, dedup_key, thread_id, merged_into
 		FROM events ORDER BY created_at`)
 	if err != nil {
 		return nil, err
@@ -84,12 +87,13 @@ func (r *PostgresRepository) List() ([]Event, error) {
 		var payload string
 		var decisionStatus, decisionReason, decisionModelVersion, decisionMatchedRule sql.NullString
 		var decisionConfidence sql.NullFloat64
+		var dedupKey, threadID, mergedInto sql.NullString
 
 		if err := rows.Scan(
 			&evt.ID, &evt.Source, &evt.EventType, &evt.Repository,
 			&evt.AttentionClass, &decisionStatus, &decisionReason,
 			&decisionModelVersion, &decisionConfidence, &decisionMatchedRule,
-			&payload,
+			&payload, &dedupKey, &threadID, &mergedInto,
 		); err != nil {
 			return nil, err
 		}
@@ -97,6 +101,8 @@ func (r *PostgresRepository) List() ([]Event, error) {
 		if err := json.Unmarshal([]byte(payload), &evt.Payload); err != nil {
 			return nil, err
 		}
+
+		evt.DedupKey, evt.ThreadID, evt.MergedInto = dedupKey.String, threadID.String, mergedInto.String
 
 		if decisionStatus.Valid || decisionReason.Valid {
 			evt.DecisionState = &DecisionState{
@@ -113,4 +119,8 @@ func (r *PostgresRepository) List() ([]Event, error) {
 		results = append(results, evt)
 	}
 	return results, nil
+}
+
+func nullString(s string) sql.NullString {
+	return sql.NullString{String: s, Valid: s != ""}
 }

@@ -8,7 +8,7 @@ See [docs/orchestration-platform.md](docs/orchestration-platform.md) for the ful
 
 ## Current milestone
 
-**Milestone 11** — End-to-end critical event pipeline. See [docs/milestone-11.md](docs/milestone-11.md).
+**Milestone 12** — Deduplication, grouping and threading. See [docs/milestone-12.md](docs/milestone-12.md).
 
 ## Included
 

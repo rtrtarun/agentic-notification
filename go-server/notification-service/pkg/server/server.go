@@ -10,6 +10,7 @@ import (
 
 	"github.com/example/notification-service/pkg/config"
 	"github.com/example/notification-service/pkg/db"
+	"github.com/example/notification-service/pkg/dedup"
 	"github.com/example/notification-service/pkg/delivery"
 	"github.com/example/notification-service/pkg/event"
 	"github.com/example/notification-service/pkg/feedback"
@@ -82,7 +83,7 @@ func NewServer(cfg *config.Config) (*Server, error) {
 				DefaultEmailRecipients: cfg.DefaultEmailRecipients(),
 				SlackWebhookURLs:       cfg.SlackWebhookURLs(),
 			},
-		),
+		).WithDeduper(dedup.NewMemoryDeduper(cfg.DedupWindow)),
 	}
 	return s, nil
 }

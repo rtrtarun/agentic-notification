@@ -5,21 +5,23 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Config struct {
-	Address              string
-	APIKey               string
-	DatabaseURL          string
-	RulesPath            string
-	DefaultNotifyEmail   string
-	SMTPHost             string
-	SMTPPort             int
-	SMTPUsername         string
-	SMTPPassword         string
-	SMTPSender           string
-	SlackWebhookURL      string
-	TeamsWebhookURL      string
+	Address            string
+	APIKey             string
+	DatabaseURL        string
+	RulesPath          string
+	DedupWindow        time.Duration
+	DefaultNotifyEmail string
+	SMTPHost           string
+	SMTPPort           int
+	SMTPUsername       string
+	SMTPPassword       string
+	SMTPSender         string
+	SlackWebhookURL    string
+	TeamsWebhookURL    string
 }
 
 func LoadConfig() (*Config, error) {
@@ -33,6 +35,15 @@ func LoadConfig() (*Config, error) {
 			return nil, fmt.Errorf("invalid PORT: out of range")
 		}
 		port = p
+	}
+
+	dedupWindow := 10 * time.Minute
+	if v := os.Getenv("DEDUP_WINDOW"); v != "" {
+		d, err := time.ParseDuration(v)
+		if err != nil || d <= 0 {
+			return nil, fmt.Errorf("invalid DEDUP_WINDOW: %q", v)
+		}
+		dedupWindow = d
 	}
 
 	smtpPort := 587
@@ -52,6 +63,7 @@ func LoadConfig() (*Config, error) {
 		APIKey:             os.Getenv("API_KEY"),
 		DatabaseURL:        os.Getenv("DATABASE_URL"),
 		RulesPath:          os.Getenv("RULES_PATH"),
+		DedupWindow:        dedupWindow,
 		DefaultNotifyEmail: os.Getenv("DEFAULT_NOTIFY_EMAIL"),
 		SMTPHost:           os.Getenv("SMTP_HOST"),
 		SMTPPort:           smtpPort,

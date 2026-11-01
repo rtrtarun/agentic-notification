@@ -15,6 +15,9 @@ type Event struct {
 	Repository     string                 `json:"repository,omitempty"`
 	AttentionClass string                 `json:"attentionClass"`
 	DecisionState  *DecisionState         `json:"decisionState,omitempty"`
+	DedupKey       string                 `json:"dedupKey,omitempty"`
+	ThreadID       string                 `json:"threadId,omitempty"`
+	MergedInto     string                 `json:"mergedInto,omitempty"`
 	Payload        map[string]interface{} `json:"payload"`
 }
 
@@ -25,10 +28,10 @@ const (
 )
 
 const (
-	DecisionSent            = "sent"
-	DecisionQueued          = "queued"
-	DecisionMerged          = "merged"
-	DecisionDigest          = "digest"
-	DecisionDelayed         = "delayed"
-	DecisionBudgetExceeded  = "budget_exceeded"
+	DecisionSent           = "sent"
+	DecisionQueued         = "queued"
+	DecisionMerged         = "merged"
+	DecisionDigest         = "digest"
+	DecisionDelayed        = "delayed"
+	DecisionBudgetExceeded = "budget_exceeded"
 )
