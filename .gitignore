@@ -28,3 +28,8 @@ coverage/
 
 # Frontend
 .vite/
+
+# Java / TS build output
+target/
+**/target/
+*.tsbuildinfo
