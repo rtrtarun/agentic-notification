@@ -3,7 +3,7 @@ import type { EventSummary } from '../lib/api'
 import { eventTitle, relativeTime } from '../lib/events'
 import { useI18n } from '../lib/i18n/I18nContext'
 import { Chip } from './Chip'
-import { Flag } from './Flag'
+import { EventIcon } from './EventIcon'
 import { BellIcon } from './icons'
 
 const SHOWN = 5
@@ -83,7 +83,7 @@ export function NotificationBell({ unread, count, now, onOpenEvent, onMarkAllRea
                       setOpen(false)
                     }}
                   >
-                    <Flag kind={e.attentionClass} />
+                    <EventIcon eventType={e.eventType} />
                     <span className="popover-text">
                       <span className="popover-name">{eventTitle(e, t)}</span>
                       <span className="popover-meta">

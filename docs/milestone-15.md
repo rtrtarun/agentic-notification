@@ -87,3 +87,15 @@ CORS now allows PATCH and DELETE. `/events`, `/feedback` and the other routes ar
 - Lists run over the newest 1000 events. There is no PostgreSQL integration test for the new repository yet (it needs the `-tags integration` database).
 - Stored decisions say "queued" for held events, so "suppressed" means only budget-exceeded events. Nothing is suppressed silently.
 - The old signal-flag CSS for the removed list (`.row`, `.thread`) is still in `styles.css` and can go in a cleanup pass.
+
+## Commit 3: dashboard redesign
+
+The first inbox looked like a prototype. The console now follows the reference design.
+
+- **Layout:** hero banner (title, "you're up to date" or unread and critical counts, mark all as read), four stat cards (Critical, High, Normal, Low) with real sparklines and click-to-filter, one list card with the filter tabs and rows, and a right rail with a **Quick stats** donut and **Recent activity**. The rail gives way to the detail drawer when one is open and drops below the list under 75rem; the stat cards go 4, 2, 2 across; below 40rem the bell art and sparklines are dropped.
+- **Sparklines and the donut use real data.** The trend lines count events received per period from the loaded events (`lib/sparkline.ts`, tested); the donut uses the service's counts. Nothing is invented.
+- **Components** in `features/dashboard/`: `InboxHero`, `StatCards`, `QuickStats`, `RecentActivity`, `BellArt`. Round, category-coloured `EventIcon` replaces the small flag shapes; the latest critical event is pinned above the list.
+- **Look:** Inter (variable, self-hosted) replaces Bricolage Grotesque; rounded cards, tinted badges, gradient active nav item, quieter sidebar footer with a dark/light switch. A new light **Daylight** theme sits beside the dark **Attention** one; the full theme and language lists live in Settings.
+- **Fixes found by screenshots:** grid tracks now shrink (`minmax(0, 1fr)`), so wide rows no longer push under the rail or sideways on a phone; tabs scroll with a fade instead of wrapping.
+- Old list CSS (`.row`, `.thread`, `.lead` and friends) was deleted.
+- Checked with headless Edge at 1600, 1024 and 500 px (the smallest window Edge allows; it is below the 40rem phone breakpoint). Not checked on a physical phone.

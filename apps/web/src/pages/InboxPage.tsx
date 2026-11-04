@@ -4,6 +4,10 @@ import { useApp } from '../app/AppState'
 import { EmptyNotice, ErrorNotice } from '../components/Notices'
 import { Lead } from '../components/Lead'
 import { Pager } from '../components/Pager'
+import { QuickStats } from '../features/dashboard/QuickStats'
+import { RecentActivity } from '../features/dashboard/RecentActivity'
+import { InboxHero } from '../features/dashboard/InboxHero'
+import { StatCards } from '../features/dashboard/StatCards'
 import { ConfirmDialog } from '../design/ConfirmDialog'
 import { SkeletonRows } from '../design/Skeleton'
 import { useToast } from '../design/Toast'
@@ -14,7 +18,10 @@ import { NotificationTabs } from '../features/inbox/NotificationTabs'
 import { useInbox } from '../features/inbox/useInbox'
 import { useI18n } from '../lib/i18n/I18nContext'
 import type { Action } from '../lib/inbox'
-import { clearFilters, isFiltered } from '../lib/inboxQuery'
+import { clearFilters, isFiltered, toggleTab } from '../lib/inboxQuery'
+import { bucketCounts } from '../lib/sparkline'
+import { LEVELS } from '../lib/priority'
+import type { Level } from '../lib/inbox'
 
 /** The inbox: filter tabs, a list with selection and bulk actions, and paging. The drawer is hosted by the shell. */
 export default function InboxPage() {
@@ -89,24 +96,16 @@ export default function InboxPage() {
   }
 
   const events = app.feed.events
+  const series = useMemo(() => {
+    const out = {} as Record<Level, number[]>
+    for (const level of LEVELS) out[level] = bucketCounts(events, now, filters.range, level)
+    return out
+  }, [events, now, filters.range])
   const filtered = isFiltered(filters)
   const totalNone = page !== null && page.total === 0
 
   return (
     <>
-      <div className="page-head">
-        <div>
-          <h1 className="page-title">
-            {t('page.title')}
-            {summary.unread > 0 && <span className="count-badge">{summary.unread}</span>}
-          </h1>
-          <p className="page-subtitle">{t('inbox.subtitle')}</p>
-        </div>
-        <button type="button" className="text-button" disabled={summary.unread === 0} onClick={markAll}>
-          {t('list.markAll')}
-        </button>
-      </div>
-
       {app.demo && (
         <p className="demo-banner" role="note">
           {t('demo.banner')}{' '}
@@ -115,12 +114,15 @@ export default function InboxPage() {
           </button>
         </p>
       )}
+      <InboxHero unread={summary.unread} critical={page?.counts.critical ?? 0} onMarkAllRead={markAll} />
+      <StatCards counts={page?.counts} series={series} active={filters.priorities} onToggle={(level) => setFilters(toggleTab(filters, level))} />
+
       {state.status === 'error' && (
         <ErrorNotice error={state.error} settings={app.settings} onOpenSettings={app.openSettings} onRetry={app.invalidate} />
       )}
 
-      {events.length > 0 && !filtered && <Lead events={events} now={now} onOpen={app.selectEvent} />}
-
+      <div className="inbox-grid">
+      <section className="card list-card" aria-label={t('inbox.list')}>
       <NotificationTabs filters={filters} counts={page?.counts} onChange={setFilters} onClear={() => setFilters(clearFilters(filters))} />
 
       {selection.size > 0 && (
@@ -132,6 +134,8 @@ export default function InboxPage() {
           onClear={() => setSelection(new Set())}
         />
       )}
+
+      {events.length > 0 && !filtered && <Lead events={events} now={now} onOpen={app.selectEvent} />}
 
       {page === null && state.status !== 'error' && (
         <div role="status" aria-label={t('inbox.loadingList')}>
@@ -179,6 +183,13 @@ export default function InboxPage() {
         </div>
       )}
       {totalNone && !filtered && state.status === 'ready' && (events.length === 0 ? <EmptyNotice settings={app.settings} /> : <p className="ledger-empty">{t('inbox.caughtUp')}</p>)}
+
+      </section>
+      <aside className="inbox-rail" aria-label={t('quick.title')}>
+        <QuickStats counts={page?.counts} />
+        <RecentActivity events={events} now={now} onOpen={app.selectEvent} onViewAll={() => setFilters(clearFilters(filters))} />
+      </aside>
+      </div>
 
       <ConfirmDialog
         open={confirming !== null}

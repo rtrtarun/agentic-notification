@@ -229,6 +229,7 @@ export const es: Messages = {
   'settings.page.modeLive': 'Conectado a {url}.',
   'settings.page.modeNone': 'No hay dirección de servicio configurada.',
   'theme.attention': 'Attention',
+  'theme.daylight': 'Luz del día',
   // Inbox v2 (milestone 15)
   'range.30d': '30d',
   'tabs.label': 'Filtrar notificaciones',
@@ -337,4 +338,19 @@ export const es: Messages = {
   'trail.unarchive': 'La devolviste a la bandeja',
   'trail.delete': 'La eliminaste',
   'trail.priority': 'Cambiaste la prioridad',
+  // Dashboard layout
+  'hero.subtitle': 'Mantente al tanto de eventos, alertas y novedades importantes.',
+  'hero.upToDate': '¡Estás al día!',
+  'hero.upToDateBody': 'No hay notificaciones nuevas por ahora.',
+  'hero.unread': '{n} sin leer',
+  'hero.critical': 'incluidas {n} críticas',
+  'stat.filter': 'Filtrar la lista por {level}',
+  'quick.title': 'Resumen rápido',
+  'quick.total': 'Total de {n} notificaciones',
+  'quick.totalLabel': 'Total',
+  'recent.title': 'Actividad reciente',
+  'recent.viewAll': 'Ver todo',
+  'recent.empty': 'Aún no ha pasado nada.',
+  'theme.toLight': 'Cambiar al tema claro',
+  'theme.toDark': 'Cambiar al tema oscuro',
 }

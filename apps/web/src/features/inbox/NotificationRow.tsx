@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { Flag } from '../../components/Flag'
+import { EventIcon } from '../../components/EventIcon'
 import { useDismiss } from '../../hooks/useDismiss'
 import { eventTitle, reasonText, relativeTime } from '../../lib/events'
 import { useI18n } from '../../lib/i18n/I18nContext'
@@ -41,7 +41,7 @@ export function NotificationRow({ item, now, active, checked, archivedView, onCh
         onChange={() => onCheck(item.id)}
       />
       <button type="button" className="nrow-open" aria-current={active ? 'true' : undefined} onClick={() => onOpen(item.id)}>
-        <Flag kind={item.attentionClass} />
+        <EventIcon eventType={item.eventType} merged={item.outcome === 'merged'} />
         <span className="nrow-text">
           <span className="nrow-title">
             {!item.read && <span className="unread-dot" role="img" aria-label={t('inbox.unreadDot')} />}

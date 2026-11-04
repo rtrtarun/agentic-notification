@@ -229,6 +229,7 @@ export const hi: Messages = {
   'settings.page.modeLive': '{url} से जुड़ा है।',
   'settings.page.modeNone': 'कोई सेवा पता सेट नहीं है।',
   'theme.attention': 'Attention',
+  'theme.daylight': 'दिन का उजाला',
   // Inbox v2 (milestone 15)
   'range.30d': '30d',
   'tabs.label': 'सूचनाएँ फ़िल्टर करें',
@@ -337,4 +338,19 @@ export const hi: Messages = {
   'trail.unarchive': 'आपने इनबॉक्स में वापस रखा',
   'trail.delete': 'आपने हटाया',
   'trail.priority': 'आपने प्राथमिकता बदली',
+  // Dashboard layout
+  'hero.subtitle': 'महत्वपूर्ण इवेंट, अलर्ट और अपडेट से अवगत रहें।',
+  'hero.upToDate': 'आप पूरी तरह अपडेट हैं!',
+  'hero.upToDateBody': 'फ़िलहाल कोई नई सूचना नहीं।',
+  'hero.unread': '{n} अपठित',
+  'hero.critical': 'जिनमें {n} गंभीर',
+  'stat.filter': 'सूची को {level} से फ़िल्टर करें',
+  'quick.title': 'त्वरित आँकड़े',
+  'quick.total': 'कुल {n} सूचनाएँ',
+  'quick.totalLabel': 'कुल',
+  'recent.title': 'हाल की गतिविधि',
+  'recent.viewAll': 'सभी देखें',
+  'recent.empty': 'अभी तक कुछ नहीं हुआ।',
+  'theme.toLight': 'हल्की थीम पर जाएँ',
+  'theme.toDark': 'गहरी थीम पर जाएँ',
 }

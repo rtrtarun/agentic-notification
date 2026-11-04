@@ -244,6 +244,7 @@ export const en = {
   'settings.page.modeLive': 'Connected to {url}.',
   'settings.page.modeNone': 'No service address is set.',
   'theme.attention': 'Attention',
+  'theme.daylight': 'Daylight',
   // Inbox v2 (milestone 15)
   'range.30d': '30d',
   'tabs.label': 'Filter notifications',
@@ -352,6 +353,21 @@ export const en = {
   'trail.unarchive': 'You moved it back to the inbox',
   'trail.delete': 'You deleted it',
   'trail.priority': 'You changed the priority',
+  // Dashboard layout
+  'hero.subtitle': 'Stay informed about important events, alerts and updates.',
+  'hero.upToDate': 'You’re up to date!',
+  'hero.upToDateBody': 'No new notifications at the moment.',
+  'hero.unread': '{n} unread',
+  'hero.critical': 'including {n} critical',
+  'stat.filter': 'Filter the list by {level}',
+  'quick.title': 'Quick stats',
+  'quick.total': 'Total {n} notifications',
+  'quick.totalLabel': 'Total',
+  'recent.title': 'Recent activity',
+  'recent.viewAll': 'View all',
+  'recent.empty': 'Nothing has happened yet.',
+  'theme.toLight': 'Switch to the light theme',
+  'theme.toDark': 'Switch to the dark theme',
 } as const
 
 export type MessageKey = keyof typeof en
