@@ -3,6 +3,7 @@
 package dedup
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"sync"
@@ -14,6 +15,10 @@ import (
 // DefaultWindow is how long an identical event is treated as a duplicate.
 const DefaultWindow = 10 * time.Minute
 
+// maxMemoryEntries bounds MemoryDeduper. When full it stops recording new keys,
+// which can only let a duplicate through, never suppress a distinct event.
+const maxMemoryEntries = 100_000
+
 // Result describes what the Deduper decided for one event.
 type Result struct {
 	DedupKey  string
@@ -24,16 +29,26 @@ type Result struct {
 }
 
 // Deduper assigns dedup keys and thread IDs and detects duplicates.
+//
+// Implementations must fail open: when the backing store is unavailable, Check
+// returns a Result with Duplicate false (plus the error) so no event is ever
+// suppressed because of an infrastructure fault.
 type Deduper interface {
-	Check(evt event.Event) Result
+	// Check records the event and reports whether it duplicates a recent one.
+	Check(ctx context.Context, evt event.Event) (Result, error)
+	// Forget removes the entry for key if it was recorded by event id. Callers use it
+	// when processing failed after Check, so a retry is not mistaken for a duplicate.
+	Forget(ctx context.Context, key, id string) error
 }
 
-// MemoryDeduper is an in-memory Deduper with a sliding time window.
+// MemoryDeduper is an in-memory Deduper with a sliding time window. It only
+// deduplicates within one process; use RedisDeduper when running several replicas.
 type MemoryDeduper struct {
-	mu     sync.Mutex
-	window time.Duration
-	now    func() time.Time
-	seen   map[string]seenEntry
+	mu        sync.Mutex
+	window    time.Duration
+	now       func() time.Time
+	seen      map[string]seenEntry
+	nextSweep time.Time
 }
 
 type seenEntry struct {
@@ -50,29 +65,47 @@ func NewMemoryDeduper(window time.Duration) *MemoryDeduper {
 }
 
 // Check records the event and reports whether it duplicates a recent one.
-func (d *MemoryDeduper) Check(evt event.Event) Result {
+func (d *MemoryDeduper) Check(_ context.Context, evt event.Event) (Result, error) {
 	res := Result{DedupKey: DedupKey(evt), ThreadID: ThreadID(evt)}
 
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	now := d.now()
-	d.evict(now)
+	d.sweep(now)
 
-	if prev, ok := d.seen[res.DedupKey]; ok {
+	if prev, ok := d.seen[res.DedupKey]; ok && now.Sub(prev.at) <= d.window {
 		res.Duplicate = true
 		res.OriginalID = prev.id
-		return res
+		return res, nil
 	}
-	d.seen[res.DedupKey] = seenEntry{id: evt.ID, at: now}
-	return res
+	if len(d.seen) < maxMemoryEntries {
+		d.seen[res.DedupKey] = seenEntry{id: evt.ID, at: now}
+	}
+	return res, nil
 }
 
-func (d *MemoryDeduper) evict(now time.Time) {
+// Forget drops key if it was recorded by event id.
+func (d *MemoryDeduper) Forget(_ context.Context, key, id string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if prev, ok := d.seen[key]; ok && prev.id == id {
+		delete(d.seen, key)
+	}
+	return nil
+}
+
+// sweep drops expired entries at most once per half window, so the cost is not
+// paid on every event while the map stays bounded by the window.
+func (d *MemoryDeduper) sweep(now time.Time) {
+	if now.Before(d.nextSweep) && len(d.seen) < maxMemoryEntries {
+		return
+	}
 	for k, e := range d.seen {
 		if now.Sub(e.at) > d.window {
 			delete(d.seen, k)
 		}
 	}
+	d.nextSweep = now.Add(d.window / 2)
 }
 
 // ThreadID groups related events about the same subject (e.g. one pull request).
@@ -84,10 +117,13 @@ func ThreadID(evt event.Event) string {
 	return strings.Join(parts, ":")
 }
 
-// DedupKey identifies a repeat of the same thing: same thread, event type and action.
+// DedupKey identifies a repeat of the same thing: same thread, event type, action
+// and, for pushes, the same head commit. Without the commit, every push to a
+// repository inside the window would collapse into the first.
 func DedupKey(evt event.Event) string {
 	action, _ := evt.Payload["action"].(string)
-	return strings.Join([]string{ThreadID(evt), evt.EventType, action}, "|")
+	head, _ := evt.Payload["after"].(string)
+	return strings.Join([]string{ThreadID(evt), evt.EventType, action, head}, "|")
 }
 
 // subjectOf extracts an issue / pull request number from a payload, if any.

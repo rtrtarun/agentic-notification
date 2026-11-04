@@ -26,3 +26,25 @@ func TestServiceUsesConfiguredProvider(t *testing.T) {
 		t.Fatalf("expected provider name fake, got %s", service.ProviderName())
 	}
 }
+
+func TestServiceWithoutProviderFails(t *testing.T) {
+	s := NewService(nil)
+	if err := s.Send(context.Background(), notification.NotificationRequest{}); err == nil {
+		t.Fatal("expected error without provider")
+	}
+	if s.ProviderName() != "none" {
+		t.Fatalf("ProviderName() = %q", s.ProviderName())
+	}
+}
+
+func TestStubProviderHonoursContext(t *testing.T) {
+	p := &StubProvider{}
+	if p.Name() != "stub" || p.Send(context.Background(), notification.NotificationRequest{}) != nil {
+		t.Fatal("stub must accept requests")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if p.Send(ctx, notification.NotificationRequest{}) == nil {
+		t.Fatal("stub must report cancellation")
+	}
+}

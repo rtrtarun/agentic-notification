@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+// MaxInMemoryFeedback caps InMemoryRecorder; the oldest entries are dropped first.
+const MaxInMemoryFeedback = 10_000
+
 type Recorder interface {
 	Record(feedback EventFeedback) error
 	List() ([]EventFeedback, error)
@@ -26,6 +29,9 @@ func (r *InMemoryRecorder) Record(feedback EventFeedback) error {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if len(r.feedback) >= MaxInMemoryFeedback {
+		r.feedback = append(r.feedback[:0], r.feedback[1:]...)
+	}
 	r.feedback = append(r.feedback, feedback)
 	return nil
 }

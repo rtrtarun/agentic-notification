@@ -1,11 +1,21 @@
 package dedup
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/example/notification-service/pkg/event"
 )
+
+// check runs Check with a background context and fails the test on error.
+func check(d Deduper, evt event.Event) Result {
+	res, err := d.Check(context.Background(), evt)
+	if err != nil {
+		panic(err)
+	}
+	return res
+}
 
 func prEvent(id string, number float64, action string) event.Event {
 	return event.Event{
@@ -16,8 +26,8 @@ func prEvent(id string, number float64, action string) event.Event {
 
 func TestDuplicateWithinWindow(t *testing.T) {
 	d := NewMemoryDeduper(time.Minute)
-	first := d.Check(prEvent("a", 1, "opened"))
-	second := d.Check(prEvent("b", 1, "opened"))
+	first := check(d, prEvent("a", 1, "opened"))
+	second := check(d, prEvent("b", 1, "opened"))
 	if first.Duplicate {
 		t.Fatal("first event must not be a duplicate")
 	}
@@ -30,17 +40,17 @@ func TestDuplicateOutsideWindowIsNotMerged(t *testing.T) {
 	d := NewMemoryDeduper(time.Minute)
 	now := time.Now()
 	d.now = func() time.Time { return now }
-	d.Check(prEvent("a", 1, "opened"))
+	check(d, prEvent("a", 1, "opened"))
 	d.now = func() time.Time { return now.Add(2 * time.Minute) }
-	if d.Check(prEvent("b", 1, "opened")).Duplicate {
+	if check(d, prEvent("b", 1, "opened")).Duplicate {
 		t.Fatal("event outside window must not be a duplicate")
 	}
 }
 
 func TestDifferentActionsShareThreadButNotKey(t *testing.T) {
 	d := NewMemoryDeduper(time.Minute)
-	a := d.Check(prEvent("a", 7, "opened"))
-	b := d.Check(prEvent("b", 7, "closed"))
+	a := check(d, prEvent("a", 7, "opened"))
+	b := check(d, prEvent("b", 7, "closed"))
 	if b.Duplicate {
 		t.Fatal("different action must not be a duplicate")
 	}

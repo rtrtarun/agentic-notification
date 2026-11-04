@@ -96,6 +96,38 @@ func TestSendReportsWebhookFailure(t *testing.T) {
 	}
 }
 
+type fakeProvider struct {
+	err   error
+	calls int
+}
+
+func (f *fakeProvider) Send(context.Context, notification.NotificationRequest) error {
+	f.calls++
+	return f.err
+}
+func (f *fakeProvider) Name() string { return "fake" }
+
+func TestSendWrapsProviderErrorWithoutValidationSentinel(t *testing.T) {
+	boom := errors.New("boom")
+	svc := NewNotificationServiceWith(&fakeProvider{err: boom})
+	err := svc.Send(context.Background(), validRequest())
+	if !errors.Is(err, boom) || errors.Is(err, notification.ErrInvalidRequest) {
+		t.Fatalf("unexpected error %v", err)
+	}
+}
+
+func TestSendDoesNotCallProviderForInvalidRequest(t *testing.T) {
+	p := &fakeProvider{}
+	req := validRequest()
+	req.Title = ""
+	if err := NewNotificationServiceWith(p).Send(context.Background(), req); !errors.Is(err, notification.ErrInvalidRequest) {
+		t.Fatalf("expected ErrInvalidRequest, got %v", err)
+	}
+	if p.calls != 0 {
+		t.Fatal("provider must not be called for an invalid request")
+	}
+}
+
 func TestSendHonoursCancelledContext(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	defer srv.Close()

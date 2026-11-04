@@ -17,7 +17,23 @@ spec:
         image: notification-service-go:latest
         ports:
         - containerPort: 8080
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 3
+          periodSeconds: 10
         env:
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: notification-service-secrets
+              key: API_KEY
+        - name: GITHUB_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: notification-service-secrets
+              key: GITHUB_WEBHOOK_SECRET
         - name: SMTP_HOST
           value: "smtp.example.com"
         - name: SMTP_PORT
@@ -25,7 +41,10 @@ spec:
         - name: SMTP_USERNAME
           value: "user@example.com"
         - name: SMTP_PASSWORD
-          value: "password"
+          valueFrom:
+            secretKeyRef:
+              name: notification-service-secrets
+              key: SMTP_PASSWORD
         - name: SMTP_SENDER
           value: "noreply@example.com"
       - name: java-notification-service
@@ -40,6 +59,9 @@ spec:
         - name: SMTP_USERNAME
           value: "user@example.com"
         - name: SMTP_PASSWORD
-          value: "password"
+          valueFrom:
+            secretKeyRef:
+              name: notification-service-secrets
+              key: SMTP_PASSWORD
         - name: SMTP_SENDER
           value: "noreply@example.com"

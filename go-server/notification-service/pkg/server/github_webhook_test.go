@@ -23,14 +23,9 @@ func TestNormalizeGitHubEvent(t *testing.T) {
 		"sender":       map[string]interface{}{"login": "octocat"},
 	}
 
-	body, err := json.Marshal(payload)
-	if err != nil {
-		t.Fatalf("marshal payload: %v", err)
-	}
-
-	e, err := s.normalizeGitHubEvent("pull_request", body)
-	if err != nil {
-		t.Fatalf("normalize event: %v", err)
+	e := s.normalizeGitHubEvent("pull_request", "72d3162e-cc78-11e3-81ab-4c9367dc0958", payload)
+	if e.ID != "github-pull_request-72d3162e-cc78-11e3-81ab-4c9367dc0958" {
+		t.Fatalf("event id must embed the delivery id, got %s", e.ID)
 	}
 
 	if e.Source != "github" {

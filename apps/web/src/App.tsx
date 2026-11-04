@@ -16,6 +16,8 @@ const App = () => {
   })
 
   const backendUrl = useMemo(() => import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080', [])
+  // Local development only: a key shipped in a browser bundle is public. Use a real login before deploying.
+  const apiKey = import.meta.env.VITE_API_KEY
 
   useEffect(() => {
     const checkHealth = async () => {
@@ -38,7 +40,7 @@ const App = () => {
     try {
       const res = await fetch(`${backendUrl}/feedback`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(apiKey ? { 'X-API-Key': apiKey } : {}) },
         body: JSON.stringify(feedback),
       })
 

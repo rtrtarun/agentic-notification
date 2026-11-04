@@ -6,5 +6,4 @@ data:
   SMTP_HOST: "smtp.example.com"
   SMTP_PORT: "587"
   SMTP_USERNAME: "user@example.com"
-  SMTP_PASSWORD: "password"
   SMTP_SENDER: "noreply@example.com"

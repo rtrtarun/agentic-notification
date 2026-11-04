@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 type SQLExecutor interface {
@@ -51,7 +52,8 @@ func (r *PostgresRepository) Save(ctx context.Context, evt Event) error {
 			attention_class, decision_status, decision_reason,
 			decision_model_version, decision_confidence, decision_matched_rule,
 			payload, dedup_key, thread_id, merged_into
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+		ON CONFLICT (id) DO NOTHING`,
 		evt.ID,
 		evt.Source,
 		evt.EventType,
@@ -76,7 +78,7 @@ func (r *PostgresRepository) List(ctx context.Context) ([]Event, error) {
 		       attention_class, decision_status, decision_reason,
 		       decision_model_version, decision_confidence, decision_matched_rule,
 		       payload, dedup_key, thread_id, merged_into
-		FROM events ORDER BY created_at`)
+		FROM events ORDER BY created_at DESC LIMIT $1`, DefaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -88,10 +90,10 @@ func (r *PostgresRepository) List(ctx context.Context) ([]Event, error) {
 		var payload string
 		var decisionStatus, decisionReason, decisionModelVersion, decisionMatchedRule sql.NullString
 		var decisionConfidence sql.NullFloat64
-		var dedupKey, threadID, mergedInto sql.NullString
+		var repository, dedupKey, threadID, mergedInto sql.NullString
 
 		if err := rows.Scan(
-			&evt.ID, &evt.Source, &evt.EventType, &evt.Repository,
+			&evt.ID, &evt.Source, &evt.EventType, &repository,
 			&evt.AttentionClass, &decisionStatus, &decisionReason,
 			&decisionModelVersion, &decisionConfidence, &decisionMatchedRule,
 			&payload, &dedupKey, &threadID, &mergedInto,
@@ -103,6 +105,7 @@ func (r *PostgresRepository) List(ctx context.Context) ([]Event, error) {
 			return nil, err
 		}
 
+		evt.Repository = repository.String
 		evt.DedupKey, evt.ThreadID, evt.MergedInto = dedupKey.String, threadID.String, mergedInto.String
 
 		if decisionStatus.Valid || decisionReason.Valid {
@@ -122,7 +125,37 @@ func (r *PostgresRepository) List(ctx context.Context) ([]Event, error) {
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate events: %w", err)
 	}
+	// The query returns newest first so LIMIT keeps the most recent rows.
+	for i, j := 0, len(results)-1; i < j; i, j = i+1, j-1 {
+		results[i], results[j] = results[j], results[i]
+	}
 	return results, nil
+}
+
+// Exists reports whether an event with this ID is already stored.
+func (r *PostgresRepository) Exists(ctx context.Context, id string) (bool, error) {
+	rows, err := r.queryer.QueryContext(ctx, `SELECT 1 FROM events WHERE id = $1`, id)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	found := rows.Next()
+	if err := rows.Err(); err != nil {
+		return false, fmt.Errorf("check event exists: %w", err)
+	}
+	return found, nil
+}
+
+// DeleteOlderThan removes events created before cutoff and returns how many.
+func (r *PostgresRepository) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, error) {
+	res, err := r.queryer.ExecContext(ctx, `DELETE FROM events WHERE created_at < $1`, cutoff)
+	if err != nil {
+		return 0, err
+	}
+	if res == nil {
+		return 0, nil
+	}
+	return res.RowsAffected()
 }
 
 func nullString(s string) sql.NullString {

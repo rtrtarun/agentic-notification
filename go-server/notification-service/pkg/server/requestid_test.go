@@ -70,7 +70,7 @@ func TestLogsIncludeRequestID(t *testing.T) {
 	if err := json.Unmarshal(buf.Bytes(), &entry); err != nil {
 		t.Fatalf("log line is not JSON: %v (%q)", err, buf.String())
 	}
-	want := map[string]any{"request_id": "req-42", "path": "/health", "method": "GET", "status": float64(200)}
+	want := map[string]any{"request_id": "req-42", "path": "/health", "method": "GET", "http_status": float64(200)}
 	for key, value := range want {
 		if entry[key] != value {
 			t.Fatalf("log key %q = %v, want %v", key, entry[key], value)
@@ -80,8 +80,9 @@ func TestLogsIncludeRequestID(t *testing.T) {
 
 type failingRepo struct{ err error }
 
-func (f failingRepo) Save(context.Context, event.Event) error     { return f.err }
-func (f failingRepo) List(context.Context) ([]event.Event, error) { return nil, f.err }
+func (f failingRepo) Save(context.Context, event.Event) error      { return f.err }
+func (f failingRepo) List(context.Context) ([]event.Event, error)  { return nil, f.err }
+func (f failingRepo) Exists(context.Context, string) (bool, error) { return false, nil }
 
 func TestWebhookPipelineFailureReturnsGenericError(t *testing.T) {
 	s := &Server{

@@ -12,19 +12,60 @@ spec:
       labels:
         app: notification-service
     spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
       containers:
       - name: notification-service
         image: notification-service:latest
         ports:
         - containerPort: 8080
+        envFrom:
+        - configMapRef:
+            name: notification-service-config
         env:
-        - name: SMTP_HOST
-          value: "smtp.example.com"
-        - name: SMTP_PORT
-          value: "587"
-        - name: SMTP_SENDER
-          value: "noreply@example.com"
-        - name: SMTP_USERNAME
-          value: "user@example.com"
+        # Secrets live in a Secret, never in this manifest. See secret.example.yaml.
         - name: SMTP_PASSWORD
-          value: "password"
+          valueFrom:
+            secretKeyRef:
+              name: notification-service-secrets
+              key: SMTP_PASSWORD
+        - name: API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: notification-service-secrets
+              key: API_KEY
+        - name: GITHUB_WEBHOOK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: notification-service-secrets
+              key: GITHUB_WEBHOOK_SECRET
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: notification-service-secrets
+              key: DATABASE_URL
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: notification-service-secrets
+              key: REDIS_URL
+        # /health is unauthenticated so probes work without the API key.
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 3
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 20
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            memory: 256Mi

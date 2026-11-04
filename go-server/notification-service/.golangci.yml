@@ -1,0 +1,35 @@
+# golangci-lint v2 configuration. CI pins the same version (see .github/workflows/ci.yml).
+version: "2"
+run:
+  build-tags:
+    - integration
+linters:
+  enable:
+    - bodyclose
+    - errorlint
+    - gosec
+    - noctx
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - errcheck
+          - gosec
+          - noctx
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

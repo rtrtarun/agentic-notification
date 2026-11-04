@@ -29,7 +29,7 @@ func (s *Server) webhookAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, s.cfg.MaxBodyBytes))
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, bodyLimit(s.cfg.MaxBodyBytes)))
 		if err != nil {
 			var tooLarge *http.MaxBytesError
 			if errors.As(err, &tooLarge) {

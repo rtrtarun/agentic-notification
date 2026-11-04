@@ -1,0 +1,254 @@
+package server
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"net/http"
+	"sync"
+	"time"
+
+	"github.com/example/notification-service/pkg/event"
+	"github.com/example/notification-service/pkg/feedback"
+	"github.com/example/notification-service/pkg/notification"
+	"github.com/example/notification-service/pkg/pipeline"
+	"github.com/example/notification-service/pkg/util"
+)
+
+// Handler returns the HTTP handler with all routes and middleware attached.
+// Logging wraps auth so rejected requests are still logged and counted.
+func (s *Server) Handler() http.Handler {
+	mux := http.NewServeMux()
+	protected := func(h http.HandlerFunc) http.Handler {
+		return s.corsMiddleware(s.loggingMiddleware(s.authMiddleware(s.timeoutMiddleware(h))))
+	}
+	mux.Handle("/notify", protected(s.notifyHandler))
+	mux.Handle("/metrics", protected(s.metricsHandler))
+	mux.Handle("/feedback", protected(s.feedbackHandler))
+	// Health is unauthenticated so orchestrator probes and the dashboard work without a key.
+	mux.Handle("/health", s.corsMiddleware(s.loggingMiddleware(http.HandlerFunc(s.healthHandler))))
+	mux.Handle("/webhooks/github", s.corsMiddleware(s.loggingMiddleware(
+		s.webhookAuthMiddleware(s.timeoutMiddleware(http.HandlerFunc(s.githubWebhookHandler))))))
+	return requestIDMiddleware(mux)
+}
+
+// Run serves HTTP until ctx is cancelled, then shuts down gracefully,
+// letting in-flight requests finish for up to shutdownTimeout.
+func (s *Server) Run(ctx context.Context) error {
+	s.http = &http.Server{
+		Addr:              s.cfg.Address,
+		Handler:           s.Handler(),
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+	}
+
+	if s.cfg.GitHubWebhookSecret == "" && s.cfg.AllowUnsignedWebhooks {
+		s.logFor(ctx).Warn("GITHUB_WEBHOOK_SECRET unset; accepting unsigned webhooks (ALLOW_UNSIGNED_WEBHOOKS=true)")
+	}
+	if s.cfg.APIKey == "" && s.cfg.AllowUnauthenticated {
+		s.logFor(ctx).Warn("API_KEY unset; serving the API without authentication (ALLOW_UNAUTHENTICATED_API=true)")
+	}
+
+	var background sync.WaitGroup
+	if s.purger != nil && s.cfg.EventRetention > 0 {
+		background.Add(1)
+		go func() {
+			defer background.Done()
+			s.runRetention(ctx, s.purger)
+		}()
+	}
+
+	shutdownDone := make(chan error, 1)
+	go func() {
+		<-ctx.Done()
+		// ctx is already cancelled, so shutdown keeps its values but gets its own deadline.
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
+		defer cancel()
+		shutdownDone <- s.http.Shutdown(shutdownCtx)
+	}()
+
+	s.logFor(ctx).Info("notification service listening", "address", s.cfg.Address)
+	serveErr := s.http.ListenAndServe()
+	if errors.Is(serveErr, http.ErrServerClosed) {
+		serveErr = <-shutdownDone
+	}
+	background.Wait()
+	return errors.Join(serveErr, s.closeAll())
+}
+
+func (s *Server) notifyHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: errMethod})
+		return
+	}
+
+	var req notification.NotificationRequest
+	if !s.decodeJSON(w, r, &req) {
+		return
+	}
+
+	if err := s.service.Send(r.Context(), req); err != nil {
+		if errors.Is(err, notification.ErrInvalidRequest) {
+			util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: err.Error()})
+			return
+		}
+		s.logFor(r.Context()).Error("send notification failed", "error", err)
+		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: errInternal})
+		return
+	}
+
+	s.metrics.NotificationAccepted()
+	util.WriteJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+}
+
+func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
+	util.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"status":  "ok",
+		"service": "attention-orchestration",
+	})
+}
+
+// metricsHandler serves the Prometheus text exposition format.
+func (s *Server) metricsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	s.metrics.WritePrometheus(w)
+}
+
+func (s *Server) feedbackHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: errMethod})
+		return
+	}
+
+	var fb feedback.EventFeedback
+	if !s.decodeJSON(w, r, &fb) {
+		return
+	}
+	if fb.EventID == "" || fb.Action == "" {
+		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "event id and action are required"})
+		return
+	}
+
+	if err := s.feedbackRecorder.Record(fb); err != nil {
+		s.logFor(r.Context()).Error("record feedback failed", "error", err)
+		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: errInternal})
+		return
+	}
+
+	util.WriteJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+}
+
+func (s *Server) githubWebhookHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: errMethod})
+		return
+	}
+
+	eventType := r.Header.Get(githubEventHeader)
+	if !validEventType(eventType) {
+		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "missing or invalid github event header"})
+		return
+	}
+
+	var payload map[string]interface{}
+	if !s.decodeJSON(w, r, &payload) {
+		return
+	}
+
+	normalized := s.normalizeGitHubEvent(eventType, r.Header.Get(githubDeliveryHdr), payload)
+
+	result, err := s.eventPipeline.Handle(r.Context(), normalized)
+	if errors.Is(err, pipeline.ErrDuplicateDelivery) {
+		s.logFor(r.Context()).Info("ignored redelivered event", "event_id", normalized.ID)
+		util.WriteJSON(w, http.StatusOK, map[string]string{"status": "duplicate", "eventId": normalized.ID})
+		return
+	}
+	if err != nil {
+		s.logFor(r.Context()).Error("pipeline failed",
+			"event_id", normalized.ID, "event_type", eventType, "error", err)
+		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: errInternal})
+		return
+	}
+
+	s.logFor(r.Context()).Info("event processed",
+		"event_id", result.ID,
+		"thread_id", result.ThreadID,
+		"attention_class", result.AttentionClass,
+		"decision_status", result.DecisionState.Status)
+
+	util.WriteJSON(w, http.StatusAccepted, map[string]interface{}{
+		"status":         "accepted",
+		"eventId":        result.ID,
+		"attentionClass": result.AttentionClass,
+		"decisionState":  result.DecisionState,
+	})
+}
+
+// normalizeGitHubEvent maps a webhook to the internal event. The event ID embeds
+// GitHub's delivery ID so a redelivery maps to the same ID and is recognised;
+// without a usable delivery ID a random one is generated.
+func (s *Server) normalizeGitHubEvent(eventType, deliveryID string, body map[string]interface{}) event.Event {
+	if body == nil {
+		body = map[string]interface{}{}
+	}
+
+	repository := ""
+	if repo, ok := body["repository"].(map[string]interface{}); ok {
+		if fullName, ok := repo["full_name"].(string); ok {
+			repository = fullName
+		}
+	}
+
+	if !validDeliveryID(deliveryID) {
+		deliveryID = randomID()
+	}
+	return event.Event{
+		ID:         fmt.Sprintf("github-%s-%s", eventType, deliveryID),
+		Source:     "github",
+		EventType:  eventType,
+		Repository: repository,
+		Payload:    body,
+	}
+}
+
+// validDeliveryID accepts short IDs of letters, digits and dashes (GitHub sends a GUID).
+func validDeliveryID(id string) bool {
+	if id == "" || len(id) > maxDeliveryIDLen {
+		return false
+	}
+	for _, c := range id {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9', c == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// validEventType accepts GitHub event names: short, lowercase letters and underscores.
+func validEventType(t string) bool {
+	if t == "" || len(t) > maxDeliveryIDLen {
+		return false
+	}
+	for _, c := range t {
+		if (c < 'a' || c > 'z') && c != '_' {
+			return false
+		}
+	}
+	return true
+}
+
+func randomID() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		// crypto/rand failing is effectively fatal on a healthy host; fall back to time
+		// so the request still gets a (less unique) ID instead of panicking.
+		return fmt.Sprintf("t%d", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}

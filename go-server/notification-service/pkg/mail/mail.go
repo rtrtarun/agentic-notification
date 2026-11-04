@@ -35,7 +35,7 @@ func Send(ctx context.Context, addr string, auth smtp.Auth, from string, to []st
 	defer client.Close()
 
 	if ok, _ := client.Extension("STARTTLS"); ok {
-		if err := client.StartTLS(&tls.Config{ServerName: host}); err != nil {
+		if err := client.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
 			return ctxErrOr(ctx, fmt.Errorf("smtp starttls: %w", err))
 		}
 	}
