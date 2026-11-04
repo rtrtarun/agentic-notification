@@ -10,7 +10,7 @@ const DEFAULT_BACKEND = 'http://localhost:8080'
  */
 export function loadSettings(): Settings {
   const defaults: Settings = {
-    backendUrl: import.meta.env.VITE_BACKEND_URL ?? DEFAULT_BACKEND,
+    backendUrl: import.meta.env.VITE_BACKEND_URL || DEFAULT_BACKEND,
     apiKey: import.meta.env.VITE_API_KEY ?? '',
     ...(import.meta.env.VITE_DEFAULT_DEMO === 'true' ? { demo: true } : {}),
   }

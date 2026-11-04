@@ -1,8 +1,10 @@
 name: Deploy console to GitHub Pages
 
-# Publishes the web console as a static site in demo mode (sample data), so a
-# visitor can explore it without a running service. To point the hosted console at
-# a real service, enter its address and key in Connection settings.
+# Publishes the web console as a static site. With no repository variable set it
+# opens in demo mode (sample data), so a visitor can explore it with no service.
+# To point it at a real service, add a repository variable BACKEND_URL (Settings >
+# Secrets and variables > Actions > Variables), for example https://my-service.example.com;
+# the console then asks visitors to enter the API key instead of showing the demo.
 #
 # One-time setup: repository Settings > Pages > Source: GitHub Actions.
 
@@ -43,7 +45,8 @@ jobs:
         env:
           # A project site is served from /<repository>/.
           VITE_BASE: /${{ github.event.repository.name }}/
-          VITE_DEFAULT_DEMO: 'true'
+          VITE_BACKEND_URL: ${{ vars.BACKEND_URL }}
+          VITE_DEFAULT_DEMO: ${{ vars.BACKEND_URL == '' && 'true' || 'false' }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: apps/web/dist

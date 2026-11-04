@@ -5,6 +5,7 @@ Every change to this repository is recorded here, newest first. Milestone-level 
 ## Unreleased
 
 ### Added
+- Go live under GitHub: [publish-image.yml](../.github/workflows/publish-image.yml) builds the service image and pushes it to GitHub Container Registry; the Pages workflow reads an optional `BACKEND_URL` repository variable (no variable means demo mode); the console treats an empty `VITE_BACKEND_URL` as unset. Step-by-step in [deployment.md](deployment.md).
 - Inbox redesign of the console, informed by common notification-centre layouts: a sidebar of views with counts, a top bar with search, time range and a notification bell with unread count and popover, coloured category chips, unread dots with **Mark all as read**, paging, a lead banner, and a three-column layout where the detail sheet docks from 80rem and the sidebar becomes a drawer below 62rem.
 - **Languages:** English, Spanish and Hindi through a small typed translation layer (`lib/i18n`), with `Intl` dates and relative times, `<html lang>`, a saved choice and browser-language detection. A test checks every language has the same keys and placeholders. Translations need native review.
 - **Colour themes:** Harbour, Violet, Forest, Sunset and Night, applied before first paint, following the system dark setting on first visit; contrast of ink, accent and distress checked at 4.5:1 or better in each.
