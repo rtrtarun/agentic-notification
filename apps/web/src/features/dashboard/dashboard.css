@@ -160,7 +160,7 @@ body {
 
 /* The spacer pushes the bell and account to the far edge, as in the reference. */
 .topbar .bell {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 /* ---------- Hero ---------- */
@@ -281,7 +281,7 @@ body {
   box-shadow: var(--card-shadow);
   color: var(--level-normal);
   cursor: pointer;
-  text-align: left;
+  text-align: start;
   transition: transform 160ms var(--ease-out), border-color 160ms var(--ease-out);
 }
 
@@ -332,7 +332,7 @@ body {
 
 .stat-spark {
   position: absolute;
-  right: 0.9rem;
+  inset-inline-end: 0.9rem;
   bottom: 0.7rem;
   width: 38%;
   height: 2.2rem;
@@ -508,7 +508,7 @@ body {
   color: inherit;
   cursor: pointer;
   font: inherit;
-  text-align: left;
+  text-align: start;
 }
 
 .recent-text {
@@ -585,7 +585,7 @@ body {
   color: inherit;
   cursor: pointer;
   font: inherit;
-  text-align: left;
+  text-align: start;
 }
 
 .lead-text {
@@ -637,7 +637,7 @@ body {
   padding: 0.7rem 0.5rem 0.7rem 0.6rem;
   border: 0;
   border-bottom: 1px solid var(--border-color);
-  border-left: 3px solid transparent;
+  border-inline-start: 3px solid transparent;
   border-radius: 0;
   background: none;
 }
@@ -647,20 +647,20 @@ body {
 }
 
 .nrow[data-priority='critical'] {
-  border-left-color: var(--level-critical);
+  border-inline-start-color: var(--level-critical);
   background: color-mix(in srgb, var(--danger) 6%, transparent);
 }
 
 .nrow[data-priority='high'] {
-  border-left-color: var(--level-high);
+  border-inline-start-color: var(--level-high);
 }
 
 .nrow[data-priority='normal'] {
-  border-left-color: var(--level-normal);
+  border-inline-start-color: var(--level-normal);
 }
 
 .nrow[data-priority='low'] {
-  border-left-color: var(--fog);
+  border-inline-start-color: var(--fog);
 }
 
 .nrow-open {

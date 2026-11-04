@@ -1,0 +1,63 @@
+/*
+  Right-to-left (Arabic). Layout mirrors itself because the page sets dir="rtl"
+  and the rest of the CSS uses logical properties. What is left: things that
+  point or slide in a direction. Charts keep their left-to-right time axis.
+*/
+
+.arrow {
+  display: inline-block;
+}
+
+[dir='rtl'] .arrow {
+  transform: scaleX(-1);
+}
+
+[dir='rtl'] .sheet {
+  animation-name: sheet-in-rtl;
+}
+
+[dir='rtl'] .sidebar[data-open='true'],
+[dir='rtl'] .toast {
+  animation-name: drawer-in-rtl;
+}
+
+@keyframes sheet-in-rtl {
+  from {
+    opacity: 0;
+    transform: translateX(-1.5rem);
+  }
+}
+
+@keyframes drawer-in-rtl {
+  from {
+    opacity: 0;
+    transform: translateX(1.5rem);
+  }
+}
+
+[dir='rtl'] .theme-toggle[aria-checked='false'] .theme-toggle-knob {
+  transform: translateX(-1.3rem);
+}
+
+[dir='rtl'] .collapse-toggle svg {
+  scale: -1 1;
+}
+
+[dir='rtl'] .tabs-bar .view-tabs {
+  mask-image: linear-gradient(270deg, #000 calc(100% - 2.5rem), transparent);
+}
+
+/* Keep code-like values readable inside right-to-left text. */
+[dir='rtl'] .mono,
+[dir='rtl'] kbd {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Numbers and percentages keep their reading order inside right-to-left text. */
+[dir='rtl'] .legend-value,
+[dir='rtl'] .stat-value,
+[dir='rtl'] .view-tab-count {
+  direction: ltr;
+  unicode-bidi: isolate;
+}

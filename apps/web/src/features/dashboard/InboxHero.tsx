@@ -33,7 +33,7 @@ export function InboxHero({ unread, critical, onMarkAllRead }: InboxHeroProps) {
             )}
           </p>
           <button type="button" className="hero-button" disabled={clear} onClick={onMarkAllRead}>
-            {t('list.markAll')} <span aria-hidden="true">→</span>
+            {t('list.markAll')} <span className="arrow" aria-hidden="true">→</span>
           </button>
         </div>
       </div>

@@ -23,7 +23,7 @@ export function RecentActivity({ events, now, onOpen, onViewAll }: RecentActivit
           {t('recent.title')}
         </h2>
         <button type="button" className="text-button" onClick={onViewAll}>
-          {t('recent.viewAll')} <span aria-hidden="true">→</span>
+          {t('recent.viewAll')} <span className="arrow" aria-hidden="true">→</span>
         </button>
       </div>
       {recent.length === 0 ? (

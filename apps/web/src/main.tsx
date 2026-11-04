@@ -8,6 +8,7 @@ import './design/tokens.css'
 import './app/shell.css'
 import './features/inbox/inbox.css'
 import './features/dashboard/dashboard.css'
+import './app/rtl.css'
 
 // Apply the saved theme before the first paint so there is no flash of the wrong colours.
 applyTheme(detectTheme())

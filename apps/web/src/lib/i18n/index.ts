@@ -3,10 +3,16 @@
 // so the gap is visible instead of silent.
 
 import { en, type MessageKey, type Messages } from './en'
+import { ar } from './ar'
+import { de } from './de'
 import { es } from './es'
+import { fr } from './fr'
 import { hi } from './hi'
+import { ja } from './ja'
+import { pt } from './pt'
+import { zh } from './zh'
 
-export type Locale = 'en' | 'es' | 'hi'
+export type Locale = 'en' | 'es' | 'fr' | 'de' | 'pt' | 'hi' | 'ar' | 'ja' | 'zh'
 
 export interface LocaleInfo {
   code: Locale
@@ -14,15 +20,23 @@ export interface LocaleInfo {
   name: string
   /** BCP 47 tag for Intl formatting. */
   tag: string
+  /** Reading direction. Arabic is right to left; the page mirrors itself. */
+  dir: 'ltr' | 'rtl'
 }
 
 export const LOCALES: LocaleInfo[] = [
-  { code: 'en', name: 'English', tag: 'en' },
-  { code: 'es', name: 'Español', tag: 'es' },
-  { code: 'hi', name: 'हिन्दी', tag: 'hi' },
+  { code: 'en', name: 'English', tag: 'en', dir: 'ltr' },
+  { code: 'es', name: 'Español', tag: 'es', dir: 'ltr' },
+  { code: 'fr', name: 'Français', tag: 'fr', dir: 'ltr' },
+  { code: 'de', name: 'Deutsch', tag: 'de', dir: 'ltr' },
+  { code: 'pt', name: 'Português (Brasil)', tag: 'pt-BR', dir: 'ltr' },
+  { code: 'hi', name: 'हिन्दी', tag: 'hi', dir: 'ltr' },
+  { code: 'ar', name: 'العربية', tag: 'ar', dir: 'rtl' },
+  { code: 'ja', name: '日本語', tag: 'ja', dir: 'ltr' },
+  { code: 'zh', name: '简体中文', tag: 'zh-CN', dir: 'ltr' },
 ]
 
-const CATALOGS: Record<Locale, Messages> = { en, es, hi }
+const CATALOGS: Record<Locale, Messages> = { en, es, fr, de, pt, hi, ar, ja, zh }
 const STORAGE_KEY = 'attention.locale'
 
 export type Params = Record<string, string | number>
@@ -30,6 +44,10 @@ export type Translator = (key: MessageKey, params?: Params) => string
 
 export function isLocale(value: unknown): value is Locale {
   return typeof value === 'string' && LOCALES.some((l) => l.code === value)
+}
+
+export function localeDir(locale: Locale): 'ltr' | 'rtl' {
+  return LOCALES.find((l) => l.code === locale)?.dir ?? 'ltr'
 }
 
 export function localeTag(locale: Locale): string {

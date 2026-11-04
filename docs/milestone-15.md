@@ -99,3 +99,14 @@ The first inbox looked like a prototype. The console now follows the reference d
 - **Fixes found by screenshots:** grid tracks now shrink (`minmax(0, 1fr)`), so wide rows no longer push under the rail or sideways on a phone; tabs scroll with a fade instead of wrapping.
 - Old list CSS (`.row`, `.thread`, `.lead` and friends) was deleted.
 - Checked with headless Edge at 1600, 1024 and 500 px (the smallest window Edge allows; it is below the 40rem phone breakpoint). Not checked on a physical phone.
+
+## Commit 4: more languages
+
+The console now speaks nine languages: English, Spanish, **French, German, Portuguese (Brazil), Arabic, Japanese and Simplified Chinese** (plus Hindi from before). Every catalogue has all 330 strings, and a test fails if a language is missing a key or changes a `{placeholder}`.
+
+- **Right to left.** Arabic sets `<html dir="rtl">` through the `dir` field on each `LOCALES` entry. The shell mirrors itself: the sidebar moves to the right, the rail to the left, drawers and toasts slide in from the other side, and arrows (`.arrow`) flip. Layout CSS now uses logical properties (`inline-start`, `inline-end`, `text-align: start`) instead of `left` and `right`; what is left lives in [app/rtl.css](../apps/web/src/app/rtl.css). Charts keep their left-to-right time axis; numbers and percentages are isolated so they read in order.
+- **Choosing.** The saved choice wins, then the browser language, matching regional codes to the base language (`pt-BR`, `zh-TW`, `fr-CA` and so on), then English. The picker is in Settings and the command palette; each language is named in itself.
+- **Fonts.** Inter covers Latin, Cyrillic and Greek. Arabic, Japanese, Chinese and Devanagari use the system fonts named in the `--font` stack, so nothing extra is downloaded.
+- **Adding a language:** copy `en.ts` to `<code>.ts`, translate the values, add it to `Locale`, `LOCALES` (with `dir`) and `CATALOGS` in `lib/i18n/index.ts`, and add it to the catalogue list and locale-count test in `i18n.test.ts`.
+- **Needs native review.** The translations were written for this change and have not been reviewed by native speakers. Dates and relative times use `Intl`, so they follow each language.
+- Checked with headless Edge in Arabic and Japanese at 1600 px. The other new languages were not viewed; German and French strings are longer than English and the layout has not been checked against them.

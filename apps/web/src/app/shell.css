@@ -9,7 +9,7 @@
 .skip-link {
   position: fixed;
   top: 0.5rem;
-  left: 0.5rem;
+  inset-inline-start: 0.5rem;
   z-index: 100;
   padding: 0.5rem 0.9rem;
   border-radius: var(--radius-sm);
@@ -27,7 +27,7 @@
 
 .sidebar {
   background: var(--sidebar-bg);
-  border-right: 1px solid var(--border-color);
+  border-inline-end: 1px solid var(--border-color);
   gap: var(--space-2);
 }
 
@@ -159,7 +159,7 @@
 }
 
 .nav-badge {
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 0.05rem 0.5rem;
   border-radius: 999px;
   background: var(--primary);
@@ -193,7 +193,7 @@
   color: var(--text);
   cursor: pointer;
   font-weight: 600;
-  text-align: left;
+  text-align: start;
 }
 
 .workspace-avatar {
@@ -222,7 +222,7 @@
   position: absolute;
   z-index: 40;
   top: calc(100% + 0.4rem);
-  left: 0;
+  inset-inline-start: 0;
   display: grid;
   gap: 0.1rem;
   width: max-content;
@@ -236,8 +236,8 @@
 }
 
 .menu-right {
-  right: 0;
-  left: auto;
+  inset-inline-end: 0;
+  inset-inline-start: auto;
 }
 
 .menu-item {
@@ -250,7 +250,7 @@
   color: var(--text);
   cursor: pointer;
   font: inherit;
-  text-align: left;
+  text-align: start;
   text-decoration: none;
 }
 
@@ -389,7 +389,7 @@
 
 .toasts {
   position: fixed;
-  right: max(var(--space-2), env(safe-area-inset-right));
+  inset-inline-end: max(var(--space-2), env(safe-area-inset-right));
   bottom: max(var(--space-2), env(safe-area-inset-bottom));
   z-index: 80;
   display: grid;
@@ -405,7 +405,7 @@
   gap: var(--space-2);
   padding: 0.7rem 0.9rem;
   border: 1px solid var(--border-color);
-  border-left: 4px solid var(--info);
+  border-inline-start: 4px solid var(--info);
   border-radius: var(--radius-sm);
   background: var(--elevated);
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
@@ -414,11 +414,11 @@
 }
 
 .toast[data-tone='success'] {
-  border-left-color: var(--success);
+  border-inline-start-color: var(--success);
 }
 
 .toast[data-tone='error'] {
-  border-left-color: var(--danger);
+  border-inline-start-color: var(--danger);
 }
 
 .toast-close {
@@ -505,7 +505,7 @@
   .sidebar[data-collapsed='true'] .nav-badge {
     position: absolute;
     top: 0.1rem;
-    right: 0.1rem;
+    inset-inline-end: 0.1rem;
     padding: 0 0.3rem;
     font-size: 0.65rem;
   }
@@ -520,7 +520,7 @@
     content: attr(data-tip);
     position: absolute;
     top: 50%;
-    left: calc(100% + 0.6rem);
+    inset-inline-start: calc(100% + 0.6rem);
     z-index: 50;
     padding: 0.35rem 0.6rem;
     border: 1px solid var(--border-color);
@@ -585,7 +585,7 @@
   .bottom-link .nav-badge {
     position: absolute;
     top: 0.2rem;
-    left: calc(50% + 0.4rem);
+    inset-inline-start: calc(50% + 0.4rem);
     margin: 0;
     padding: 0 0.35rem;
     font-size: 0.65rem;
