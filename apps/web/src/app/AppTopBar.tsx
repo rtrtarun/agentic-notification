@@ -2,8 +2,9 @@ import { useCallback, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { CommandIcon, MenuIcon, SearchIcon, UserIcon } from '../components/icons'
 import { NotificationBell } from '../components/NotificationBell'
+import { useToast } from '../design/Toast'
 import { useDismiss } from '../hooks/useDismiss'
-import { RANGES } from '../lib/filters'
+import { clearFilters as resetFilters, RANGES } from '../lib/inboxQuery'
 import { useI18n } from '../lib/i18n/I18nContext'
 import { useApp } from './AppState'
 
@@ -23,7 +24,8 @@ export function paletteShortcut(): string {
 /** Menu (small screens), search, time range, palette, bell and account menu. */
 export function AppTopBar({ onMenu, menuOpen, onPalette }: AppTopBarProps) {
   const { t } = useI18n()
-  const { filters, changeFilters, unread, now, selectEvent, markEverythingRead, clearFilters } = useApp()
+  const { filters, changeFilters, setFilters, summary, now, selectEvent, markEverythingRead } = useApp()
+  const toast = useToast()
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
@@ -75,15 +77,20 @@ export function AppTopBar({ onMenu, menuOpen, onPalette }: AppTopBarProps) {
       </div>
 
       <NotificationBell
-        unread={unread}
+        unread={summary.items}
+        count={summary.unread}
         now={now}
         onOpenEvent={(id) => {
           selectEvent(id)
           navigate('/inbox')
         }}
-        onMarkAllRead={markEverythingRead}
+        onMarkAllRead={() => {
+          markEverythingRead()
+            .then(() => toast.push(t('toast.allRead'), 'success'))
+            .catch(() => toast.push(t('inbox.failed', { message: '' }), 'error'))
+        }}
         onViewAll={() => {
-          clearFilters()
+          setFilters(resetFilters(filters))
           navigate('/inbox')
         }}
       />

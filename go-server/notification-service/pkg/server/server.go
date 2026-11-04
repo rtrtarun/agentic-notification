@@ -17,6 +17,7 @@ import (
 	"github.com/example/notification-service/pkg/delivery"
 	"github.com/example/notification-service/pkg/event"
 	"github.com/example/notification-service/pkg/feedback"
+	"github.com/example/notification-service/pkg/inbox"
 	"github.com/example/notification-service/pkg/learning"
 	"github.com/example/notification-service/pkg/metrics"
 	"github.com/example/notification-service/pkg/notification"
@@ -50,6 +51,8 @@ type Server struct {
 	service          notification.NotificationService
 	deliveryService  *delivery.Service
 	eventRepo        event.Repository
+	sqlDB            *sql.DB
+	inbox            *inbox.Service
 	feedbackRecorder feedback.Recorder
 	learningService  *learning.Service
 	policyEngine     *policy.Engine
@@ -92,6 +95,7 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 	deliverySvc := delivery.NewService(provider)
 
 	s.eventRepo = eventRepo
+	s.inbox = inbox.NewService(eventRepo, s.initInboxRepository())
 	s.deliveryService = deliverySvc
 	s.policyEngine = policyEngine
 	s.feedbackRecorder = feedback.NewInMemoryRecorder()
@@ -146,11 +150,20 @@ func (s *Server) initEventRepository(ctx context.Context) (event.Repository, err
 		return nil, err
 	}
 	s.closers = append(s.closers, sqlDB.Close)
+	s.sqlDB = sqlDB
 	if err := migrate(ctx, sqlDB); err != nil {
 		return nil, err
 	}
 	s.logger.Info("connected to PostgreSQL and ran migrations")
 	return event.NewPostgresRepository(sqlDB), nil
+}
+
+// initInboxRepository keeps inbox state in PostgreSQL when the events are there, otherwise in memory.
+func (s *Server) initInboxRepository() inbox.Repository {
+	if s.sqlDB == nil {
+		return inbox.NewMemoryRepository()
+	}
+	return inbox.NewPostgresRepository(s.sqlDB)
 }
 
 func migrate(ctx context.Context, sqlDB *sql.DB) error {

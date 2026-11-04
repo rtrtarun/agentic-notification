@@ -95,10 +95,31 @@ func Migrate(ctx context.Context, db Execer) error {
 		`ALTER TABLE events ADD COLUMN IF NOT EXISTS merged_into TEXT`,
 		`CREATE INDEX IF NOT EXISTS events_thread_id_idx ON events (thread_id)`,
 		`CREATE INDEX IF NOT EXISTS events_created_at_idx ON events (created_at)`,
+		`CREATE INDEX IF NOT EXISTS events_dedup_key_idx ON events (dedup_key)`,
+		// Inbox state: what a person did with an event. Rows go with the event when retention purges it.
+		`CREATE TABLE IF NOT EXISTS notification_state (
+			event_id          TEXT PRIMARY KEY REFERENCES events(id) ON DELETE CASCADE,
+			read_at           TIMESTAMPTZ,
+			archived_at       TIMESTAMPTZ,
+			deleted_at        TIMESTAMPTZ,
+			acknowledged_at   TIMESTAMPTZ,
+			resolved_at       TIMESTAMPTZ,
+			snoozed_until     TIMESTAMPTZ,
+			priority_override TEXT,
+			updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS event_trail (
+			id       BIGSERIAL PRIMARY KEY,
+			event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+			step     TEXT NOT NULL,
+			detail   TEXT NOT NULL DEFAULT '',
+			at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS event_trail_event_id_idx ON event_trail (event_id, at)`,
 	}
 	for _, stmt := range statements {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			return fmt.Errorf("migrate events table: %w", err)
+			return fmt.Errorf("migrate schema: %w", err)
 		}
 	}
 	return nil

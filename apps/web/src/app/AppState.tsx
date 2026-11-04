@@ -1,16 +1,19 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useEvents, type Feed } from '../hooks/useEvents'
-import { useRead } from '../hooks/useRead'
-import type { EventSummary, Settings } from '../lib/api'
-import { DEFAULT_FILTERS, type Filters } from '../lib/filters'
+import { useInboxSummary, type InboxSummary } from '../hooks/useInboxSummary'
+import type { Settings } from '../lib/api'
+import { inboxClientFor, type InboxClient } from '../lib/inbox'
+import { DEFAULT_FILTERS, type InboxFilters } from '../lib/inboxQuery'
+import { migrateLocalRead } from '../lib/read'
 import { loadSettings, needsWelcome, saveSettings } from '../lib/settings'
 
 const CLOCK_MS = 30_000
 
-/** Everything the shell and the screens share: the connection, the events, read state and filters. */
+/** Everything the shell and the screens share: the connection, the inbox client, the unread summary and filters. */
 export interface AppState {
   settings: Settings
   demo: boolean
+  /** The recent events, used by the lead banner and the connection state. */
   feed: Feed
   reload: () => void
   now: Date
@@ -20,18 +23,20 @@ export interface AppState {
   openSettings: () => void
   closeSettings: () => void
   saveConnection: (next: Settings) => void
-  read: Set<string>
-  markRead: (id: string) => void
-  /** Unread events, newest first. Repeats merged into an earlier event are not counted. */
-  unread: EventSummary[]
-  markEverythingRead: () => void
-  /** The event whose detail sheet is open. */
+  client: InboxClient
+  /** Changes whenever something was updated; lists and the summary reload on it. */
+  version: number
+  /** Tell every list that something changed. */
+  invalidate: () => void
+  summary: InboxSummary
+  markEverythingRead: () => Promise<number>
+  /** The notification whose detail drawer is open. */
   selectedId: string | null
   selectEvent: (id: string) => void
   closeEvent: () => void
-  filters: Filters
-  changeFilters: (patch: Partial<Filters>) => void
-  clearFilters: () => void
+  filters: InboxFilters
+  changeFilters: (patch: Partial<InboxFilters>) => void
+  setFilters: (next: InboxFilters) => void
 }
 
 const AppContext = createContext<AppState | null>(null)
@@ -40,11 +45,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Settings>(loadSettings)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [welcome, setWelcome] = useState(needsWelcome)
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
+  const [filters, setFilters] = useState<InboxFilters>(DEFAULT_FILTERS)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [version, setVersion] = useState(0)
   const [now, setNow] = useState(() => new Date())
   const { feed, reload } = useEvents(settings, !welcome)
-  const { read, markRead, markAllRead } = useRead()
+  const client = useMemo(() => inboxClientFor(settings), [settings])
+  const summary = useInboxSummary(client, !welcome, version)
 
   // Keep "2 min ago" honest between refreshes.
   useEffect(() => {
@@ -52,19 +59,35 @@ export function AppProvider({ children }: { children: ReactNode }) {
     return () => window.clearInterval(timer)
   }, [])
 
-  const events = feed.events
-  const unread = useMemo(() => events.filter((e) => !e.mergedInto && !read.has(e.id)), [events, read])
+  const invalidate = useCallback(() => setVersion((v) => v + 1), [])
 
-  const changeFilters = useCallback((patch: Partial<Filters>) => setFilters((f) => ({ ...f, ...patch })), [])
-  const clearFilters = useCallback(() => setFilters(DEFAULT_FILTERS), [])
-  const markEverythingRead = useCallback(() => markAllRead(events.map((e) => e.id)), [markAllRead, events])
+  // Read state used to be kept in this browser; send it to the service once.
+  const connected = summary.status === 'ready' && !settings.demo
+  useEffect(() => {
+    if (!connected) return
+    migrateLocalRead(client)
+      .then((sent) => sent > 0 && invalidate())
+      .catch(() => undefined) // try again next visit; the ids are only forgotten after they were sent
+  }, [connected, client, invalidate])
+
+  const changeFilters = useCallback((patch: Partial<InboxFilters>) => setFilters((f) => ({ ...f, ...patch })), [])
+
+  const markEverythingRead = useCallback(async () => {
+    const changed = await client.markAllRead()
+    invalidate()
+    return changed
+  }, [client, invalidate])
 
   const selectEvent = useCallback(
     (id: string) => {
       setSelectedId(id)
-      markRead(id)
+      // Opening a notification reads it. A failure here is not worth interrupting for.
+      client
+        .act(id, { type: 'read' })
+        .then(invalidate)
+        .catch(() => undefined)
     },
-    [markRead],
+    [client, invalidate],
   )
   const closeEvent = useCallback(() => setSelectedId(null), [])
 
@@ -73,6 +96,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSettings(next)
     setWelcome(false)
     setSettingsOpen(false)
+    setSelectedId(null)
   }, [])
 
   const tryDemo = useCallback(() => saveConnection({ ...settings, demo: true }), [saveConnection, settings])
@@ -90,21 +114,21 @@ export function AppProvider({ children }: { children: ReactNode }) {
       openSettings: () => setSettingsOpen(true),
       closeSettings: () => setSettingsOpen(false),
       saveConnection,
-      read,
-      markRead,
-      unread,
+      client,
+      version,
+      invalidate,
+      summary,
       markEverythingRead,
       selectedId,
       selectEvent,
       closeEvent,
       filters,
       changeFilters,
-      clearFilters,
+      setFilters,
     }),
     [
-      settings, feed, reload, now, welcome, tryDemo, settingsOpen, saveConnection,
-      read, markRead, unread, markEverythingRead, selectedId, selectEvent, closeEvent, filters,
-      changeFilters, clearFilters,
+      settings, feed, reload, now, welcome, tryDemo, settingsOpen, saveConnection, client, version,
+      invalidate, summary, markEverythingRead, selectedId, selectEvent, closeEvent, filters, changeFilters,
     ],
   )
 

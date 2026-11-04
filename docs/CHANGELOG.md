@@ -5,6 +5,7 @@ Every change to this repository is recorded here, newest first. Milestone-level 
 ## Unreleased
 
 ### Added
+- Milestone 15, commit 2 (Inbox v2 and detail drawer, see [milestone-15.md](milestone-15.md)): new `pkg/inbox` and `/api/notifications` endpoints (list with filters, sort and paging, detail, patch, delete, acknowledge, resolve, snooze, bulk actions, mark all read), tables `notification_state` and `event_trail`, four display priority levels over the three stored classes (critical can never be lowered), read state on the service, combinable filter tabs, bulk bar, confirmation dialog, optimistic updates with rollback, and a detail drawer with why, decision, timeline and related events. 101 Vitest tests; Go module passes.
 - Go live under GitHub: [publish-image.yml](../.github/workflows/publish-image.yml) builds the service image and pushes it to GitHub Container Registry; the Pages workflow reads an optional `BACKEND_URL` repository variable (no variable means demo mode); the console treats an empty `VITE_BACKEND_URL` as unset. Step-by-step in [deployment.md](deployment.md).
 - Inbox redesign of the console, informed by common notification-centre layouts: a sidebar of views with counts, a top bar with search, time range and a notification bell with unread count and popover, coloured category chips, unread dots with **Mark all as read**, paging, a lead banner, and a three-column layout where the detail sheet docks from 80rem and the sidebar becomes a drawer below 62rem.
 - **Languages:** English, Spanish and Hindi through a small typed translation layer (`lib/i18n`), with `Intl` dates and relative times, `<html lang>`, a saved choice and browser-language detection. A test checks every language has the same keys and placeholders. Translations need native review.
@@ -27,6 +28,8 @@ Every change to this repository is recorded here, newest first. Milestone-level 
 - `docs/CHANGELOG.md` and the rule that every change is documented in `docs/`.
 
 ### Changed
+- **Breaking (console):** unread state now comes from the service (`/api/notifications`), so the console needs a service from this version. Read ids kept in the browser are sent once and forgotten. CORS now allows PATCH and DELETE.
+- Removed the old list, sheet and filter code (`Ledger`, `EventSheet`, `lib/filters`, `useRead`), replaced by `features/inbox`.
 - **Breaking (console):** the dashboard is rebuilt; it needs `GET /events`, so it requires a service from this version. The API key is now entered in Connection settings (per tab) instead of read from `VITE_API_KEY` alone. `docker-compose.yml` allows the origins `http://localhost:3000` and `http://localhost:5173`.
 - Web job in CI runs `npm test` before the build. Generated `tsbuildinfo`, `vite.config.js` and `vite.config.d.ts` are no longer tracked.
 - **Breaking (security):** protected routes now fail closed. With no `API_KEY` they return 503 unless `ALLOW_UNAUTHENTICATED_API=true`. `/health` no longer needs a key. CORS is closed unless `CORS_ALLOWED_ORIGINS` lists the origin. `/notify` rejects non-https or non-allow-listed webhook URLs and invalid recipients (400).

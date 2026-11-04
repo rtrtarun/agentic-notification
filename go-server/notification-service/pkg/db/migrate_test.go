@@ -58,3 +58,16 @@ func TestMigrateStopsOnFirstError(t *testing.T) {
 		t.Fatalf("expected to stop after failing statement, ran %d", len(exec.statements))
 	}
 }
+
+func TestMigrateCreatesInboxTables(t *testing.T) {
+	exec := &recordingExecer{}
+	if err := Migrate(context.Background(), exec); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	all := strings.Join(exec.statements, "\n")
+	for _, want := range []string{"notification_state", "event_trail", "ON DELETE CASCADE"} {
+		if !strings.Contains(all, want) {
+			t.Fatalf("migration missing %s", want)
+		}
+	}
+}

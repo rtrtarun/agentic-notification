@@ -50,7 +50,7 @@ function endpoint(settings: Settings, path: string): string {
   return settings.backendUrl.replace(/\/+$/, '') + path
 }
 
-async function request(settings: Settings, path: string, init: RequestInit = {}): Promise<Response> {
+export async function request(settings: Settings, path: string, init: RequestInit = {}): Promise<Response> {
   let res: Response
   try {
     res = await fetch(endpoint(settings, path), {

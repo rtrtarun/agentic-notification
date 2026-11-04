@@ -46,9 +46,14 @@ func (r *statusRecorder) status() int {
 // scanners probing random paths cannot create unbounded label cardinality.
 var knownRoutes = map[string]bool{
 	"/notify": true, "/health": true, "/metrics": true, "/webhooks/github": true, "/feedback": true, "/events": true,
+	inboxPrefix: true,
 }
 
 func routeLabel(path string) string {
+	// Ids in the path would otherwise make one label per notification.
+	if path == inboxPrefix || strings.HasPrefix(path, inboxPrefix+"/") {
+		return inboxPrefix
+	}
 	if knownRoutes[path] {
 		return path
 	}
@@ -104,7 +109,7 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 		if origin := r.Header.Get("Origin"); origin != "" && originAllowed(s.cfg, origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Add("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Request-ID")
 			w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID")
 		}

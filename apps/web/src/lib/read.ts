@@ -1,8 +1,11 @@
-// Which events the person has opened. Kept in this browser (localStorage) as a
-// list of ids; nothing is sent to the service.
+// Read state used to live only in this browser (localStorage). It now lives on
+// the service. This module remains for one job: sending ids opened before the
+// upgrade to the service once, so unread counts do not jump back up.
+
+import type { InboxClient } from './inbox'
 
 const STORAGE_KEY = 'attention.read'
-const MAX_IDS = 2000
+const CHUNK = 100
 
 export function loadRead(): Set<string> {
   try {
@@ -16,12 +19,21 @@ export function loadRead(): Set<string> {
   }
 }
 
-export function saveRead(ids: Set<string>): void {
-  // Sets keep insertion order, so the oldest ids are dropped first.
-  const list = [...ids].slice(-MAX_IDS)
+function forget(): void {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(list))
+    localStorage.removeItem(STORAGE_KEY)
   } catch {
-    // read state just will not persist
+    // nothing to clean up
   }
+}
+
+/** Marks the locally remembered ids read on the service, then forgets them. Returns how many were sent. */
+export async function migrateLocalRead(client: InboxClient): Promise<number> {
+  const ids = [...loadRead()]
+  if (ids.length === 0) return 0
+  for (let i = 0; i < ids.length; i += CHUNK) {
+    await client.bulk(ids.slice(i, i + CHUNK), { type: 'read' })
+  }
+  forget()
+  return ids.length
 }
