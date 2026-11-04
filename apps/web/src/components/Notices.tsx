@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { ApiError, Settings } from '../lib/api'
+import { useI18n } from '../lib/i18n/I18nContext'
 
 interface ErrorNoticeProps {
   error: ApiError
@@ -10,41 +11,32 @@ interface ErrorNoticeProps {
 
 /** Says what went wrong and what to do about it. Never apologises, never vague. */
 export function ErrorNotice({ error, settings, onOpenSettings, onRetry }: ErrorNoticeProps) {
+  const { t } = useI18n()
   switch (error.kind) {
     case 'unauthorized':
+    case 'unconfigured': {
+      const base = error.kind === 'unauthorized' ? 'err.unauthorized' : 'err.unconfigured'
       return (
         <section className="notice" role="alert">
-          <h2 className="notice-title">The service rejected this API key.</h2>
-          <p className="prose">Enter the value that is set as API_KEY on the service.</p>
+          <h2 className="notice-title">{t(`${base}.title`)}</h2>
+          <p className="prose">{t(`${base}.body`)}</p>
           <button type="button" className="button button-primary" onClick={onOpenSettings}>
-            Enter API key
+            {t('err.enterKey')}
           </button>
         </section>
       )
-    case 'unconfigured':
-      return (
-        <section className="notice" role="alert">
-          <h2 className="notice-title">The service has no API key, so it refuses every request.</h2>
-          <p className="prose">Set API_KEY on the service and restart it. Then enter the same key here.</p>
-          <button type="button" className="button button-primary" onClick={onOpenSettings}>
-            Enter API key
-          </button>
-        </section>
-      )
+    }
     case 'unreachable':
       return (
         <section className="notice" role="alert">
-          <h2 className="notice-title">Can&rsquo;t reach {settings.backendUrl}.</h2>
-          <p className="prose">
-            Check that the service is running. If it is, add {window.location.origin} to CORS_ALLOWED_ORIGINS on the
-            service, or correct the address.
-          </p>
+          <h2 className="notice-title">{t('err.unreachable.title', { url: settings.backendUrl })}</h2>
+          <p className="prose">{t('err.unreachable.body', { origin: window.location.origin })}</p>
           <div className="actions">
             <button type="button" className="button button-primary" onClick={onRetry}>
-              Try again
+              {t('err.retry')}
             </button>
             <button type="button" className="button" onClick={onOpenSettings}>
-              Change address
+              {t('err.changeAddress')}
             </button>
           </div>
         </section>
@@ -52,10 +44,10 @@ export function ErrorNotice({ error, settings, onOpenSettings, onRetry }: ErrorN
     default:
       return (
         <section className="notice" role="alert">
-          <h2 className="notice-title">The service hit an error.</h2>
-          <p className="prose">Events are not loading. Check the service logs for the request that failed, then try again.</p>
+          <h2 className="notice-title">{t('err.server.title')}</h2>
+          <p className="prose">{t('err.server.body')}</p>
           <button type="button" className="button button-primary" onClick={onRetry}>
-            Try again
+            {t('err.retry')}
           </button>
         </section>
       )
@@ -64,6 +56,7 @@ export function ErrorNotice({ error, settings, onOpenSettings, onRetry }: ErrorN
 
 /** Shown when the service is healthy but has not received an event yet. */
 export function EmptyNotice({ settings }: { settings: Settings }) {
+  const { t } = useI18n()
   const [copied, setCopied] = useState(false)
   const webhookUrl = `${settings.backendUrl.replace(/\/+$/, '')}/webhooks/github`
 
@@ -80,18 +73,16 @@ export function EmptyNotice({ settings }: { settings: Settings }) {
   return (
     <section className="notice" aria-labelledby="empty-heading">
       <h2 id="empty-heading" className="notice-title">
-        No events yet.
+        {t('empty.title')}
       </h2>
-      <p className="prose">Send your first GitHub event to see how the system decides what to do with it.</p>
+      <p className="prose">{t('empty.body')}</p>
       <ol className="steps">
-        <li>In your GitHub repository, open Settings, then Webhooks, then Add webhook.</li>
-        <li>
-          Set the payload URL to <span className="url">{webhookUrl}</span> and the content type to application/json.
-        </li>
-        <li>Set the secret to the value of GITHUB_WEBHOOK_SECRET on the service, then choose the events to send.</li>
+        <li>{t('empty.step1')}</li>
+        <li>{t('empty.step2', { url: webhookUrl })}</li>
+        <li>{t('empty.step3')}</li>
       </ol>
       <button type="button" className="button" onClick={copy}>
-        {copied ? 'Copied' : 'Copy webhook URL'}
+        {copied ? t('empty.copied') : t('empty.copy')}
       </button>
     </section>
   )

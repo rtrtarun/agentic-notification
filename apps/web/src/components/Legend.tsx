@@ -1,24 +1,19 @@
 import type { AttentionClass } from '../lib/api'
-import { CLASS_LABELS } from '../lib/events'
+import { useI18n } from '../lib/i18n/I18nContext'
 import { Flag } from './Flag'
-
-const MEANINGS: Record<AttentionClass, string> = {
-  critical: 'Always reaches you right away.',
-  standard: 'Held back so it does not interrupt you.',
-  background: 'Stays quiet. Kept for reference.',
-}
 
 const ORDER: AttentionClass[] = ['critical', 'standard', 'background']
 
 /** The three classes in plain words, so the shapes in the list are never a puzzle. */
 export function Legend() {
+  const { t } = useI18n()
   return (
-    <ul className="legend" aria-label="How events are sorted">
+    <ul className="legend" aria-label={t('legend.label')}>
       {ORDER.map((kind) => (
         <li key={kind} className="legend-item">
-          <Flag kind={kind} />
+          <Flag kind={kind} decorative />
           <span>
-            <strong>{CLASS_LABELS[kind]}.</strong> {MEANINGS[kind]}
+            <strong>{t(`class.${kind}`)}.</strong> {t(`legend.${kind}`)}
           </span>
         </li>
       ))}

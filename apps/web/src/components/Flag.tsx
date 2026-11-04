@@ -1,12 +1,12 @@
 import type { AttentionClass } from '../lib/api'
+import { useI18n } from '../lib/i18n/I18nContext'
 
 export type FlagKind = AttentionClass | 'merged'
 
-const SHAPE_NAMES: Record<FlagKind, string> = {
-  critical: 'Critical',
-  standard: 'Standard',
-  background: 'Background',
-  merged: 'Merged',
+interface FlagProps {
+  kind: FlagKind
+  /** Hide from assistive technology when the label next to the flag already says it. */
+  decorative?: boolean
 }
 
 /**
@@ -14,6 +14,8 @@ const SHAPE_NAMES: Record<FlagKind, string> = {
  * colour vision: a solid pennant is critical, a square flag is standard, a thin
  * outlined flag is background and a swallowtail is a merged event.
  */
-export function Flag({ kind }: { kind: FlagKind }) {
-  return <span className="flag" data-kind={kind} role="img" aria-label={SHAPE_NAMES[kind]} />
+export function Flag({ kind, decorative = false }: FlagProps) {
+  const { t } = useI18n()
+  if (decorative) return <span className="flag" data-kind={kind} aria-hidden="true" />
+  return <span className="flag" data-kind={kind} role="img" aria-label={t(`class.${kind}`)} />
 }

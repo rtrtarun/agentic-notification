@@ -2,60 +2,59 @@
 // interface speaks in what happened to the person.
 
 import type { AttentionClass, EventSummary } from './api'
+import { en, type MessageKey } from './i18n/en'
+import { tEn, type Translator } from './i18n'
 
-const EVENT_LABELS: Record<string, string> = {
-  pull_request: 'Pull request',
-  pull_request_review: 'Pull request review',
-  push: 'Push',
-  issues: 'Issue',
-  issue_comment: 'Issue comment',
-  security_advisory: 'Security advisory',
-  dependabot_alert: 'Dependabot alert',
-  workflow_run: 'Workflow run',
-  check_run: 'Check run',
-  release: 'Release',
-  star: 'Star',
-  watch: 'Watch',
-  fork: 'Fork',
-  ping: 'Webhook test',
+function hasKey(key: string): key is MessageKey {
+  return key in en
 }
 
-export function eventLabel(eventType: string): string {
-  const known = EVENT_LABELS[eventType]
-  if (known) return known
+/** Plain name for a GitHub event type; unknown types are made readable. */
+export function eventLabel(eventType: string, t: Translator = tEn): string {
+  const key = `ev.${eventType}`
+  if (eventType !== 'titleIn' && hasKey(key)) return t(key)
   const spaced = eventType.replace(/_/g, ' ')
   return spaced.charAt(0).toUpperCase() + spaced.slice(1)
 }
 
-export function eventTitle(e: Pick<EventSummary, 'eventType' | 'repository'>): string {
-  const label = eventLabel(e.eventType)
-  return e.repository ? `${label} in ${e.repository}` : label
+export function eventTitle(e: Pick<EventSummary, 'eventType' | 'repository'>, t: Translator = tEn): string {
+  const label = eventLabel(e.eventType, t)
+  return e.repository ? t('ev.titleIn', { event: label, repo: e.repository }) : label
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  sent: 'Sent to you',
-  queued: 'Held back',
-  merged: 'Merged',
-  digest: 'In a digest',
-  delayed: 'Delayed',
-  budget_exceeded: 'Over your limit',
+export function statusLabel(status: string | undefined, t: Translator = tEn): string {
+  if (!status) return t('status.none')
+  const key = `status.${status}`
+  return hasKey(key) ? t(key) : status
 }
 
-export function statusLabel(status: string | undefined): string {
-  if (!status) return 'No decision yet'
-  return STATUS_LABELS[status] ?? status
+export function classLabel(kind: AttentionClass, t: Translator = tEn): string {
+  return t(`class.${kind}`)
 }
 
-export const CLASS_LABELS: Record<AttentionClass, string> = {
-  critical: 'Critical',
-  standard: 'Standard',
-  background: 'Background',
+export function classExplanation(kind: AttentionClass, t: Translator = tEn): string {
+  return t(`class.${kind}.explain`)
 }
 
-export const CLASS_EXPLANATIONS: Record<AttentionClass, string> = {
-  critical: 'Critical events always reach you. They never go through AI and are never merged.',
-  standard: 'Standard events are held back instead of interrupting you. Digests are not available yet, so they stay here.',
-  background: 'Background events are low priority and never interrupt you. They stay here for reference.',
+// The service sends decision reasons in English. Known ones are translated; any
+// other reason is shown as the service wrote it.
+const KNOWN_REASONS: [string, MessageKey][] = [
+  ['security vulnerability detected', 'reason.security'],
+  ['dependency vulnerability detected', 'reason.dependency'],
+  ['low-priority social signal', 'reason.social'],
+  ['standard events are held back instead of interrupting', 'reason.standard'],
+]
+
+export function reasonText(reason: string | undefined, t: Translator = tEn): string {
+  if (!reason) return ''
+  const trimmed = reason.trim()
+  const lower = trimmed.toLowerCase()
+  for (const [english, key] of KNOWN_REASONS) {
+    if (lower === english) return t(key)
+  }
+  const duplicate = /^duplicate of (.+)$/i.exec(trimmed)
+  if (duplicate) return t('reason.duplicate', { id: duplicate[1] })
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
 }
 
 export interface Thread {
@@ -113,13 +112,13 @@ export function summarizeLastHour(events: EventSummary[], now: Date): HourSummar
   return summary
 }
 
-export function describeHour(s: HourSummary): string {
-  if (s.total === 0) return 'Nothing arrived in the last hour.'
+export function describeHour(s: HourSummary, t: Translator = tEn): string {
+  if (s.total === 0) return t('hour.none')
   const parts: string[] = []
-  if (s.sent) parts.push(`${s.sent} sent to you`)
-  if (s.heldBack) parts.push(`${s.heldBack} held back`)
-  if (s.merged) parts.push(`${s.merged} merged`)
-  return `In the last hour: ${parts.join(', ')}.`
+  if (s.sent) parts.push(t('hour.sent', { n: s.sent }))
+  if (s.heldBack) parts.push(t('hour.held', { n: s.heldBack }))
+  if (s.merged) parts.push(t('hour.merged', { n: s.merged }))
+  return t('hour.prefix', { parts: parts.join(', ') })
 }
 
 export function latestCritical(events: EventSummary[]): EventSummary | undefined {
@@ -132,14 +131,14 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ['minute', 60_000],
 ]
 
-export function relativeTime(iso: string, now: Date): string {
+export function relativeTime(iso: string, now: Date, tag = 'en', t: Translator = tEn): string {
   const diff = new Date(iso).getTime() - now.getTime()
-  if (Math.abs(diff) < 60_000) return 'just now'
-  const rtf = new Intl.RelativeTimeFormat('en', { numeric: 'always', style: 'short' })
+  if (Math.abs(diff) < 60_000) return t('time.now')
+  const rtf = new Intl.RelativeTimeFormat(tag, { numeric: 'always', style: 'short' })
   for (const [unit, ms] of UNITS) {
     if (Math.abs(diff) >= ms) return rtf.format(Math.round(diff / ms), unit)
   }
-  return 'just now'
+  return t('time.now')
 }
 
 export function pluralize(count: number, one: string, many: string): string {

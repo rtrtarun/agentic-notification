@@ -2,6 +2,8 @@
 
 Written for engineers who will change or extend `apps/web`. It explains how the console is built, why it looks the way it does, which component owns what, and where it falls short of the three UI skills in [`skills/`](../skills/README.md). The shorter product-level summary is [frontend.md](frontend.md); the backend contract is in [architecture.md](architecture.md) section 11.4a.
 
+This document describes the console after the inbox redesign (sidebar, search, unread, themes and languages). Sections 15 and 16 record the earlier skills audit, which still applies; new controls follow the same rules.
+
 All statements here were checked against the code at the commit that added this file. Line references are to `apps/web/src`.
 
 ## Contents
@@ -20,6 +22,7 @@ All statements here were checked against the code at the commit that added this 
 12. [Accessibility](#12-accessibility)
 13. [Copy rules](#13-copy-rules)
 14. [Testing](#14-testing)
+    - [14a. Languages, themes and categories](#14a-languages-themes-and-categories)
 15. [Skills conformance audit](#15-skills-conformance-audit)
 16. [Gaps and recommended order of work](#16-gaps-and-recommended-order-of-work)
 17. [How to extend the console](#17-how-to-extend-the-console)
@@ -47,46 +50,58 @@ Rules the code follows: components render, `lib/` holds logic and has the tests,
 
 ```mermaid
 flowchart TD
-    Main["main.tsx"] --> App
-    App["App<br/>settings, selection, clock"] --> Header
-    App --> Main2["main element"]
+    Main["main.tsx<br/>applies saved theme"] --> I18n["I18nProvider<br/>language, t()"]
+    I18n --> App
+    App["App<br/>settings, selection, filters,<br/>page, drawer, clock"] --> Welcome
+    App --> Sidebar
+    App --> Workspace["workspace"]
     App --> EventSheet
     App --> SettingsDialog
-    Main2 --> ErrorNotice
-    Main2 --> Lead
-    Main2 --> Ledger
-    Main2 --> EmptyNotice
-    Lead --> Flag
+    Welcome --> Appearance
+    Sidebar --> Appearance
+    Sidebar --> Flag
+    Workspace --> TopBar
+    Workspace --> Notices["ErrorNotice / EmptyNotice"]
+    Workspace --> Lead
+    Workspace --> Ledger
+    Workspace --> Pager
+    TopBar --> Bell["NotificationBell"]
+    Bell --> Chip
+    Ledger --> Chip
     Ledger --> Flag
-    EventSheet --> Flag
-    App -. uses .-> useEvents["useEvents hook<br/>polling, abort, last-good events"]
-    useEvents --> api["lib/api.ts<br/>fetchEvents, sendFeedback"]
+    EventSheet --> Chip
+    App -. uses .-> useEvents["useEvents<br/>polling, abort, last-good events"]
+    App -. uses .-> useRead["useRead<br/>unread state"]
+    useEvents --> api["lib/api.ts<br/>fetchEvents, sendFeedback<br/>(or lib/demo.ts)"]
     EventSheet --> api
-    App --> settings["lib/settings.ts<br/>sessionStorage"]
-    Lead --> events["lib/events.ts<br/>labels, threads, summaries"]
-    Ledger --> events
-    EventSheet --> events
+    App --> filters["lib/filters.ts<br/>search, view, range, paging"]
+    Ledger --> events["lib/events.ts<br/>labels, threads, summaries"]
 ```
 
-`App` is the only component with application state. Everything below it receives data and callbacks as props. `Flag` is the only shared visual component.
+`App` is the only component with application state. Everything below it receives data and callbacks as props. Every visible string goes through `t()` from `I18nProvider`.
 
 ## 4. Component reference
 
-| Component | File | Owns | Props | Notes |
-|---|---|---|---|---|
-| `App` | `App.tsx` | `settings`, `settingsOpen`, `selectedId`, `now` (30 s clock) | none | Derives `selected` and `original` (the event a merged one points to). Sets `data-sheet="open\|closed"` on `.page`, which switches the grid layout. |
-| `Welcome` | `components/Welcome.tsx` | nothing | `onTryDemo`, `onConnect` | First-visit screen with the legend and two choices. Shown instead of an error when nothing has been configured. |
-| `Legend` | `components/Legend.tsx` | nothing | none | The three classes with their flags and a plain sentence each. Used in `Welcome` and above the list. |
-| `Header` | `components/Header.tsx` | nothing | `feed`, `onOpenSettings`, `inert?` | Wordmark, connection status (`role="status"`), link to settings. The status dot has three shapes: filled circle (connected), hollow circle (connecting), rotated diamond (problem), so state is not colour-only. |
-| `Lead` | `components/Lead.tsx` | nothing | `events`, `now`, `onOpen` | The page's `h1`. Latest critical event as a button in the largest type, its reason, and one last-hour sentence. When there is no critical event it says so in a lighter, condensed face. |
-| `Ledger` | `components/Ledger.tsx` | `filter` | `events`, `now`, `selectedId`, `onSelect` | Filter group (`aria-pressed` buttons with counts) and the thread list. Memoises counts and `groupThreads`. Each row is one `<button>`; merged events are nested buttons in a second list. |
-| `EventSheet` | `components/EventSheet.tsx` | `last`, `error`, `busy`, `reply` | `event`, `original?`, `settings`, `onOpenOriginal`, `onClose` | Why, rule, class meaning, repeat link, feedback buttons, note form, confirmation with Undo. Moves focus to its heading on open and on event change, restores focus on close, closes on Escape. Hides "Never notify me" for critical events and says why. |
-| `SettingsDialog` | `components/SettingsDialog.tsx` | form fields, `urlError` | `open`, `settings`, `onSave`, `onClose` | Native `<dialog>` opened with `showModal()`, so the browser supplies the focus trap, Escape and backdrop. Validates the address with `validateBackendUrl`. API key is a password field. |
-| `ErrorNotice` | `components/Notices.tsx` | nothing | `error`, `settings`, `onOpenSettings`, `onRetry` | One branch per `ApiError.kind`; every branch names the cause and offers the next action. `role="alert"`. |
-| `EmptyNotice` | `components/Notices.tsx` | `copied` | `settings` | Three real setup steps, the webhook URL and a copy button. The numbered list is a true sequence. |
-| `Flag` | `components/Flag.tsx` | nothing | `kind` | CSS-drawn shape with `role="img"` and an accessible name. See [section 6](#6-design-tokens). |
-| `useMediaQuery` | `hooks/useMediaQuery.ts` | match state | `query` | Used by `App` to know when the sheet covers the screen, so it can mark the page behind it `inert`. |
-| `useEvents` | `hooks/useEvents.ts` | feed state, reload counter | `settings` | Loads on mount and when settings change, polls every 15 s while the tab is visible, reloads when the tab becomes visible, aborts superseded requests, keeps the last events on screen during an outage. |
+| Component | File | Owns | Notes |
+|---|---|---|---|
+| `App` | `App.tsx` | `settings`, `settingsOpen`, `selectedId`, `now`, `welcome`, `filters` (view, query, range), `pageNumber`, `drawerOpen` | Derives counts, filtered threads, the current page and the unread list. Marks the page behind a covering layer `inert`. |
+| `Welcome` | `components/Welcome.tsx` | nothing | First-visit screen: purpose, the legend, **Try the demo**, **Connect your service**, language and theme. |
+| `Sidebar` | `components/Sidebar.tsx` | nothing | Wordmark, the four **views** (All, Critical, Standard, Background) with counts, connection status, **Connection settings**, and `Appearance`. A fixed column from 62rem; a drawer below that (focus moves in, Escape closes, a scrim behind). |
+| `TopBar` | `components/TopBar.tsx` | nothing | Menu button (small screens), search box, time-range control (1h, 24h, 7d, All) and the bell. Sticky. |
+| `NotificationBell` | `components/NotificationBell.tsx` | `open` | Bell with an unread badge. Opens a popover of the five latest unread events with **Mark all as read** and **View all**. Closes on Escape (focus returns to the bell) or an outside press. |
+| `Lead` | `components/Lead.tsx` | nothing | Banner: the latest critical event, its reason and one last-hour sentence. A calm message when there is no critical event. |
+| `Ledger` | `components/Ledger.tsx` | nothing | The list for the current page. Row = flag, title, reason, coloured `Chip`, status, time, unread dot. Merged events nest on a thread line. Empty result offers **Clear search and filters**. |
+| `Pager` | `components/Pager.tsx` | nothing | Previous, "Page 2 of 5", Next. Hidden when there is one page. |
+| `EventSheet` | `components/EventSheet.tsx` | `last`, `error`, `busy`, `reply` | Why, rule, class meaning, repeat link, **Was this right?** choices with explanations, note form, confirmation with Undo. Focus in on open and on event change, restored on close, Escape closes. No "Never notify me" for critical events. |
+| `SettingsDialog` | `components/SettingsDialog.tsx` | form fields, `urlError` | Native `<dialog>` with `showModal()`. Validates the address; the key is a password field. |
+| `ErrorNotice`, `EmptyNotice` | `components/Notices.tsx` | `copied` | One branch per `ApiError.kind`, each naming the cause and the next action. Empty state gives three setup steps. |
+| `Appearance` | `components/Appearance.tsx` | `theme` | Language select and five colour-theme swatches (radio group). Applies at once and persists. |
+| `Chip` | `components/Chip.tsx` | nothing | Coloured label for the event category. |
+| `Legend` | `components/Legend.tsx` | nothing | The three classes with flag and a plain sentence each. |
+| `Flag` | `components/Flag.tsx` | nothing | CSS-drawn shape; accessible name from the language, or hidden when a label sits beside it. |
+| `useEvents` | `hooks/useEvents.ts` | feed state | Loads, polls every 15 s while visible, aborts superseded requests, keeps the last events during an outage, can be disabled (welcome screen). |
+| `useRead` | `hooks/useRead.ts` | set of opened ids | Opened events are read; stored in `localStorage` (newest 2,000 ids). Not sent to the service. |
+| `useMediaQuery` | `hooks/useMediaQuery.ts` | match state | Tells `App` when the sheet covers the screen (below 80rem) and when the sidebar is a drawer (below 62rem). |
 
 ### Demo mode and first run
 
@@ -131,7 +146,9 @@ sequenceDiagram
 | Settings (address, key) | `App`, persisted by `lib/settings.ts` in `sessionStorage` | Changing them must restart the feed; the key must not outlive the tab |
 | Selected event id | `App` | The layout (`data-sheet`) and the list highlight both depend on it |
 | Clock `now` | `App`, updated every 30 s | Keeps "2 minutes ago" correct between polls; passed down so children stay pure |
-| Filter | `Ledger` | Nothing else needs it |
+| Filters (view, search, range) and page number | `App` | The sidebar, top bar, list and pager all read them |
+| Unread ids | `useRead`, `localStorage` | Shared by the list, the badge and the bell; kept in this browser |
+| Language, theme | `I18nProvider`, `Appearance`, `localStorage` | Apply at once and persist |
 | Feedback progress | `EventSheet` | Resets whenever the event changes |
 | Dialog field values | `SettingsDialog` | Discarded on cancel |
 
@@ -203,67 +220,63 @@ Other uses: wordmark 75% width at weight 800; lead 100% at 750; the calm lead ("
 
 ## 8. Layout and wireframes
 
-One column, left-aligned, maximum width 60rem. No sidebar, no stat cards.
+Three regions: a **sidebar** of views, a **workspace** (top bar and the list) and the **detail sheet**. Widths decide how they combine:
 
-### Wide screen, nothing selected
+| Width | Sidebar | Detail sheet |
+|---|---|---|
+| 80rem and up (1280 px) | Fixed column, 16rem | Docks as a third column, 27rem |
+| 62rem to 80rem | Fixed column | Covers the screen (page behind is `inert`) |
+| Below 62rem | Drawer opened from the menu button | Covers the screen |
+| Below 40rem | Drawer | Covers; search wraps to its own line; rows stack |
 
-```
-+--------------------------------------------------------------+
-| Attention                    (o) Connected   Connection settings
-|                                                              |
-| Payment failed in acme/billing        <- largest type, link  |
-| Latest critical event, 4 minutes ago. Matched a critical rule|
-| In the last hour: 2 sent to you, 5 held back, 3 merged.      |
-|                                                              |
-| All 24   Critical 3   Standard 9   Background 12             |
-| ------------------------------------------------------------ |
-| >  Payment failed in acme/billing      Sent        4 min ago |  tall row
-| ------------------------------------------------------------ |
-| #  Pull request opened in acme/web     Held back   9 min ago |  medium
-|    |-- <> Repeat, merged into the event above      6 min ago |  thread line
-| -  star created                        Held back  12 min ago |  slim
-+--------------------------------------------------------------+
-```
-
-### Wide screen, event selected (62rem and up)
-
-The page becomes a two-column grid; the sheet is sticky at 27rem and the list narrows beside it.
+### Wide screen, event selected
 
 ```
-+------------------------------------------+------------------+
-| Attention        (o) Connected  Settings | Close            |
-| Lead ...                                 | Payment failed...|
-| Filters                                  | Critical. Sent.  |
-| rows ...                                 | Why this happened|
-|                                          | Rule that matched|
-|                                          | [Dismiss][Always]|
-|                                          | Add a note [   ] |
-+------------------------------------------+------------------+
++----------+------------------------------------------+-----------------+
+| Attention| [Search events]  [1h 24h 7d All]   (bell 3)| Close          |
+|          | Notifications (3)        Mark all as read | Security advisory|
+| > All 18 | +--------------------------------------+ | Critical. Sent. |
+|   Crit. 3| | Security advisory in acme/billing    | | Why this happened|
+|   Std. 10| | Latest critical event, 4 min. ago.   | | Rule that matched|
+|   Bkg.  5| +--------------------------------------+ | Was this right? |
+|          | Select an event to see why ...           | [Dismiss]       |
+|          | > Security advisory in acme/billing  [Security] * | [Always notify]|
+|          |   Security vulnerability detected  Sent  4 min   | Add a note      |
+|          |   Pull request in acme/web        [Code]   *     |                 |
+| Connected|     |-- <> Repeat, merged ...                    |                 |
+| Settings |   Page 1 of 2   [Previous] [Next]                |                 |
+| Language |                                                  |                 |
+| (o)(o)(o)|                                                  |                 |
++----------+--------------------------------------------------+-----------------+
 ```
 
-### Phone (up to 40rem)
+`*` is the orange unread dot. Chips are coloured by category (see section 6).
 
-Rows stack into title, status and time. The sheet becomes a fixed full-screen layer (`position: fixed; inset: 0; z-index: 10`).
+### Phone
 
 ```
-+------------------------+      +------------------------+
-| Attention  (o) Connected      | Close                  |
-| Settings               |      | Payment failed in ...  |
-| Lead (large, wraps)    |      | Critical. Sent.        |
-| All 24 Critical 3 ...  |      | Why this happened      |
-| > Payment failed in .. |      | ...                    |
-|   Sent                 |      | [Dismiss] [Always]     |
-|   4 min ago            |      | Add a note             |
-+------------------------+      +------------------------+
++------------------------+   +------------------------+
+| [=] [bell 3]           |   | Attention          [x] |
+| [Search events        ]|   | > All            18    |
+| [1h 24h 7d All]        |   |   Critical        3    |
+| Notifications (3)      |   |   Standard       10    |
+| Lead banner            |   |   Background      5    |
+| > Security advisory *  |   |                        |
+|   [Security] Sent 4 min|   | Connected              |
+|   Pull request  *      |   | Connection settings    |
+|   [Code] Held back     |   | Language [English v]   |
+| Page 1 of 2 [<] [>]    |   | Colour theme (o)(o)(o) |
++------------------------+   +------------------------+
+        list                       drawer (menu button)
 ```
 
 ## 9. CSS architecture
 
-- **Single-class selectors.** Components own a block name (`.row`, `.sheet`, `.notice`, `.dialog`) with a few elements (`.row-title`). Variation uses `data-*` attributes (`data-class`, `data-kind`, `data-state`, `data-sheet`) or ARIA state (`aria-pressed`, `aria-current`, `aria-invalid`), not modifier classes. The attribute that styles an element is the same one assistive technology reads.
-- **No `!important`, no inline styles, no `transition: all`.** Nothing transitions today.
-- **Order in the file:** tokens, reset, page frame, lead, ledger, flags, sheet, controls, dialog, notices, wide-screen rules, small-screen rules, motion.
-- **Responsive rules** are two media queries (`min-width: 62rem` for the docked sheet, `max-width: 40rem` for stacked rows), plus a fluid lead size via `clamp`.
-- **Page grid** uses named areas (`masthead`, `main`, `sheet`) so the sheet can dock without moving the DOM.
+- **Single-class selectors.** Components own a block name (`.row`, `.sheet`, `.sidebar`, `.popover`, `.chip`). Variation uses `data-*` attributes (`data-class`, `data-kind`, `data-category`, `data-state`, `data-sheet`, `data-open`, `data-unread`) or ARIA state (`aria-pressed`, `aria-current`, `aria-invalid`), not modifier classes.
+- **Themes are variables.** `:root` holds the default (Harbour); `:root[data-theme='...']` overrides surface, ink, accent and rule colours. Components never hard-code a colour.
+- **No `!important`, no `transition: all`.** Inline styles appear only for the theme swatches, whose colours come from `lib/theme.ts`.
+- **Order in the file:** tokens and themes, reset, frame (sidebar, appearance, top bar, main), lead, ledger, chips, flags, pager, sheet, controls, dialog, notices, welcome, width rules, hover, press, motion.
+- **Layout** is a CSS grid on `.app` whose columns change by media query (section 8). The sheet is `position: fixed` when it covers the screen and `position: sticky` in its own column when docked.
 
 ## 10. Interaction states
 
@@ -287,7 +300,7 @@ Keyboard map:
 
 | Key | Where | Effect |
 |---|---|---|
-| Tab / Shift+Tab | everywhere | Moves through filters, rows, then the sheet if open. When the sheet covers the screen (below 62rem) the page behind it is `inert`, so focus stays inside the sheet |
+| Tab / Shift+Tab | everywhere | Moves through the sidebar, search, range, bell, rows and pager, then the sheet if open. When the sheet covers the screen (below 80rem) or the drawer is open, the page behind it is `inert`, so focus stays inside the layer |
 | Enter / Space | rows, buttons | Activates (all interactive elements are real buttons) |
 | Escape | detail sheet | Closes it and returns focus to the row that opened it |
 | Escape | settings dialog | Closes it (native `<dialog>`) |
@@ -304,19 +317,19 @@ Everything else is small feedback: a 140 ms press scale and, on desktop only, a 
 
 | Area | What is in place |
 |---|---|
-| Landmarks | `header`, `main`, `aside` (sheet, labelled by its heading), `section` regions with labels |
-| Headings | `h1` is the lead; the sheet and notices use `h2`; sheet sections use `h3` |
-| Focus | One visible ring for everything (`:focus-visible`, 3 px signal, offset 3 px). The sheet heading takes programmatic focus without a ring on mouse use and a ring on keyboard use |
-| Focus management | Sheet focus moves in and is restored on close. Below 62rem, where the sheet covers the screen, the header and `main` are `inert` while it is open. Native `<dialog>` handles settings |
-| Live regions | Connection text `role="status"`; feedback confirmation `role="status"`; errors `role="alert"` |
-| Colour | Class is carried by shape and by name (`Flag` has `role="img"` and a label); the connection dot also changes shape |
-| Contrast | Text is Sea (12:1), Distress (4.9:1) or Signal (5.7:1) on Harbour. Fog and Pennant never carry text |
+| Landmarks | `aside` (sidebar), `nav` (views), `header` (top bar), `search`, `main`, `aside` (sheet, labelled by its heading), labelled regions |
+| Headings | `h1` is the page title ("Notifications"); the lead, sheet and notices use `h2`; sheet sections `h3`. The welcome page has its own `h1` |
+| Focus | One visible ring for everything (`:focus-visible`, 3 px accent). The search box shows the ring on `:focus-within` |
+| Focus management | Sheet: focus in, restored on close. Drawer: focus to its close button, Escape closes. Bell: Escape closes and returns focus to the bell. Settings: native `<dialog>` |
+| Covering layers | While the sheet covers the screen, or the drawer is open, the page behind is `inert` |
+| Live regions | Connection text and feedback confirmation `role="status"`; errors `role="alert"`; the pager's "Page x of y" `aria-live="polite"` |
+| Names | The bell says "Unread notifications: 17"; unread dots have a name; flags have names; icon-only buttons have labels; each field has a label |
+| Colour | Class is carried by shape and name; category is carried by the chip's text, so colour is never the only signal; the connection dot changes shape |
+| Contrast | Ink, accent and distress text are at least 4.5:1 on the page and raised surfaces in all five themes; chip text is at least 5.2:1 on its tint (checked by calculation). Fog and Pennant never carry text |
+| Language | `<html lang>` follows the chosen language; each language option is marked with its own `lang` |
 | Forced colours | Filled flags use `CanvasText` |
-| Zoom | The viewport meta does not block zoom; layout holds at 390 px and with larger text |
-| Reduced motion | The sheet keeps a fade and loses the slide; press scaling is off |
-| Forms | Every field has a label; the URL field exposes `aria-invalid` and `aria-describedby` |
-
-Known weaknesses are in [section 16](#16-gaps-and-recommended-order-of-work).
+| Reduced motion | The sheet and drawer keep a fade and lose the slide; press scaling is off |
+| Touch | 16 px inputs, `touch-action: manipulation`, hover gated to hover-capable pointers |
 
 ## 13. Copy rules
 
@@ -327,14 +340,46 @@ Known weaknesses are in [section 16](#16-gaps-and-recommended-order-of-work).
 
 ## 14. Testing
 
-| Layer | Tooling | Count | Covers |
-|---|---|---|---|
-| `lib/api` | Vitest | in the 34 | URL joining, key header, every HTTP status mapped to a kind, network failure, abort passthrough |
-| `lib/events` | Vitest | in the 34 | Labels, thread grouping with and without the original loaded, last-hour counts and boundary, sentences, relative time, plurals |
-| `lib/settings` | Vitest | in the 34 | Defaults, round trip, corrupt and wrong-typed storage, URL validation |
-| Components | none | 0 | Checked by hand in a browser at desktop and 390 px widths (list, sheet, feedback and Undo, settings, empty, 401 and unreachable states) |
+| Layer | Tooling | Covers |
+|---|---|---|
+| `lib/api`, `lib/demo` | Vitest | URL joining, key header, every HTTP status mapped to a kind, network failure, abort; sample data shape, demo mode makes no network call |
+| `lib/events` | Vitest | Labels, thread grouping, last-hour counts and sentence, relative time, plurals |
+| `lib/filters` | Vitest | View, time range, multi-word search (case, status, category, current language), combined filters, counts, paging and clamping, category mapping, unread storage |
+| `lib/i18n` | Vitest | Every language defines exactly the English keys and keeps every `{placeholder}`; no empty text; interpolation; locale detection; translated helpers; reasons; `Intl` relative time |
+| `lib/settings` | Vitest | Defaults, round trip, corrupt storage, demo flag, first-visit detection, URL validation keys |
+| Components | none | Checked in a browser: all five themes, three languages, welcome and demo, search, views, range, paging, mark all read, the bell, the drawer and focus, the docked and covering sheet, 1440, 800 and 390 px widths. No console errors |
 
-The honest gap: no component or interaction tests, no automated accessibility check and no visual regression. Adding Testing Library with `jsdom` and `jest-axe` is the next step ([section 16](#16-gaps-and-recommended-order-of-work)).
+77 unit tests. The honest gap: no component or interaction tests, no automated accessibility check and no visual regression. Testing Library with `jsdom` and `jest-axe` is the next step.
+
+## 14a. Languages, themes and categories
+
+### Languages
+
+English, Spanish and Hindi. `lib/i18n/en.ts` is the source of truth; `es.ts` and `hi.ts` are typed `Messages`, so a missing key is a compile error, and a test checks keys and placeholders again. `t(key, {values})` fills `{name}` values; a key missing at run time falls back to English, then to the key itself so the gap is visible. The choice is saved in `localStorage`; the first visit follows the browser's language. Dates, times and "5 min. ago" use `Intl`, so they follow the language too.
+
+Not translated: decision reasons from the service that this console does not know. Known reasons (security, dependency, social signal, standard hold-back, duplicate of ...) are mapped; anything else is shown as the service wrote it. Translations were written by the assistant and should be reviewed by native speakers before release.
+
+To add a language: copy `en.ts` to `<code>.ts` and translate the values, add it to `Locale`, `LOCALES` and `CATALOGS` in `lib/i18n/index.ts`, and update the locale-count test. If its script is missing from Bricolage Grotesque (Devanagari, Telugu, Arabic and others), add a fallback font to `--font`.
+
+### Colour themes
+
+Five, chosen with the swatches in the sidebar (or on the welcome screen): Harbour (default), Violet, Forest, Sunset and Night. A theme sets the page, raised surface, ink, accent and rule colours. Red keeps meaning "critical" in every theme. The first visit follows the system's dark setting (Night); the choice is saved and applied before first paint, and the browser's address-bar colour follows it.
+
+| Theme | Page | Ink | Accent |
+|---|---|---|---|
+| Harbour | `#E6ECEE` | `#10283B` | `#2058B8` |
+| Violet | `#ECE9F6` | `#241B4B` | `#5B3FD0` |
+| Forest | `#E7EFE8` | `#12301F` | `#17734A` |
+| Sunset | `#F4E9EE` | `#3B1030` | `#A3195B` |
+| Night | `#0F1B26` | `#E6EEF2` | `#7FB0FF` |
+
+### Categories (the multicolour part)
+
+Each event type belongs to a category shown as a coloured chip: Security (red), Code (blue), Issues (violet), Builds (teal), Releases (green), Social (amber) and Other (grey). Colour says what kind of event it is; the flag's shape and the row's size say how much it matters. Light and dark themes each have a tuned set so the chip text stays readable.
+
+### Search, views, range, paging and unread
+
+All of it works on the events already loaded (the newest 200). The sidebar views filter by class; the search matches every word against the title, event type, repository, status, reason and category in the current language; the range keeps the last hour, day or week; the list shows 10 threads per page. An event is **unread** until it is opened (or **Mark all as read** is used); the badge counts unread events, not repeats merged into an earlier one. Read state is kept in this browser only.
 
 ## 15. Skills conformance audit
 
@@ -419,7 +464,7 @@ No competing library is installed, so there is nothing to flag or replace. The s
 | 5 | `user-select: none` on buttons only | mobile-native |
 | 6 | `viewport-fit=cover`, `interactive-widget=resizes-content`, `theme-color`, `color-scheme`, safe-area padding | mobile-native |
 | 7 | Custom ease-out curve; fade kept under reduced motion; short colour transition on desktop hover | tarun-design-eng |
-| 8 | Page behind the full-screen sheet is `inert` (new `useMediaQuery` hook; `inert` prop on `Header` and `main`) | accessibility |
+| 8 | Page behind the full-screen sheet is `inert` (new `useMediaQuery` hook; `inert` on the workspace and sidebar; the original `Header` has since been replaced by `Sidebar` and `TopBar`) | accessibility |
 
 Verified in Edge: the page behind the sheet is inert on a 390 px viewport and Tab stays inside it; closing restores focus to the row and removes `inert`; on desktop nothing is inert and the sheet docks; hover and press behave as described in [section 10](#10-interaction-states); the reduced-motion animation is `sheet-fade`. 34 unit tests, `tsc` and the production build pass.
 
@@ -442,6 +487,9 @@ Verified in Edge: the page behind the sheet is inert on a 390 px viewport and Ta
 | A new feedback action | Add it to `FeedbackAction` and `DONE_TEXT`, add a button in `EventSheet`, and confirm the backend accepts it. If it silences anything, check the critical-event rule |
 | A new setting | Add it to `Settings`, `lib/settings.ts` (with a test for corrupt storage) and `SettingsDialog` |
 | Pagination or search | Add cursor parameters to `GET /events` first; then extend `fetchEvents` and `useEvents`. Virtuoso becomes worthwhile above about 1,000 rendered rows |
+| A new language | See section 14a. Add the file, register it, run the tests |
+| A new colour theme | Add `:root[data-theme='x']` in `styles.css`, an entry in `THEMES`, a `theme.x` message in every language, and check 4.5:1 for ink, accent and distress on the page and raised surfaces |
+| A new event category | Add it to `Category`, `BY_EVENT`, a `cat.x` message in every language and `--cat-x` / `--cat-x-bg` in light and dark with at least 4.5:1 |
 | A new colour | Add it as a token with its role and contrast. If it would carry text, check 4.5:1 on Harbour first |
 
 Before merging UI changes: `npm test`, `npm run build`, keyboard-only pass, a look at 390 px width, and the checks in [section 15](#15-skills-conformance-audit).

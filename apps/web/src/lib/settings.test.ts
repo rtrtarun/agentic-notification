@@ -63,8 +63,8 @@ describe('validateBackendUrl', () => {
   })
 
   it('rejects other schemes and non-URLs with advice', () => {
-    expect(validateBackendUrl('ftp://host')).toMatch(/http/)
+    expect(validateBackendUrl('ftp://host')).toBe('settings.urlScheme')
     expect(validateBackendUrl('localhost:8080')).not.toBeNull()
-    expect(validateBackendUrl('')).toMatch(/full URL/)
+    expect(validateBackendUrl('')).toBe('settings.urlInvalid')
   })
 })

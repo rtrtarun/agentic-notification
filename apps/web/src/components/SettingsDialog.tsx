@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Settings } from '../lib/api'
+import { useI18n } from '../lib/i18n/I18nContext'
+import type { MessageKey } from '../lib/i18n'
 import { validateBackendUrl } from '../lib/settings'
 
 interface SettingsDialogProps {
@@ -10,10 +12,11 @@ interface SettingsDialogProps {
 }
 
 export function SettingsDialog({ open, settings, onSave, onClose }: SettingsDialogProps) {
+  const { t } = useI18n()
   const dialogRef = useRef<HTMLDialogElement>(null)
   const [backendUrl, setBackendUrl] = useState(settings.backendUrl)
   const [apiKey, setApiKey] = useState(settings.apiKey)
-  const [urlError, setUrlError] = useState<string | null>(null)
+  const [urlError, setUrlError] = useState<MessageKey | null>(null)
 
   useEffect(() => {
     const dialog = dialogRef.current
@@ -42,11 +45,11 @@ export function SettingsDialog({ open, settings, onSave, onClose }: SettingsDial
         }}
       >
         <h2 id="settings-heading" className="dialog-title">
-          Connection settings
+          {t('settings.title')}
         </h2>
 
         <label htmlFor="backend-url" className="field-label">
-          Service address
+          {t('settings.address')}
         </label>
         <input
           id="backend-url"
@@ -60,12 +63,12 @@ export function SettingsDialog({ open, settings, onSave, onClose }: SettingsDial
         />
         {urlError && (
           <p id="backend-url-error" className="error-text">
-            {urlError}
+            {t(urlError)}
           </p>
         )}
 
         <label htmlFor="api-key" className="field-label">
-          API key
+          {t('settings.key')}
         </label>
         <input
           id="api-key"
@@ -77,16 +80,15 @@ export function SettingsDialog({ open, settings, onSave, onClose }: SettingsDial
           aria-describedby="api-key-help"
         />
         <p id="api-key-help" className="hint">
-          Use the value set as API_KEY on the service. It is kept in this browser tab only and forgotten when you close
-          the tab.
+          {t('settings.keyHelp')}
         </p>
 
         <div className="actions">
           <button type="submit" className="button button-primary">
-            Save and connect
+            {t('settings.save')}
           </button>
           <button type="button" className="button" onClick={onClose}>
-            Cancel
+            {t('settings.cancel')}
           </button>
         </div>
       </form>

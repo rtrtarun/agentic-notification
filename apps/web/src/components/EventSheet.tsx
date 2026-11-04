@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiError, sendFeedback, type EventSummary, type FeedbackAction, type Settings } from '../lib/api'
-import { CLASS_EXPLANATIONS, CLASS_LABELS, eventTitle, statusLabel } from '../lib/events'
+import { classExplanation, classLabel, eventTitle, reasonText, statusLabel } from '../lib/events'
+import { useI18n } from '../lib/i18n/I18nContext'
+import type { Translator } from '../lib/i18n'
+import { Chip } from './Chip'
 import { Flag } from './Flag'
 
 interface EventSheetProps {
@@ -11,25 +14,17 @@ interface EventSheetProps {
   onClose: () => void
 }
 
-/** What the confirmation says. Each name matches the button that produced it. */
-const DONE_TEXT: Record<FeedbackAction, string> = {
-  dismissed: 'Dismissed.',
-  always: 'You will always be notified about events like this.',
-  never: 'You will never be notified about events like this.',
-  undo: 'Undone.',
-  reply: 'Reply sent.',
-}
-
-function feedbackError(err: unknown): string {
+function feedbackError(err: unknown, t: Translator): string {
   if (err instanceof ApiError) {
-    if (err.kind === 'unauthorized') return 'The API key was rejected. Update it in connection settings, then try again.'
-    if (err.kind === 'unreachable') return 'The service could not be reached. Check the connection and try again.'
-    if (err.kind === 'rejected') return `${err.message} Check the entry and try again.`
+    if (err.kind === 'unauthorized') return t('fb.unauthorized')
+    if (err.kind === 'unreachable') return t('fb.unreachable')
+    if (err.kind === 'rejected') return t('fb.rejected', { message: err.message })
   }
-  return 'The service hit an error and did not save your feedback. Try again in a moment.'
+  return t('fb.server')
 }
 
 export function EventSheet({ event, original, settings, onOpenOriginal, onClose }: EventSheetProps) {
+  const { t, tag } = useI18n()
   const headingRef = useRef<HTMLHeadingElement>(null)
   const [last, setLast] = useState<FeedbackAction | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -67,7 +62,7 @@ export function EventSheet({ event, original, settings, onOpenOriginal, onClose 
       setLast(action)
       if (action === 'reply') setReply('')
     } catch (err) {
-      setError(feedbackError(err))
+      setError(feedbackError(err, t))
     } finally {
       setBusy(false)
     }
@@ -75,66 +70,68 @@ export function EventSheet({ event, original, settings, onOpenOriginal, onClose 
 
   const critical = event.attentionClass === 'critical'
   const decision = event.decisionState
+  const reason = reasonText(decision?.reason, t)
 
   return (
     <aside className="sheet" aria-labelledby="sheet-heading">
       <div className="sheet-bar">
         <button type="button" className="text-button" onClick={onClose}>
-          Close
+          {t('sheet.close')}
         </button>
       </div>
 
       <h2 id="sheet-heading" className="sheet-title" tabIndex={-1} ref={headingRef}>
-        {eventTitle(event)}
+        {eventTitle(event, t)}
       </h2>
       <p className="sheet-meta">
         <Flag kind={event.attentionClass} />
-        {CLASS_LABELS[event.attentionClass]}. {statusLabel(decision?.status)}.{' '}
-        <time dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleString()}</time>
+        {classLabel(event.attentionClass, t)}. {statusLabel(decision?.status, t)}.{' '}
+        <Chip eventType={event.eventType} />{' '}
+        <time dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleString(tag)}</time>
       </p>
 
-      <h3 className="sheet-subtitle">Why this happened</h3>
-      <p className="prose">{decision?.reason ? `${decision.reason.charAt(0).toUpperCase()}${decision.reason.slice(1)}.` : 'No reason was recorded.'}</p>
-      {decision?.matchedRule && <p className="prose">Rule that matched: {decision.matchedRule}.</p>}
-      <p className="prose">{CLASS_EXPLANATIONS[event.attentionClass]}</p>
+      <h3 className="sheet-subtitle">{t('sheet.why')}</h3>
+      <p className="prose">{reason ? `${reason}.` : t('sheet.noReason')}</p>
+      {decision?.matchedRule && <p className="prose">{t('sheet.rule', { rule: decision.matchedRule })}</p>}
+      <p className="prose">{classExplanation(event.attentionClass, t)}</p>
 
       {event.mergedInto && (
         <p className="prose">
-          This is a repeat of an earlier event.{' '}
+          {t('sheet.repeat')}{' '}
           {original ? (
             <button type="button" className="text-button" onClick={() => onOpenOriginal(original.id)}>
-              Open the original
+              {t('sheet.openOriginal')}
             </button>
           ) : (
-            'The original is older than the events shown here.'
+            t('sheet.originalOld')
           )}
         </p>
       )}
 
-      <h3 className="sheet-subtitle">Was this right?</h3>
+      <h3 className="sheet-subtitle">{t('sheet.right')}</h3>
       <ul className="choices">
         <li className="choice">
           <button type="button" className="button" disabled={busy} onClick={() => submit('dismissed')}>
-            Dismiss
+            {t('act.dismiss')}
           </button>
-          <span className="choice-hint">Mark this one as handled.</span>
+          <span className="choice-hint">{t('act.dismiss.hint')}</span>
         </li>
         <li className="choice">
           <button type="button" className="button" disabled={busy} onClick={() => submit('always')}>
-            Always notify me
+            {t('act.always')}
           </button>
-          <span className="choice-hint">Send events like this straight to you.</span>
+          <span className="choice-hint">{t('act.always.hint')}</span>
         </li>
         {!critical && (
           <li className="choice">
             <button type="button" className="button" disabled={busy} onClick={() => submit('never')}>
-              Never notify me
+              {t('act.never')}
             </button>
-            <span className="choice-hint">Stop interrupting you for events like this.</span>
+            <span className="choice-hint">{t('act.never.hint')}</span>
           </li>
         )}
       </ul>
-      {critical && <p className="hint">Critical events can&rsquo;t be silenced, so there is no option to never be notified.</p>}
+      {critical && <p className="hint">{t('sheet.criticalHint')}</p>}
 
       <form
         className="reply"
@@ -144,7 +141,7 @@ export function EventSheet({ event, original, settings, onOpenOriginal, onClose 
         }}
       >
         <label htmlFor="reply-text" className="field-label">
-          Add a note
+          {t('sheet.note')}
         </label>
         <textarea
           id="reply-text"
@@ -155,20 +152,20 @@ export function EventSheet({ event, original, settings, onOpenOriginal, onClose 
           onChange={(e) => setReply(e.target.value)}
         />
         <button type="submit" className="button" disabled={busy || !reply.trim()}>
-          Send note
+          {t('sheet.sendNote')}
         </button>
       </form>
 
       <div className="feedback-status" role="status">
         {last && last !== 'undo' && (
           <p>
-            {DONE_TEXT[last]}{' '}
+            {t(`done.${last}`)}{' '}
             <button type="button" className="text-button" disabled={busy} onClick={() => submit('undo', last)}>
-              Undo
+              {t('act.undo')}
             </button>
           </p>
         )}
-        {last === 'undo' && <p>{DONE_TEXT.undo}</p>}
+        {last === 'undo' && <p>{t('done.undo')}</p>}
       </div>
       {error && (
         <p className="error-text" role="alert">

@@ -45,13 +45,13 @@ export function needsWelcome(): boolean {
   }
 }
 
-/** Returns an error message for an invalid backend URL, or null when it is usable. */
-export function validateBackendUrl(value: string): string | null {
+/** Returns the message key for what is wrong with a backend URL, or null when it is usable. */
+export function validateBackendUrl(value: string): 'settings.urlScheme' | 'settings.urlInvalid' | null {
   try {
     const url = new URL(value)
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return 'Use a URL that starts with http:// or https://.'
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return 'settings.urlScheme'
     return null
   } catch {
-    return 'Enter a full URL, for example http://localhost:8080.'
+    return 'settings.urlInvalid'
   }
 }

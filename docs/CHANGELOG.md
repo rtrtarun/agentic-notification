@@ -5,6 +5,11 @@ Every change to this repository is recorded here, newest first. Milestone-level 
 ## Unreleased
 
 ### Added
+- Inbox redesign of the console, informed by common notification-centre layouts: a sidebar of views with counts, a top bar with search, time range and a notification bell with unread count and popover, coloured category chips, unread dots with **Mark all as read**, paging, a lead banner, and a three-column layout where the detail sheet docks from 80rem and the sidebar becomes a drawer below 62rem.
+- **Languages:** English, Spanish and Hindi through a small typed translation layer (`lib/i18n`), with `Intl` dates and relative times, `<html lang>`, a saved choice and browser-language detection. A test checks every language has the same keys and placeholders. Translations need native review.
+- **Colour themes:** Harbour, Violet, Forest, Sunset and Night, applied before first paint, following the system dark setting on first visit; contrast of ink, accent and distress checked at 4.5:1 or better in each.
+- 77 Vitest tests (up from 44): i18n, filters and paging, categories, unread storage.
+- Docs: [ui-architecture.md](ui-architecture.md) updated (components, layout, accessibility, section 14a).
 - Easier first use of the console: a welcome screen on a first visit (what Attention does, how events are sorted, "Try the demo" or "Connect your service"); a **demo mode** with sample data that needs no service (`VITE_DEFAULT_DEMO=true` makes it the default for the hosted build); a plain-language key for the three attention classes above the list; a line telling people to select an event; and feedback choices that each say what they do under a "Was this right?" heading. 44 Vitest tests.
 - Hosting: [.github/workflows/pages.yml](../.github/workflows/pages.yml) publishes the console to GitHub Pages (tests, then a build with `VITE_BASE` and demo mode); `vite.config.ts` reads `VITE_BASE`. Guide: [deployment.md](deployment.md).
 - [notification-hubs-comparison.md](notification-hubs-comparison.md): how the platform differs from Azure Notification Hubs, with its public request details.
