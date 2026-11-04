@@ -17,12 +17,12 @@ GitHub can host the **console** (GitHub Pages) and store the **service image** (
 
 Workflow: [.github/workflows/pages.yml](../.github/workflows/pages.yml).
 
-1. Push the repository to GitHub and merge to `main`:
+1. Push the repository to GitHub and merge to the default branch (`master` or `main`):
    ```bash
    git push origin feature-impl
-   # then open a pull request into main on GitHub and merge it
+   # then open a pull request into master on GitHub and merge it
    ```
-   The workflow runs on pushes to `main` that touch `apps/web/**`, or by hand from the Actions tab (Run workflow).
+   The workflow runs on pushes to `main` or `master` that touch `apps/web/**`, or by hand from the Actions tab (Run workflow).
 2. In the repository open **Settings, then Pages**, and set **Source** to **GitHub Actions**.
 3. Open the **Actions** tab, wait for "Deploy console to GitHub Pages", and open the address it prints: `https://<user>.github.io/<repository>/`.
 

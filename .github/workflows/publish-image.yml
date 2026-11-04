@@ -6,7 +6,7 @@ name: Publish service image
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
     paths:
       - 'go-server/notification-service/**'
       - '.github/workflows/publish-image.yml'

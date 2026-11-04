@@ -10,7 +10,7 @@ name: Deploy console to GitHub Pages
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
     paths:
       - 'apps/web/**'
       - '.github/workflows/pages.yml'
