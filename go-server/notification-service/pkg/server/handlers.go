@@ -29,6 +29,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/metrics", protected(s.metricsHandler))
 	mux.Handle("/feedback", protected(s.feedbackHandler))
 	mux.Handle("/events", protected(s.eventsHandler))
+	mux.Handle(inboxPrefix, protected(s.inboxHandler))
+	mux.Handle(inboxPrefix+"/", protected(s.inboxHandler))
 	// Health is unauthenticated so orchestrator probes and the dashboard work without a key.
 	mux.Handle("/health", s.corsMiddleware(s.loggingMiddleware(http.HandlerFunc(s.healthHandler))))
 	mux.Handle("/webhooks/github", s.corsMiddleware(s.loggingMiddleware(

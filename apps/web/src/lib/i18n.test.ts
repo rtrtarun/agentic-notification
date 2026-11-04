@@ -1,9 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { describeHour, eventLabel, eventTitle, reasonText, relativeTime, statusLabel } from './events'
-import { LOCALES, detectLocale, isLocale, makeTranslator, saveLocale, tEn } from './i18n'
+import { LOCALES, detectLocale, isLocale, localeDir, makeTranslator, saveLocale, tEn } from './i18n'
+import { ar } from './i18n/ar'
+import { de } from './i18n/de'
 import { en } from './i18n/en'
 import { es } from './i18n/es'
+import { fr } from './i18n/fr'
 import { hi } from './i18n/hi'
+import { ja } from './i18n/ja'
+import { pt } from './i18n/pt'
+import { zh } from './i18n/zh'
 
 function fakeStorage() {
   const data = new Map<string, string>()
@@ -23,7 +29,13 @@ afterEach(() => {
 
 const catalogs = [
   ['es', es],
+  ['fr', fr],
+  ['de', de],
+  ['pt', pt],
   ['hi', hi],
+  ['ar', ar],
+  ['ja', ja],
+  ['zh', zh],
 ] as const
 
 describe('catalogs', () => {
@@ -47,7 +59,7 @@ describe('catalogs', () => {
   })
 
   it('lists every supported language once', () => {
-    expect(LOCALES.map((l) => l.code).sort()).toEqual(['en', 'es', 'hi'])
+    expect(LOCALES.map((l) => l.code).sort()).toEqual(['ar', 'de', 'en', 'es', 'fr', 'hi', 'ja', 'pt', 'zh'])
   })
 })
 
@@ -82,8 +94,24 @@ describe('locale choice', () => {
   it('falls back to the browser language, then English', () => {
     vi.stubGlobal('navigator', { languages: ['es-MX', 'en'], language: 'es-MX' })
     expect(detectLocale()).toBe('es')
-    vi.stubGlobal('navigator', { languages: ['fr-FR'], language: 'fr-FR' })
+    vi.stubGlobal('navigator', { languages: ['it-IT'], language: 'it-IT' })
     expect(detectLocale()).toBe('en')
+  })
+
+  it('matches regional browser codes to the base language', () => {
+    for (const [browser, expected] of [['fr-CA', 'fr'], ['de-AT', 'de'], ['pt-BR', 'pt'], ['pt-PT', 'pt'], ['ar-EG', 'ar'], ['ja-JP', 'ja'], ['zh-CN', 'zh'], ['zh-TW', 'zh']] as const) {
+      vi.stubGlobal('navigator', { languages: [browser], language: browser })
+      expect(detectLocale(), browser).toBe(expected)
+    }
+  })
+
+  it('reads Arabic right to left and everything else left to right', () => {
+    expect(localeDir('ar')).toBe('rtl')
+    for (const l of LOCALES.filter((x) => x.code !== 'ar')) expect(l.dir, l.code).toBe('ltr')
+  })
+
+  it('gives every language a distinct name written in that language', () => {
+    expect(new Set(LOCALES.map((l) => l.name)).size).toBe(LOCALES.length)
   })
 })
 

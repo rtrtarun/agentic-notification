@@ -41,7 +41,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
         group: 'actions',
         run: () => {
           markEverythingRead()
-          toast.push(t('toast.allRead'), 'success')
+            .then(() => toast.push(t('toast.allRead'), 'success'))
+            .catch(() => toast.push(t('inbox.failed', { message: '' }), 'error'))
         },
       },
       {

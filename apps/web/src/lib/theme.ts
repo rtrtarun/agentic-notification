@@ -2,7 +2,7 @@
 // <html data-theme="...">; see styles.css. The class colours keep their meaning
 // in every theme: red stays critical.
 
-export type ThemeId = 'attention' | 'harbour' | 'violet' | 'forest' | 'sunset' | 'night'
+export type ThemeId = 'attention' | 'daylight' | 'harbour' | 'violet' | 'forest' | 'sunset' | 'night'
 
 export interface ThemeInfo {
   id: ThemeId
@@ -14,6 +14,7 @@ export interface ThemeInfo {
 
 export const THEMES: ThemeInfo[] = [
   { id: 'attention', background: '#0b1020', accent: '#8f7bff' },
+  { id: 'daylight', background: '#f3f5fb', accent: '#5b3fd0' },
   { id: 'harbour', background: '#e6ecee', accent: '#2058b8' },
   { id: 'violet', background: '#ece9f6', accent: '#5b3fd0' },
   { id: 'forest', background: '#e7efe8', accent: '#17734a' },
@@ -36,7 +37,7 @@ export function detectTheme(): ThemeId {
     // fall through
   }
   // Dark first: only a system that asks for light gets the light theme.
-  if (typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: light)').matches) return 'harbour'
+  if (typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: light)').matches) return 'daylight'
   return 'attention'
 }
 

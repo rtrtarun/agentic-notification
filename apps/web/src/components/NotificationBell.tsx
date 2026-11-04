@@ -3,14 +3,16 @@ import type { EventSummary } from '../lib/api'
 import { eventTitle, relativeTime } from '../lib/events'
 import { useI18n } from '../lib/i18n/I18nContext'
 import { Chip } from './Chip'
-import { Flag } from './Flag'
+import { EventIcon } from './EventIcon'
 import { BellIcon } from './icons'
 
 const SHOWN = 5
 
 interface NotificationBellProps {
-  /** Unread events, newest first. */
+  /** The newest unread events, for the short list. */
   unread: EventSummary[]
+  /** How many are unread in all, which can be more than the list shows. */
+  count: number
   now: Date
   onOpenEvent: (id: string) => void
   onMarkAllRead: () => void
@@ -18,7 +20,7 @@ interface NotificationBellProps {
 }
 
 /** A bell with an unread count. Opens a short list of the latest unread events. */
-export function NotificationBell({ unread, now, onOpenEvent, onMarkAllRead, onViewAll }: NotificationBellProps) {
+export function NotificationBell({ unread, count, now, onOpenEvent, onMarkAllRead, onViewAll }: NotificationBellProps) {
   const { t, tag } = useI18n()
   const [open, setOpen] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -43,7 +45,6 @@ export function NotificationBell({ unread, now, onOpenEvent, onMarkAllRead, onVi
     }
   }, [open])
 
-  const count = unread.length
   return (
     <div className="bell" ref={rootRef}>
       <button
@@ -82,7 +83,7 @@ export function NotificationBell({ unread, now, onOpenEvent, onMarkAllRead, onVi
                       setOpen(false)
                     }}
                   >
-                    <Flag kind={e.attentionClass} />
+                    <EventIcon eventType={e.eventType} />
                     <span className="popover-text">
                       <span className="popover-name">{eventTitle(e, t)}</span>
                       <span className="popover-meta">

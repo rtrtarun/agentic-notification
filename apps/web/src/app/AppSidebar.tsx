@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Appearance } from '../components/Appearance'
+import { ThemeToggle } from '../components/ThemeToggle'
 import { ChevronIcon, CloseIcon, NavIcon } from '../components/icons'
 import { useDismiss } from '../hooks/useDismiss'
 import { useI18n } from '../lib/i18n/I18nContext'
@@ -104,12 +104,12 @@ export function AppSidebar({ feed, demo, unread, collapsed, onToggleCollapsed, o
         </nav>
 
         <div className="sidebar-foot">
+          <div className="foot-row">
           <p className="connection" data-state={state} role="status">
             <span className="connection-dot" aria-hidden="true" />
             <span className="nav-text">{t(key)}</span>
           </p>
-          <div className="nav-text">
-            <Appearance />
+          <ThemeToggle />
           </div>
           <button
             type="button"

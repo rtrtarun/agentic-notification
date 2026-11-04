@@ -359,7 +359,7 @@ English, Spanish and Hindi. `lib/i18n/en.ts` is the source of truth; `es.ts` and
 
 Not translated: decision reasons from the service that this console does not know. Known reasons (security, dependency, social signal, standard hold-back, duplicate of ...) are mapped; anything else is shown as the service wrote it. Translations were written by the assistant and should be reviewed by native speakers before release.
 
-To add a language: copy `en.ts` to `<code>.ts` and translate the values, add it to `Locale`, `LOCALES` and `CATALOGS` in `lib/i18n/index.ts`, and update the locale-count test. If its script is missing from Bricolage Grotesque (Devanagari, Telugu, Arabic and others), add a fallback font to `--font`.
+To add a language (nine are supported; Arabic is right to left, see [milestone-15.md](milestone-15.md) commit 4): copy `en.ts` to `<code>.ts` and translate the values, add it to `Locale`, `LOCALES` and `CATALOGS` in `lib/i18n/index.ts`, and update the locale-count test. If its script is missing from Bricolage Grotesque (Devanagari, Telugu, Arabic and others), add a fallback font to `--font`.
 
 ### Colour themes
 

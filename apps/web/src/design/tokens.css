@@ -79,3 +79,28 @@
   --sidebar-bg: #11202d;
   --success: #3ccf9f;
 }
+
+/* The light counterpart of the Attention theme: same structure, soft blue-grey page, white cards. */
+:root[data-theme='daylight'] {
+  color-scheme: light;
+  --harbour: #f3f5fb;
+  --deck: #ffffff;
+  --sea: #101828;
+  --signal: #5b3fd0;
+  --distress: #c81e3d;
+  --pennant: #9a5b00;
+  --fog: #c7cfe0;
+  --on-ink: #f3f5fb;
+  --on-signal: #ffffff;
+  --on-distress: #ffffff;
+  --unread: #c2570c;
+  --scrim: rgb(16 24 40 / 0.45);
+
+  --sidebar-bg: #ffffff;
+  --elevated: #ffffff;
+  --border-color: #dfe4f0;
+  --text-muted: #5a6685;
+  --success: #0f8a64;
+  --info: #1d5fd6;
+  --primary: #5b3fd0;
+}

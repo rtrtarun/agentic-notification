@@ -1,57 +1,112 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useApp } from '../app/AppState'
-import { Flag } from '../components/Flag'
-import { Lead } from '../components/Lead'
-import { Ledger } from '../components/Ledger'
 import { EmptyNotice, ErrorNotice } from '../components/Notices'
+import { Lead } from '../components/Lead'
 import { Pager } from '../components/Pager'
+import { QuickStats } from '../features/dashboard/QuickStats'
+import { RecentActivity } from '../features/dashboard/RecentActivity'
+import { InboxHero } from '../features/dashboard/InboxHero'
+import { StatCards } from '../features/dashboard/StatCards'
+import { ConfirmDialog } from '../design/ConfirmDialog'
+import { SkeletonRows } from '../design/Skeleton'
 import { useToast } from '../design/Toast'
-import { groupThreads } from '../lib/events'
-import { countByView, filterEvents, isFiltered, paginate, type View } from '../lib/filters'
+import { BulkBar } from '../features/inbox/BulkBar'
+import { copyNotificationLink } from '../features/inbox/link'
+import { NotificationRow } from '../features/inbox/NotificationRow'
+import { NotificationTabs } from '../features/inbox/NotificationTabs'
+import { useInbox } from '../features/inbox/useInbox'
 import { useI18n } from '../lib/i18n/I18nContext'
+import type { Action } from '../lib/inbox'
+import { clearFilters, isFiltered, toggleTab } from '../lib/inboxQuery'
+import { bucketCounts } from '../lib/sparkline'
+import { LEVELS } from '../lib/priority'
+import type { Level } from '../lib/inbox'
 
-const VIEWS: View[] = ['all', 'critical', 'standard', 'background']
-
-/** The notification list. Milestone 15 keeps the current list and moves it into the shell. */
+/** The inbox: filter tabs, a list with selection and bulk actions, and paging. The drawer is hosted by the shell. */
 export default function InboxPage() {
   const { t } = useI18n()
   const toast = useToast()
   const app = useApp()
-  const { feed, filters, now, read, unread, settings, demo } = app
+  const { filters, setFilters, summary, now, selectedId } = app
   const [pageNumber, setPageNumber] = useState(1)
+  const [selection, setSelection] = useState<Set<string>>(new Set())
+  const [confirming, setConfirming] = useState<string[] | null>(null)
+  const [params, setParams] = useSearchParams()
+  const { state, run } = useInbox(filters, pageNumber)
+  const page = state.page
 
-  // A new search or filter starts again from the first page.
-  useEffect(() => setPageNumber(1), [filters])
+  // A new search, filter or sort starts again from the first page with nothing selected.
+  useEffect(() => {
+    setPageNumber(1)
+    setSelection(new Set())
+  }, [filters])
 
-  const events = feed.events
-  const counts = useMemo(() => countByView(events), [events])
-  const threads = useMemo(() => groupThreads(filterEvents(events, filters, now, t)), [events, filters, now, t])
-  const page = useMemo(() => paginate(threads, pageNumber), [threads, pageNumber])
+  // A shared link (#/inbox?open=<id>) opens that notification once.
+  const openParam = params.get('open')
+  useEffect(() => {
+    if (!openParam) return
+    app.selectEvent(openParam)
+    setParams({}, { replace: true })
+    // selectEvent is stable per connection; reacting to the parameter alone is intended.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openParam])
 
-  const hasEvents = events.length > 0
-  const failing = feed.status === 'error'
-  const showEmpty = feed.status === 'ready' && !hasEvents
+  const ids = useMemo(() => page?.items.map((i) => i.id) ?? [], [page])
+  const allChecked = ids.length > 0 && ids.every((id) => selection.has(id))
 
-  const markAll = () => {
-    app.markEverythingRead()
-    toast.push(t('toast.allRead'), 'success')
+  const toggle = useCallback((id: string) => {
+    setSelection((prev) => {
+      const next = new Set(prev)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+  }, [])
+
+  const act = useCallback((targets: string[], action: Action) => void run(targets, action), [run])
+
+  const bulk = (action: Action) => {
+    const targets = [...selection]
+    setSelection(new Set())
+    act(targets, action)
   }
+
+  const copyLink = useCallback(
+    async (id: string) => {
+      if (await copyNotificationLink(id)) toast.push(t('toast.linkCopied'), 'success')
+      else toast.push(t('toast.copyFailed'), 'error')
+    },
+    [t, toast],
+  )
+
+  const markAll = async () => {
+    try {
+      await app.markEverythingRead()
+      toast.push(t('toast.allRead'), 'success')
+    } catch (err) {
+      toast.push(t('inbox.failed', { message: err instanceof Error ? err.message : '' }), 'error')
+    }
+  }
+
+  const confirmDelete = () => {
+    const targets = confirming ?? []
+    setConfirming(null)
+    setSelection(new Set())
+    act(targets, { type: 'delete' })
+  }
+
+  const events = app.feed.events
+  const series = useMemo(() => {
+    const out = {} as Record<Level, number[]>
+    for (const level of LEVELS) out[level] = bucketCounts(events, now, filters.range, level)
+    return out
+  }, [events, now, filters.range])
+  const filtered = isFiltered(filters)
+  const totalNone = page !== null && page.total === 0
 
   return (
     <>
-      <div className="page-head">
-        <h1 className="page-title">
-          {t('page.title')}
-          {unread.length > 0 && <span className="count-badge">{unread.length}</span>}
-        </h1>
-        {hasEvents && (
-          <button type="button" className="text-button" disabled={unread.length === 0} onClick={markAll}>
-            {t('list.markAll')}
-          </button>
-        )}
-      </div>
-
-      {demo && (
+      {app.demo && (
         <p className="demo-banner" role="note">
           {t('demo.banner')}{' '}
           <button type="button" className="text-button" onClick={app.openSettings}>
@@ -59,45 +114,91 @@ export default function InboxPage() {
           </button>
         </p>
       )}
-      {failing && <ErrorNotice error={feed.error} settings={settings} onOpenSettings={app.openSettings} onRetry={app.reload} />}
+      <InboxHero unread={summary.unread} critical={page?.counts.critical ?? 0} onMarkAllRead={markAll} />
+      <StatCards counts={page?.counts} series={series} active={filters.priorities} onToggle={(level) => setFilters(toggleTab(filters, level))} />
 
-      {hasEvents && (
+      {state.status === 'error' && (
+        <ErrorNotice error={state.error} settings={app.settings} onOpenSettings={app.openSettings} onRetry={app.invalidate} />
+      )}
+
+      <div className="inbox-grid">
+      <section className="card list-card" aria-label={t('inbox.list')}>
+      <NotificationTabs filters={filters} counts={page?.counts} onChange={setFilters} onClear={() => setFilters(clearFilters(filters))} />
+
+      {selection.size > 0 && (
+        <BulkBar
+          count={selection.size}
+          archivedView={filters.archived}
+          onAction={bulk}
+          onDelete={() => setConfirming([...selection])}
+          onClear={() => setSelection(new Set())}
+        />
+      )}
+
+      {events.length > 0 && !filtered && <Lead events={events} now={now} onOpen={app.selectEvent} />}
+
+      {page === null && state.status !== 'error' && (
+        <div role="status" aria-label={t('inbox.loadingList')}>
+          <SkeletonRows />
+        </div>
+      )}
+
+      {page !== null && page.items.length > 0 && (
         <>
-          <div className="view-tabs" role="group" aria-label={t('nav.views')}>
-            {VIEWS.map((v) => (
-              <button
-                key={v}
-                type="button"
-                className="view-tab"
-                aria-pressed={filters.view === v}
-                onClick={() => app.changeFilters({ view: v })}
-              >
-                {v !== 'all' && <Flag kind={v} decorative />}
-                {t(`view.${v}`)}
-                <span className="view-tab-count">{counts[v]}</span>
-              </button>
+          <label className="select-all">
+            <input
+              type="checkbox"
+              checked={allChecked}
+              onChange={() => setSelection(allChecked ? new Set() : new Set(ids))}
+            />
+            {t('inbox.selectAll')}
+          </label>
+          <ul className="nlist" aria-label={t('inbox.page', { page: page.page })} aria-busy={state.status === 'loading'}>
+            {page.items.map((item) => (
+              <NotificationRow
+                key={item.id}
+                item={item}
+                now={now}
+                active={selectedId === item.id}
+                checked={selection.has(item.id)}
+                archivedView={filters.archived}
+                onCheck={toggle}
+                onOpen={app.selectEvent}
+                onAction={(id, action) => act([id], action)}
+                onDelete={(id) => setConfirming([id])}
+                onCopyLink={copyLink}
+              />
             ))}
-          </div>
-          <Lead events={events} now={now} onOpen={app.selectEvent} />
-          <p className="list-help">{t('list.help')}</p>
-          <Ledger
-            threads={page.items}
-            now={now}
-            selectedId={app.selectedId}
-            isRead={(id) => read.has(id)}
-            onSelect={app.selectEvent}
-            filtered={isFiltered(filters)}
-            onClear={app.clearFilters}
-          />
-          <Pager page={page.page} pages={page.pages} onPage={setPageNumber} />
+          </ul>
+          <Pager page={page.page} pages={Math.max(1, Math.ceil(page.total / page.pageSize))} onPage={setPageNumber} />
         </>
       )}
-      {showEmpty && <EmptyNotice settings={settings} />}
-      {feed.status === 'loading' && !hasEvents && (
-        <p className="loading" role="status">
-          {t('loading')}
-        </p>
+
+      {totalNone && filtered && (
+        <div className="ledger-empty">
+          <p>{t('list.empty')}</p>
+          <button type="button" className="button" onClick={() => setFilters(clearFilters(filters))}>
+            {t('list.clear')}
+          </button>
+        </div>
       )}
+      {totalNone && !filtered && state.status === 'ready' && (events.length === 0 ? <EmptyNotice settings={app.settings} /> : <p className="ledger-empty">{t('inbox.caughtUp')}</p>)}
+
+      </section>
+      <aside className="inbox-rail" aria-label={t('quick.title')}>
+        <QuickStats counts={page?.counts} />
+        <RecentActivity events={events} now={now} onOpen={app.selectEvent} onViewAll={() => setFilters(clearFilters(filters))} />
+      </aside>
+      </div>
+
+      <ConfirmDialog
+        open={confirming !== null}
+        title={t('confirm.delete.title')}
+        body={t('confirm.delete.body')}
+        confirmLabel={t('act.delete')}
+        onConfirm={confirmDelete}
+        onCancel={() => setConfirming(null)}
+      />
     </>
   )
 }
