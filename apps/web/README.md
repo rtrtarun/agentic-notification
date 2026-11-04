@@ -13,4 +13,6 @@ npm run build    # type-check and production build
 - `VITE_API_KEY`: **local development only.** Anything in a built bundle is public. Normally you enter the key in Connection settings; it is kept in this tab's `sessionStorage`.
 - The service must allow this origin: `CORS_ALLOWED_ORIGINS=http://localhost:3000`.
 
+Open the console with no service running and choose **Try the demo** to explore it with sample data. The GitHub Pages build starts in demo mode; see [docs/deployment.md](../../docs/deployment.md).
+
 Design language, states, copy rules and structure: [docs/frontend.md](../../docs/frontend.md).

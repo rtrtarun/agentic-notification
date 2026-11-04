@@ -75,6 +75,8 @@ flowchart TD
 | Component | File | Owns | Props | Notes |
 |---|---|---|---|---|
 | `App` | `App.tsx` | `settings`, `settingsOpen`, `selectedId`, `now` (30 s clock) | none | Derives `selected` and `original` (the event a merged one points to). Sets `data-sheet="open\|closed"` on `.page`, which switches the grid layout. |
+| `Welcome` | `components/Welcome.tsx` | nothing | `onTryDemo`, `onConnect` | First-visit screen with the legend and two choices. Shown instead of an error when nothing has been configured. |
+| `Legend` | `components/Legend.tsx` | nothing | none | The three classes with their flags and a plain sentence each. Used in `Welcome` and above the list. |
 | `Header` | `components/Header.tsx` | nothing | `feed`, `onOpenSettings`, `inert?` | Wordmark, connection status (`role="status"`), link to settings. The status dot has three shapes: filled circle (connected), hollow circle (connecting), rotated diamond (problem), so state is not colour-only. |
 | `Lead` | `components/Lead.tsx` | nothing | `events`, `now`, `onOpen` | The page's `h1`. Latest critical event as a button in the largest type, its reason, and one last-hour sentence. When there is no critical event it says so in a lighter, condensed face. |
 | `Ledger` | `components/Ledger.tsx` | `filter` | `events`, `now`, `selectedId`, `onSelect` | Filter group (`aria-pressed` buttons with counts) and the thread list. Memoises counts and `groupThreads`. Each row is one `<button>`; merged events are nested buttons in a second list. |
@@ -85,6 +87,10 @@ flowchart TD
 | `Flag` | `components/Flag.tsx` | nothing | `kind` | CSS-drawn shape with `role="img"` and an accessible name. See [section 6](#6-design-tokens). |
 | `useMediaQuery` | `hooks/useMediaQuery.ts` | match state | `query` | Used by `App` to know when the sheet covers the screen, so it can mark the page behind it `inert`. |
 | `useEvents` | `hooks/useEvents.ts` | feed state, reload counter | `settings` | Loads on mount and when settings change, polls every 15 s while the tab is visible, reloads when the tab becomes visible, aborts superseded requests, keeps the last events on screen during an outage. |
+
+### Demo mode and first run
+
+`Settings.demo` switches `lib/api.ts` to `lib/demo.ts`: `fetchEvents` returns sample events and `sendFeedback` does nothing, so no network call is made. `needsWelcome()` is true on a first visit (nothing in `sessionStorage`, no `VITE_API_KEY`, and not a demo-default build). `App` holds `welcome`; while it is true `useEvents` is disabled and `Welcome` replaces the page. Saving connection settings or choosing the demo clears it. A hosted build sets `VITE_DEFAULT_DEMO=true`, so visitors land straight in demo mode.
 
 ### Feed state
 

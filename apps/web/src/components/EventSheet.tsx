@@ -111,20 +111,29 @@ export function EventSheet({ event, original, settings, onOpenOriginal, onClose 
         </p>
       )}
 
-      <h3 className="sheet-subtitle">Tell the system</h3>
-      <div className="actions">
-        <button type="button" className="button" disabled={busy} onClick={() => submit('dismissed')}>
-          Dismiss
-        </button>
-        <button type="button" className="button" disabled={busy} onClick={() => submit('always')}>
-          Always notify me
-        </button>
-        {!critical && (
-          <button type="button" className="button" disabled={busy} onClick={() => submit('never')}>
-            Never notify me
+      <h3 className="sheet-subtitle">Was this right?</h3>
+      <ul className="choices">
+        <li className="choice">
+          <button type="button" className="button" disabled={busy} onClick={() => submit('dismissed')}>
+            Dismiss
           </button>
+          <span className="choice-hint">Mark this one as handled.</span>
+        </li>
+        <li className="choice">
+          <button type="button" className="button" disabled={busy} onClick={() => submit('always')}>
+            Always notify me
+          </button>
+          <span className="choice-hint">Send events like this straight to you.</span>
+        </li>
+        {!critical && (
+          <li className="choice">
+            <button type="button" className="button" disabled={busy} onClick={() => submit('never')}>
+              Never notify me
+            </button>
+            <span className="choice-hint">Stop interrupting you for events like this.</span>
+          </li>
         )}
-      </div>
+      </ul>
       {critical && <p className="hint">Critical events can&rsquo;t be silenced, so there is no option to never be notified.</p>}
 
       <form

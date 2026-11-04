@@ -98,6 +98,8 @@ flowchart TB
 
 ## 2. Source Documents and References
 
+Related: [ui-architecture.md](ui-architecture.md), [deployment.md](deployment.md) and [notification-hubs-comparison.md](notification-hubs-comparison.md).
+
 | Document | What it is | Reliability today |
 |---|---|---|
 | [`AGENTS.md`](../AGENTS.md) | Project charter: layers, rules, tech stack, the 10-milestone plan | Authoritative for intent. Milestone *numbers* no longer match the implemented milestones (see section 3) |

@@ -9,12 +9,13 @@ export type Feed =
 const REFRESH_MS = 15_000
 
 /** Loads recent events and refreshes them while the tab is visible. */
-export function useEvents(settings: Settings): { feed: Feed; reload: () => void } {
+export function useEvents(settings: Settings, enabled = true): { feed: Feed; reload: () => void } {
   const [feed, setFeed] = useState<Feed>({ status: 'loading', events: [] })
   const [nonce, setNonce] = useState(0)
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
   useEffect(() => {
+    if (!enabled) return
     let controller = new AbortController()
     let cancelled = false
 
@@ -49,7 +50,7 @@ export function useEvents(settings: Settings): { feed: Feed; reload: () => void 
       window.clearInterval(timer)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [settings, nonce])
+  }, [settings, nonce, enabled])
 
   return { feed, reload }
 }

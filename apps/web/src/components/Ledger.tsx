@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { AttentionClass, EventSummary } from '../lib/api'
 import { CLASS_LABELS, eventTitle, groupThreads, relativeTime, statusLabel } from '../lib/events'
 import { Flag } from './Flag'
+import { Legend } from './Legend'
 
 type Filter = 'all' | AttentionClass
 
@@ -38,6 +39,8 @@ export function Ledger({ events, now, selectedId, onSelect }: LedgerProps) {
 
   return (
     <section className="ledger" aria-label="Events">
+      <p className="ledger-help">Select an event to see why it was handled this way.</p>
+      <Legend />
       <div className="filters" role="group" aria-label="Show events">
         {FILTERS.map((f) => (
           <button

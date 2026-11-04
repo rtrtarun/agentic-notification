@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadSettings, saveSettings, validateBackendUrl } from './settings'
+import { loadSettings, needsWelcome, saveSettings, validateBackendUrl } from './settings'
 
 function fakeSessionStorage() {
   const data = new Map<string, string>()
@@ -35,6 +35,24 @@ describe('loadSettings and saveSettings', () => {
   it('ignores values of the wrong type', () => {
     sessionStorage.setItem('attention.settings', JSON.stringify({ backendUrl: 5, apiKey: {} }))
     expect(loadSettings()).toEqual({ backendUrl: 'http://localhost:8080', apiKey: '' })
+  })
+})
+
+describe('demo mode and the welcome screen', () => {
+  it('round-trips the demo flag', () => {
+    saveSettings({ backendUrl: 'http://localhost:8080', apiKey: '', demo: true })
+    expect(loadSettings().demo).toBe(true)
+  })
+
+  it('ignores a demo value that is not exactly true', () => {
+    sessionStorage.setItem('attention.settings', JSON.stringify({ demo: 'yes' }))
+    expect(loadSettings().demo).toBeUndefined()
+  })
+
+  it('asks on a first visit and not after a choice is saved', () => {
+    expect(needsWelcome()).toBe(true)
+    saveSettings({ backendUrl: 'http://localhost:8080', apiKey: '', demo: true })
+    expect(needsWelcome()).toBe(false)
   })
 })
 

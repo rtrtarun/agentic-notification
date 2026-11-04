@@ -12,6 +12,7 @@ export function loadSettings(): Settings {
   const defaults: Settings = {
     backendUrl: import.meta.env.VITE_BACKEND_URL ?? DEFAULT_BACKEND,
     apiKey: import.meta.env.VITE_API_KEY ?? '',
+    ...(import.meta.env.VITE_DEFAULT_DEMO === 'true' ? { demo: true } : {}),
   }
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY)
@@ -20,6 +21,7 @@ export function loadSettings(): Settings {
     return {
       backendUrl: typeof stored.backendUrl === 'string' && stored.backendUrl ? stored.backendUrl : defaults.backendUrl,
       apiKey: typeof stored.apiKey === 'string' ? stored.apiKey : defaults.apiKey,
+      ...(stored.demo === true ? { demo: true } : {}),
     }
   } catch {
     return defaults
@@ -28,6 +30,19 @@ export function loadSettings(): Settings {
 
 export function saveSettings(settings: Settings): void {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(settings))
+}
+
+/**
+ * True on a first visit with nothing chosen yet, when the console should ask
+ * whether to try the demo or connect a service instead of showing an error.
+ */
+export function needsWelcome(): boolean {
+  if (import.meta.env.VITE_API_KEY || import.meta.env.VITE_DEFAULT_DEMO === 'true') return false
+  try {
+    return sessionStorage.getItem(STORAGE_KEY) === null
+  } catch {
+    return true
+  }
 }
 
 /** Returns an error message for an invalid backend URL, or null when it is usable. */

@@ -722,3 +722,69 @@ button {
     transform: none;
   }
 }
+
+/* ---------- Orientation: welcome, legend, demo banner, action choices ---------- */
+
+.welcome {
+  max-width: 44rem;
+}
+
+.welcome-title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--step-lead);
+  font-weight: 750;
+  font-stretch: 100%;
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+.welcome-actions {
+  margin-top: var(--space-3);
+}
+
+.legend {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+  font-size: var(--step--1);
+}
+
+.legend-item {
+  display: grid;
+  grid-template-columns: 1.4rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ledger-help {
+  margin: 0 0 var(--space-1);
+}
+
+.demo-banner {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border-left: 4px solid var(--pennant);
+  background: var(--deck);
+  font-size: var(--step--1);
+}
+
+.choices {
+  display: grid;
+  gap: var(--space-1);
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.choice {
+  display: grid;
+  justify-items: start;
+  gap: 0.3rem;
+}
+
+.choice-hint {
+  font-size: var(--step--1);
+}

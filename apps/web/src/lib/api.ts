@@ -1,6 +1,8 @@
 // HTTP client for the notification service. Every failure is mapped to a kind
 // the interface can explain, so no screen shows a raw status code.
 
+import { demoEvents } from './demo'
+
 export type AttentionClass = 'critical' | 'standard' | 'background'
 
 export interface DecisionState {
@@ -28,6 +30,8 @@ export type FeedbackAction = 'dismissed' | 'always' | 'never' | 'undo' | 'reply'
 export interface Settings {
   backendUrl: string
   apiKey: string
+  /** Use built-in sample data instead of calling a service. */
+  demo?: boolean
 }
 
 export type ApiErrorKind = 'unauthorized' | 'unconfigured' | 'unreachable' | 'rejected' | 'server'
@@ -71,6 +75,7 @@ async function request(settings: Settings, path: string, init: RequestInit = {})
 }
 
 export async function fetchEvents(settings: Settings, signal?: AbortSignal, limit = 200): Promise<EventSummary[]> {
+  if (settings.demo) return demoEvents()
   const res = await request(settings, `/events?limit=${limit}`, { signal })
   const body = (await res.json()) as { events: EventSummary[] }
   return body.events
@@ -80,5 +85,6 @@ export async function sendFeedback(
   settings: Settings,
   feedback: { eventId: string; action: FeedbackAction; reason?: string },
 ): Promise<void> {
+  if (settings.demo) return // nothing is stored in demo mode
   await request(settings, '/feedback', { method: 'POST', body: JSON.stringify(feedback) })
 }

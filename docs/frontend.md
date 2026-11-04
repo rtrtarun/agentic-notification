@@ -64,10 +64,15 @@ Shape means the meaning survives without colour vision. In forced-colours mode t
 
 One thing moves: the detail sheet fades and slides in (180 ms, strong ease-out) when someone opens an event, which shows what changed. Controls scale to 0.97 while pressed (140 ms). Nothing animates on load or scroll, and closing the sheet is instant. `prefers-reduced-motion` keeps a fade and removes the movement and the press scale.
 
+## First use and orientation
+
+A first visit shows a **welcome screen** rather than an error: one sentence on what Attention does, the three classes in plain words, and two choices, **Try the demo** and **Connect your service**. **Demo mode** uses built-in sample events (`lib/demo.ts`), sends nothing and saves nothing; a banner and the header's "Sample data" status make that clear, and "Connect your service" leaves it. The hosted build starts in demo mode (`VITE_DEFAULT_DEMO=true`). Above the list, a short key explains Critical, Standard and Background, and a line says to select an event. In the sheet, the heading is **Was this right?** and each choice has a sentence under it saying what it does.
+
 ## Screens and states
 
 | State | When | What it says | Action |
 |---|---|---|---|
+| Welcome | First visit, nothing chosen | What Attention does, how events are sorted | Try the demo, Connect your service |
 | Events | Service has events | Lead, filters (All, Critical, Standard, Background), list | Open an event |
 | Event detail | A row is selected | Why it happened, the rule, what the class means, feedback controls | Dismiss, Always notify me, Never notify me, Add a note, Undo |
 | Empty | Connected, no events | "No events yet." plus three real setup steps and the webhook URL | Copy webhook URL |

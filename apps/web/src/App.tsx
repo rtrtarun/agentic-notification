@@ -3,12 +3,13 @@ import { EventSheet } from './components/EventSheet'
 import { Header } from './components/Header'
 import { Lead } from './components/Lead'
 import { Ledger } from './components/Ledger'
+import { Welcome } from './components/Welcome'
 import { EmptyNotice, ErrorNotice } from './components/Notices'
 import { SettingsDialog } from './components/SettingsDialog'
 import { useEvents } from './hooks/useEvents'
 import { useMediaQuery } from './hooks/useMediaQuery'
 import type { Settings } from './lib/api'
-import { loadSettings, saveSettings } from './lib/settings'
+import { loadSettings, needsWelcome, saveSettings } from './lib/settings'
 
 const CLOCK_MS = 30_000
 
@@ -20,7 +21,8 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [now, setNow] = useState(() => new Date())
-  const { feed, reload } = useEvents(settings)
+  const [welcome, setWelcome] = useState(needsWelcome)
+  const { feed, reload } = useEvents(settings, !welcome)
   const sheetCovers = useMediaQuery(SHEET_COVERS_PAGE)
 
   // Keep "2 min ago" honest between refreshes.
@@ -35,6 +37,12 @@ export default function App() {
     [feed.events, selected],
   )
 
+  const tryDemo = useCallback(() => {
+    const next: Settings = { ...settings, demo: true }
+    saveSettings(next)
+    setSettings(next)
+    setWelcome(false)
+  }, [settings])
   const closeSheet = useCallback(() => setSelectedId(null), [])
   const openSettings = useCallback(() => setSettingsOpen(true), [])
 
@@ -46,20 +54,29 @@ export default function App() {
 
   return (
     <div className="page" data-sheet={selected ? 'open' : 'closed'}>
-      <Header feed={feed} onOpenSettings={openSettings} inert={behindSheet} />
+      <Header feed={feed} onOpenSettings={openSettings} inert={behindSheet} demo={settings.demo === true && !welcome} hideStatus={welcome} />
 
       <main className="main" {...(behindSheet ? { inert: '' } : {})}>
-        {failing && (
+        {welcome && <Welcome onTryDemo={tryDemo} onConnect={openSettings} />}
+        {!welcome && settings.demo && (
+          <p className="demo-banner" role="note">
+            You are looking at sample data. Nothing is sent or saved.{' '}
+            <button type="button" className="text-button" onClick={openSettings}>
+              Connect your service
+            </button>
+          </p>
+        )}
+        {!welcome && failing && (
           <ErrorNotice error={feed.error} settings={settings} onOpenSettings={openSettings} onRetry={reload} />
         )}
-        {hasEvents && (
+        {!welcome && hasEvents && (
           <>
             <Lead events={feed.events} now={now} onOpen={setSelectedId} />
             <Ledger events={feed.events} now={now} selectedId={selectedId} onSelect={setSelectedId} />
           </>
         )}
-        {showEmpty && <EmptyNotice settings={settings} />}
-        {feed.status === 'loading' && !hasEvents && (
+        {!welcome && showEmpty && <EmptyNotice settings={settings} />}
+        {!welcome && feed.status === 'loading' && !hasEvents && (
           <p className="loading" role="status">
             Loading events.
           </p>
@@ -83,6 +100,7 @@ export default function App() {
         onSave={(next) => {
           saveSettings(next)
           setSettings(next)
+          setWelcome(false)
           setSettingsOpen(false)
         }}
       />
