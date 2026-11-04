@@ -1,107 +1,84 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { EventSheet } from './components/EventSheet'
+import { Header } from './components/Header'
+import { Lead } from './components/Lead'
+import { Ledger } from './components/Ledger'
+import { EmptyNotice, ErrorNotice } from './components/Notices'
+import { SettingsDialog } from './components/SettingsDialog'
+import { useEvents } from './hooks/useEvents'
+import type { Settings } from './lib/api'
+import { loadSettings, saveSettings } from './lib/settings'
 
-type FeedbackPayload = {
-  event_id: string
-  action: 'opened' | 'dismissed' | 'replied' | 'ignored'
-  note?: string
-}
+const CLOCK_MS = 30_000
 
-const App = () => {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
-  const [message, setMessage] = useState('')
-  const [feedback, setFeedback] = useState<FeedbackPayload>({
-    event_id: 'demo-event-1',
-    action: 'opened',
-    note: 'The dashboard is working.',
-  })
+export default function App() {
+  const [settings, setSettings] = useState<Settings>(loadSettings)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [now, setNow] = useState(() => new Date())
+  const { feed, reload } = useEvents(settings)
 
-  const backendUrl = useMemo(() => import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080', [])
-  // Local development only: a key shipped in a browser bundle is public. Use a real login before deploying.
-  const apiKey = import.meta.env.VITE_API_KEY
-
+  // Keep "2 min ago" honest between refreshes.
   useEffect(() => {
-    const checkHealth = async () => {
-      setStatus('loading')
-      try {
-        const res = await fetch(`${backendUrl}/health`)
-        if (!res.ok) throw new Error(`health check failed: ${res.status}`)
-        setStatus('ok')
-        setMessage('Backend is reachable.')
-      } catch (error) {
-        setStatus('error')
-        setMessage(error instanceof Error ? error.message : 'Unable to reach backend.')
-      }
-    }
+    const timer = window.setInterval(() => setNow(new Date()), CLOCK_MS)
+    return () => window.clearInterval(timer)
+  }, [])
 
-    checkHealth()
-  }, [backendUrl])
+  const selected = useMemo(() => feed.events.find((e) => e.id === selectedId) ?? null, [feed.events, selectedId])
+  const original = useMemo(
+    () => (selected?.mergedInto ? feed.events.find((e) => e.id === selected.mergedInto) : undefined),
+    [feed.events, selected],
+  )
 
-  const submitFeedback = async () => {
-    try {
-      const res = await fetch(`${backendUrl}/feedback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(apiKey ? { 'X-API-Key': apiKey } : {}) },
-        body: JSON.stringify(feedback),
-      })
+  const closeSheet = useCallback(() => setSelectedId(null), [])
+  const openSettings = useCallback(() => setSettingsOpen(true), [])
 
-      if (!res.ok) throw new Error(`feedback failed: ${res.status}`)
-      setMessage('Feedback submitted successfully.')
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to submit feedback.')
-    }
-  }
+  const failing = feed.status === 'error'
+  const showEmpty = feed.status === 'ready' && feed.events.length === 0
+  const hasEvents = feed.events.length > 0
 
   return (
-    <main style={{ fontFamily: 'Inter, sans-serif', padding: '2rem', maxWidth: '720px', margin: '0 auto', lineHeight: 1.5 }}>
-      <h1>Attention Orchestration Platform</h1>
-      <p>Local operator view for service health and feedback capture.</p>
+    <div className="page" data-sheet={selected ? 'open' : 'closed'}>
+      <Header feed={feed} onOpenSettings={openSettings} />
 
-      <section style={{ border: '1px solid #d0d7de', borderRadius: '12px', padding: '1rem', marginBottom: '1rem' }}>
-        <h2>Backend status</h2>
-        <p><strong>Status:</strong> {status}</p>
-        <p>{message}</p>
-      </section>
+      <main className="main">
+        {failing && (
+          <ErrorNotice error={feed.error} settings={settings} onOpenSettings={openSettings} onRetry={reload} />
+        )}
+        {hasEvents && (
+          <>
+            <Lead events={feed.events} now={now} onOpen={setSelectedId} />
+            <Ledger events={feed.events} now={now} selectedId={selectedId} onSelect={setSelectedId} />
+          </>
+        )}
+        {showEmpty && <EmptyNotice settings={settings} />}
+        {feed.status === 'loading' && !hasEvents && (
+          <p className="loading" role="status">
+            Loading events.
+          </p>
+        )}
+      </main>
 
-      <section style={{ border: '1px solid #d0d7de', borderRadius: '12px', padding: '1rem' }}>
-        <h2>Submit feedback</h2>
-        <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-          Event ID
-          <input
-            value={feedback.event_id}
-            onChange={(event) => setFeedback({ ...feedback, event_id: event.target.value })}
-            style={{ display: 'block', width: '100%', marginTop: '0.25rem', padding: '0.5rem' }}
-          />
-        </label>
+      {selected && (
+        <EventSheet
+          event={selected}
+          original={original}
+          settings={settings}
+          onOpenOriginal={setSelectedId}
+          onClose={closeSheet}
+        />
+      )}
 
-        <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-          Action
-          <select
-            value={feedback.action}
-            onChange={(event) => setFeedback({ ...feedback, action: event.target.value as FeedbackPayload['action'] })}
-            style={{ display: 'block', width: '100%', marginTop: '0.25rem', padding: '0.5rem' }}
-          >
-            <option value="opened">opened</option>
-            <option value="dismissed">dismissed</option>
-            <option value="replied">replied</option>
-            <option value="ignored">ignored</option>
-          </select>
-        </label>
-
-        <label style={{ display: 'block', marginBottom: '0.75rem' }}>
-          Note
-          <textarea
-            value={feedback.note || ''}
-            onChange={(event) => setFeedback({ ...feedback, note: event.target.value })}
-            style={{ display: 'block', width: '100%', marginTop: '0.25rem', padding: '0.5rem', minHeight: '90px' }}
-          />
-        </label>
-
-        <button onClick={submitFeedback} style={{ padding: '0.6rem 1rem', cursor: 'pointer' }}>
-          Submit feedback
-        </button>
-      </section>
-    </main>
+      <SettingsDialog
+        open={settingsOpen}
+        settings={settings}
+        onClose={() => setSettingsOpen(false)}
+        onSave={(next) => {
+          saveSettings(next)
+          setSettings(next)
+          setSettingsOpen(false)
+        }}
+      />
+    </div>
   )
 }
-
-export default App

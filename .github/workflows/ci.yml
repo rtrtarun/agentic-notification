@@ -75,4 +75,4 @@ jobs:
           cache-dependency-path: apps/web/package-lock.json
       - name: Build
         working-directory: apps/web
-        run: npm ci && npm run build
+        run: npm ci && npm test && npm run build

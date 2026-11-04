@@ -77,7 +77,7 @@ func (r *PostgresRepository) List(ctx context.Context) ([]Event, error) {
 		SELECT id, source, event_type, repository,
 		       attention_class, decision_status, decision_reason,
 		       decision_model_version, decision_confidence, decision_matched_rule,
-		       payload, dedup_key, thread_id, merged_into
+		       payload, dedup_key, thread_id, merged_into, created_at
 		FROM events ORDER BY created_at DESC LIMIT $1`, DefaultListLimit)
 	if err != nil {
 		return nil, err
@@ -96,7 +96,7 @@ func (r *PostgresRepository) List(ctx context.Context) ([]Event, error) {
 			&evt.ID, &evt.Source, &evt.EventType, &repository,
 			&evt.AttentionClass, &decisionStatus, &decisionReason,
 			&decisionModelVersion, &decisionConfidence, &decisionMatchedRule,
-			&payload, &dedupKey, &threadID, &mergedInto,
+			&payload, &dedupKey, &threadID, &mergedInto, &evt.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

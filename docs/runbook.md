@@ -17,6 +17,20 @@ Page on burn rate, not raw thresholds:
 - Latency: P99 `histogram_quantile(0.99, sum by (le, route) (rate(http_request_duration_seconds_bucket[5m])))` above 8s on `/webhooks/github`. GitHub gives up at 10s and redelivers.
 - Target SLOs (adjust to your contract): webhook availability 99.5%, P99 under 5s.
 
+## The console
+
+The web console (`apps/web`) reads `GET /events` and posts to `/feedback`. Its own error screens say what to do; the matching service-side causes:
+
+| Console says | Cause | Fix |
+|---|---|---|
+| "The service rejected this API key." | `X-API-Key` does not match `API_KEY` | Enter the current key in Connection settings |
+| "The service has no API key, so it refuses every request." | `API_KEY` is unset on the service | Set `API_KEY` and restart |
+| "Can't reach http://..." | Service down, wrong address, or the browser blocked the call (CORS) | Start the service, or add the console's origin to `CORS_ALLOWED_ORIGINS` |
+| "No events yet." | Healthy service, nothing ingested | Add the GitHub webhook as the screen describes |
+| Events missing that you expect | The list shows only the newest 200 (the service returns at most 500, and keeps the newest 1,000 in memory per call) | Check the database directly; pagination is on the roadmap |
+
+The API key is entered in the browser and kept per tab. Rotate it by changing `API_KEY` on the service and entering the new value; no console deploy is needed.
+
 ## Symptoms
 
 ### Webhooks return 401

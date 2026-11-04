@@ -19,7 +19,7 @@ The API fails closed: with no `API_KEY` every protected route returns 503. Set `
 | `ALLOW_UNAUTHENTICATED_API` | `false` | `true` serves protected routes with no key when `API_KEY` is unset. Local development only |
 | `GITHUB_WEBHOOK_SECRET` | none | Verifies `X-Hub-Signature-256` on `POST /webhooks/github`. Without it the endpoint returns 503 |
 | `ALLOW_UNSIGNED_WEBHOOKS` | `false` | Accept unsigned webhooks when no secret is set. Local development only |
-| `CORS_ALLOWED_ORIGINS` | empty (CORS closed) | Comma-separated browser origins allowed to call the API |
+| `CORS_ALLOWED_ORIGINS` | empty (CORS closed) | Comma-separated browser origins allowed to call the API. The console needs its own origin here, for example `http://localhost:3000` |
 | `NOTIFY_ALLOWED_WEBHOOK_HOSTS` | Slack and Teams hosts | Hosts a caller may name in `slackWebhookUrls` / `teamsWebhookUrls` (`*.example.com` allowed). URLs must be `https`. Empty rejects all caller-supplied webhooks |
 | `NOTIFY_ALLOWED_EMAIL_DOMAINS` | empty (any valid address) | Restrict `emailRecipients` to these domains |
 | `MAX_BODY_BYTES` | `1048576` | Request body limit on every route (413 when exceeded) |
@@ -47,6 +47,7 @@ The API fails closed: with no `API_KEY` every protected route returns 503. Set `
 |---|---|---|
 | `GET /health` | none | Liveness/readiness probe |
 | `GET /metrics` | API key | Prometheus text format: request counts and latency histograms per route |
+| `GET /events` | API key | Recent events, newest first, without raw payloads. `?limit=1..500` (default 100). Used by the [web console](../../apps/web/README.md) |
 | `POST /notify` | API key | Send a notification (validated, see below) |
 | `POST /feedback` | API key | Record feedback |
 | `POST /webhooks/github` | HMAC signature | Ingest a GitHub event. Redeliveries (same `X-GitHub-Delivery`) return `200 {"status":"duplicate"}` and notify nothing |

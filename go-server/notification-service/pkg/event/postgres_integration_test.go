@@ -76,7 +76,7 @@ func TestPostgresSaveExistsListRoundTrip(t *testing.T) {
 	}
 	got := stored[0]
 	if got.ID != "evt-1" || got.AttentionClass != event.AttentionCritical || got.ThreadID != "t" ||
-		got.DecisionState == nil || got.DecisionState.MatchedRule != "r1" || got.Payload["number"] != float64(7) {
+		got.CreatedAt.IsZero() || got.DecisionState == nil || got.DecisionState.MatchedRule != "r1" || got.Payload["number"] != float64(7) {
 		t.Fatalf("round trip lost data: %+v", got)
 	}
 }

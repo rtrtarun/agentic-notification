@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -27,6 +28,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/notify", protected(s.notifyHandler))
 	mux.Handle("/metrics", protected(s.metricsHandler))
 	mux.Handle("/feedback", protected(s.feedbackHandler))
+	mux.Handle("/events", protected(s.eventsHandler))
 	// Health is unauthenticated so orchestrator probes and the dashboard work without a key.
 	mux.Handle("/health", s.corsMiddleware(s.loggingMiddleware(http.HandlerFunc(s.healthHandler))))
 	mux.Handle("/webhooks/github", s.corsMiddleware(s.loggingMiddleware(
@@ -251,4 +253,61 @@ func randomID() string {
 		return fmt.Sprintf("t%d", time.Now().UnixNano())
 	}
 	return hex.EncodeToString(b)
+}
+
+const (
+	defaultEventsLimit = 100
+	maxEventsLimit     = 500
+)
+
+// eventSummary is the read model for the event list. It leaves out the raw
+// payload, which can carry names and emails and is large.
+type eventSummary struct {
+	ID             string               `json:"id"`
+	Source         string               `json:"source"`
+	EventType      string               `json:"eventType"`
+	Repository     string               `json:"repository,omitempty"`
+	AttentionClass string               `json:"attentionClass"`
+	DecisionState  *event.DecisionState `json:"decisionState,omitempty"`
+	ThreadID       string               `json:"threadId,omitempty"`
+	MergedInto     string               `json:"mergedInto,omitempty"`
+	CreatedAt      time.Time            `json:"createdAt"`
+}
+
+// eventsHandler lists the most recent events, newest first.
+func (s *Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: errMethod})
+		return
+	}
+
+	limit := defaultEventsLimit
+	if raw := r.URL.Query().Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil || n < 1 || n > maxEventsLimit {
+			util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{
+				Error: "limit must be a whole number from 1 to " + strconv.Itoa(maxEventsLimit)})
+			return
+		}
+		limit = n
+	}
+
+	stored, err := s.eventRepo.List(r.Context())
+	if err != nil {
+		s.logFor(r.Context()).Error("list events failed", "error", err)
+		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: errInternal})
+		return
+	}
+
+	// List returns oldest first; the console wants newest first.
+	summaries := make([]eventSummary, 0, min(limit, len(stored)))
+	for i := len(stored) - 1; i >= 0 && len(summaries) < limit; i-- {
+		e := stored[i]
+		summaries = append(summaries, eventSummary{
+			ID: e.ID, Source: e.Source, EventType: e.EventType, Repository: e.Repository,
+			AttentionClass: e.AttentionClass, DecisionState: e.DecisionState,
+			ThreadID: e.ThreadID, MergedInto: e.MergedInto, CreatedAt: e.CreatedAt,
+		})
+	}
+	util.WriteJSON(w, http.StatusOK, map[string]interface{}{"events": summaries})
 }

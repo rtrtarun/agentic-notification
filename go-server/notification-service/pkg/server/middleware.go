@@ -45,7 +45,7 @@ func (r *statusRecorder) status() int {
 // knownRoutes is the closed set of metric labels; anything else is "other" so
 // scanners probing random paths cannot create unbounded label cardinality.
 var knownRoutes = map[string]bool{
-	"/notify": true, "/health": true, "/metrics": true, "/webhooks/github": true, "/feedback": true,
+	"/notify": true, "/health": true, "/metrics": true, "/webhooks/github": true, "/feedback": true, "/events": true,
 }
 
 func routeLabel(path string) string {

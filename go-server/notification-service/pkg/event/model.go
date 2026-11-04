@@ -1,5 +1,7 @@
 package event
 
+import "time"
+
 type DecisionState struct {
 	Status       string  `json:"status"`
 	Reason       string  `json:"reason"`
@@ -19,6 +21,8 @@ type Event struct {
 	ThreadID       string                 `json:"threadId,omitempty"`
 	MergedInto     string                 `json:"mergedInto,omitempty"`
 	Payload        map[string]interface{} `json:"payload"`
+	// CreatedAt is when the event was stored. Set by the repository.
+	CreatedAt time.Time `json:"createdAt,omitempty"`
 }
 
 const (

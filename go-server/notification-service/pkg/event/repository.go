@@ -43,6 +43,9 @@ func (r *InMemoryRepository) Save(ctx context.Context, evt Event) error {
 			return nil
 		}
 	}
+	if evt.CreatedAt.IsZero() {
+		evt.CreatedAt = time.Now().UTC()
+	}
 	r.events = append(r.events, evt)
 	return nil
 }
