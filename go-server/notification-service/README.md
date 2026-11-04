@@ -3,29 +3,56 @@
 Run locally:
 
 ```bash
-cd go-server/notification-service/cmd/notification-service
-go run main.go
+cd go-server/notification-service
+API_KEY=dev-key ALLOW_UNSIGNED_WEBHOOKS=true go run ./cmd/notification-service
 ```
 
-Environment variables:
+The API fails closed: with no `API_KEY` every protected route returns 503. Set `API_KEY`, or `ALLOW_UNAUTHENTICATED_API=true` for local experiments only.
 
-- `PORT`
-- `API_KEY` - when set, the service requires the `X-API-Key` header for protected routes
-- `SMTP_HOST`
-- `SMTP_PORT`
-- `SMTP_USERNAME`
-- `SMTP_PASSWORD`
-- `SMTP_SENDER`
-- `SLACK_WEBHOOK_URL`
-- `TEAMS_WEBHOOK_URL`
+## Environment variables
 
-Health check:
+### Security
 
-```bash
-curl http://localhost:8080/health
-```
+| Variable | Default | Purpose |
+|---|---|---|
+| `API_KEY` | none | Required `X-API-Key` for `/notify`, `/feedback`, `/metrics` (compared in constant time) |
+| `ALLOW_UNAUTHENTICATED_API` | `false` | `true` serves protected routes with no key when `API_KEY` is unset. Local development only |
+| `GITHUB_WEBHOOK_SECRET` | none | Verifies `X-Hub-Signature-256` on `POST /webhooks/github`. Without it the endpoint returns 503 |
+| `ALLOW_UNSIGNED_WEBHOOKS` | `false` | Accept unsigned webhooks when no secret is set. Local development only |
+| `CORS_ALLOWED_ORIGINS` | empty (CORS closed) | Comma-separated browser origins allowed to call the API. The console needs its own origin here, for example `http://localhost:3000` |
+| `NOTIFY_ALLOWED_WEBHOOK_HOSTS` | Slack and Teams hosts | Hosts a caller may name in `slackWebhookUrls` / `teamsWebhookUrls` (`*.example.com` allowed). URLs must be `https`. Empty rejects all caller-supplied webhooks |
+| `NOTIFY_ALLOWED_EMAIL_DOMAINS` | empty (any valid address) | Restrict `emailRecipients` to these domains |
+| `MAX_BODY_BYTES` | `1048576` | Request body limit on every route (413 when exceeded) |
+| `REQUEST_TIMEOUT` | `25s` | Per-request deadline covering queries and delivery |
 
-POST `/notify` with JSON:
+### Storage and scaling
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `DATABASE_URL` | none (in-memory) | PostgreSQL connection string. Migrations run at start under an advisory lock |
+| `DB_MAX_OPEN_CONNS` / `DB_MAX_IDLE_CONNS` | `25` / `5` | Connection pool size |
+| `DB_CONN_MAX_LIFETIME` | `30m` | Recycle connections after this long |
+| `EVENT_RETENTION` | `2160h` (90 days) | Events older than this are deleted hourly. `0` disables retention |
+| `REDIS_URL` | none (in-process) | Share the dedup window across replicas. Start-up fails if set but unreachable; at runtime an outage fails open |
+| `DEDUP_WINDOW` | `10m` | How long a repeated event counts as a duplicate |
+| `RULES_PATH` | built-in rules | YAML policy rules (attention classes are validated) |
+
+### Delivery and logging
+
+`DEFAULT_NOTIFY_EMAIL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_SENDER`, `SLACK_WEBHOOK_URL`, `TEAMS_WEBHOOK_URL`, `LOG_LEVEL` (`debug`/`info`/`warn`/`error`, default `info`, JSON on stdout), `PORT` (default `8080`).
+
+## Endpoints
+
+| Route | Auth | Purpose |
+|---|---|---|
+| `GET /health` | none | Liveness/readiness probe |
+| `GET /metrics` | API key | Prometheus text format: request counts and latency histograms per route |
+| `GET /events` | API key | Recent events, newest first, without raw payloads. `?limit=1..500` (default 100). Used by the [web console](../../apps/web/README.md) |
+| `POST /notify` | API key | Send a notification (validated, see below) |
+| `POST /feedback` | API key | Record feedback |
+| `POST /webhooks/github` | HMAC signature | Ingest a GitHub event. Redeliveries (same `X-GitHub-Delivery`) return `200 {"status":"duplicate"}` and notify nothing |
+
+`POST /notify`:
 
 ```json
 {
@@ -33,7 +60,27 @@ POST `/notify` with JSON:
   "title":"Alert",
   "message":"Hello",
   "emailRecipients":["user@example.com"],
-  "slackWebhookUrls":["https://hooks.slack.com/..."],
-  "teamsWebhookUrls":["https://outlook.office.com/webhook/..."]
+  "slackWebhookUrls":["https://hooks.slack.com/services/..."],
+  "teamsWebhookUrls":["https://example.webhook.office.com/..."]
 }
 ```
+
+Rejected with 400: non-`https` or non-allow-listed webhook hosts, recipients that are not plain addresses (or outside the allowed domains), titles with line breaks or over 200 characters, messages over 20,000 characters, more than 20 recipients or 10 webhooks. Every channel is attempted even if one fails; failures are joined in the logged error.
+
+## Testing
+
+```bash
+go test ./...                                  # unit tests
+go test -race -tags integration ./...          # plus PostgreSQL integration tests
+```
+
+Integration tests need `TEST_DATABASE_URL` (they skip without it):
+
+```bash
+docker run --rm -d -p 5433:5432 -e POSTGRES_PASSWORD=test postgres:16-alpine
+TEST_DATABASE_URL='postgres://postgres:test@localhost:5433/postgres?sslmode=disable' go test -tags integration ./...
+```
+
+`-race` needs cgo. On Windows without a C compiler run it in Docker: `docker run --rm -v "$PWD:/src" -w /src golang:1.26 go test -race ./...`.
+
+CI also runs `golangci-lint` (`.golangci.yml`), `govulncheck`, and an 80% coverage gate. See [docs/runbook.md](../../docs/runbook.md) for operating the service.

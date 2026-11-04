@@ -1,0 +1,201 @@
+// English is the source of truth. Every other language must define exactly these
+// keys (the compiler checks it). Use {name} for values filled in at run time.
+
+export const en = {
+  // Brand and navigation
+  'app.name': 'Attention',
+  'nav.views': 'Views',
+  'nav.openMenu': 'Open menu',
+  'nav.closeMenu': 'Close menu',
+  'nav.main': 'Main',
+  'view.all': 'All',
+  'view.critical': 'Critical',
+  'view.standard': 'Standard',
+  'view.background': 'Background',
+
+  // Appearance
+  'appearance.title': 'Appearance',
+  'appearance.language': 'Language',
+  'appearance.theme': 'Colour theme',
+  'theme.harbour': 'Harbour',
+  'theme.violet': 'Violet',
+  'theme.forest': 'Forest',
+  'theme.sunset': 'Sunset',
+  'theme.night': 'Night',
+
+  // Connection
+  'conn.connected': 'Connected',
+  'conn.connecting': 'Connecting',
+  'conn.notConnected': 'Not connected',
+  'conn.notSignedIn': 'Not signed in',
+  'conn.sample': 'Sample data',
+  'conn.settings': 'Connection settings',
+
+  // Top bar
+  'top.search': 'Search events',
+  'top.searchPlaceholder': 'Search events',
+  'range.label': 'Time range',
+  'range.1h': '1h',
+  'range.24h': '24h',
+  'range.7d': '7d',
+  'range.all': 'All',
+  'bell.label': 'Unread notifications',
+  'bell.title': 'Unread',
+  'bell.empty': 'You are all caught up.',
+  'bell.viewAll': 'View all',
+  'bell.markAll': 'Mark all as read',
+
+  // List
+  'page.title': 'Notifications',
+  'list.help': 'Select an event to see why it was handled this way.',
+  'list.unread': 'Unread',
+  'list.empty': 'No events match your search or filters.',
+  'list.clear': 'Clear search and filters',
+  'list.merged': 'Repeat, merged into the event above',
+  'list.markAll': 'Mark all as read',
+  'pager.label': 'Pages',
+  'pager.prev': 'Previous',
+  'pager.next': 'Next',
+  'pager.page': 'Page {page} of {pages}',
+
+  // Attention classes
+  'class.critical': 'Critical',
+  'class.standard': 'Standard',
+  'class.background': 'Background',
+  'class.merged': 'Merged',
+  'legend.label': 'How events are sorted',
+  'legend.critical': 'Always reaches you right away.',
+  'legend.standard': 'Held back so it does not interrupt you.',
+  'legend.background': 'Stays quiet. Kept for reference.',
+  'class.critical.explain': 'Critical events always reach you. They never go through AI and are never merged.',
+  'class.standard.explain':
+    'Standard events are held back instead of interrupting you. Digests are not available yet, so they stay here.',
+  'class.background.explain': 'Background events are low priority and never interrupt you. They stay here for reference.',
+
+  // Statuses
+  'status.sent': 'Sent to you',
+  'status.queued': 'Held back',
+  'status.merged': 'Merged',
+  'status.digest': 'In a digest',
+  'status.delayed': 'Delayed',
+  'status.budget_exceeded': 'Over your limit',
+  'status.none': 'No decision yet',
+
+  // Event categories (coloured chips)
+  'cat.security': 'Security',
+  'cat.code': 'Code',
+  'cat.issues': 'Issues',
+  'cat.build': 'Builds',
+  'cat.release': 'Releases',
+  'cat.social': 'Social',
+  'cat.other': 'Other',
+
+  // Event types
+  'ev.pull_request': 'Pull request',
+  'ev.pull_request_review': 'Pull request review',
+  'ev.push': 'Push',
+  'ev.issues': 'Issue',
+  'ev.issue_comment': 'Issue comment',
+  'ev.security_advisory': 'Security advisory',
+  'ev.dependabot_alert': 'Dependabot alert',
+  'ev.workflow_run': 'Workflow run',
+  'ev.check_run': 'Check run',
+  'ev.release': 'Release',
+  'ev.star': 'Star',
+  'ev.watch': 'Watch',
+  'ev.fork': 'Fork',
+  'ev.ping': 'Webhook test',
+  'ev.titleIn': '{event} in {repo}',
+
+  // Decision reasons the service sends in English
+  'reason.security': 'Security vulnerability detected',
+  'reason.dependency': 'Dependency vulnerability detected',
+  'reason.social': 'Low-priority social signal',
+  'reason.standard': 'Standard events are held back instead of interrupting',
+  'reason.duplicate': 'Duplicate of {id}',
+
+  // Lead
+  'lead.calm': 'Nothing critical has arrived.',
+  'lead.latest': 'Latest critical event, {time}.',
+  'hour.none': 'Nothing arrived in the last hour.',
+  'hour.prefix': 'In the last hour: {parts}.',
+  'hour.sent': '{n} sent to you',
+  'hour.held': '{n} held back',
+  'hour.merged': '{n} merged',
+  'time.now': 'just now',
+
+  // Detail sheet
+  'sheet.close': 'Close',
+  'sheet.why': 'Why this happened',
+  'sheet.noReason': 'No reason was recorded.',
+  'sheet.rule': 'Rule that matched: {rule}.',
+  'sheet.repeat': 'This is a repeat of an earlier event.',
+  'sheet.openOriginal': 'Open the original',
+  'sheet.originalOld': 'The original is older than the events shown here.',
+  'sheet.right': 'Was this right?',
+  'sheet.criticalHint': 'Critical events can’t be silenced, so there is no option to never be notified.',
+  'sheet.note': 'Add a note',
+  'sheet.sendNote': 'Send note',
+  'act.dismiss': 'Dismiss',
+  'act.dismiss.hint': 'Mark this one as handled.',
+  'act.always': 'Always notify me',
+  'act.always.hint': 'Send events like this straight to you.',
+  'act.never': 'Never notify me',
+  'act.never.hint': 'Stop interrupting you for events like this.',
+  'act.undo': 'Undo',
+  'done.dismissed': 'Dismissed.',
+  'done.always': 'You will always be notified about events like this.',
+  'done.never': 'You will never be notified about events like this.',
+  'done.undo': 'Undone.',
+  'done.reply': 'Reply sent.',
+  'fb.unauthorized': 'The API key was rejected. Update it in connection settings, then try again.',
+  'fb.unreachable': 'The service could not be reached. Check the connection and try again.',
+  'fb.rejected': '{message} Check the entry and try again.',
+  'fb.server': 'The service hit an error and did not save your feedback. Try again in a moment.',
+
+  // Notices
+  'err.unauthorized.title': 'The service rejected this API key.',
+  'err.unauthorized.body': 'Enter the value that is set as API_KEY on the service.',
+  'err.unconfigured.title': 'The service has no API key, so it refuses every request.',
+  'err.unconfigured.body': 'Set API_KEY on the service and restart it. Then enter the same key here.',
+  'err.unreachable.title': 'Can’t reach {url}.',
+  'err.unreachable.body':
+    'Check that the service is running. If it is, add {origin} to CORS_ALLOWED_ORIGINS on the service, or correct the address.',
+  'err.server.title': 'The service hit an error.',
+  'err.server.body': 'Events are not loading. Check the service logs for the request that failed, then try again.',
+  'err.enterKey': 'Enter API key',
+  'err.retry': 'Try again',
+  'err.changeAddress': 'Change address',
+  'empty.title': 'No events yet.',
+  'empty.body': 'Send your first GitHub event to see how the system decides what to do with it.',
+  'empty.step1': 'In your GitHub repository, open Settings, then Webhooks, then Add webhook.',
+  'empty.step2': 'Set the payload URL to {url} and the content type to application/json.',
+  'empty.step3': 'Set the secret to the value of GITHUB_WEBHOOK_SECRET on the service, then choose the events to send.',
+  'empty.copy': 'Copy webhook URL',
+  'empty.copied': 'Copied',
+  'loading': 'Loading events.',
+
+  // Welcome and demo
+  'welcome.title': 'Decide what deserves to interrupt you.',
+  'welcome.body':
+    'Attention reads your events, sends only what matters and holds back the rest. This console shows what it decided and why, and lets you correct it.',
+  'welcome.how': 'How it sorts events',
+  'welcome.demo': 'Try the demo',
+  'welcome.connect': 'Connect your service',
+  'welcome.demoHint': 'The demo uses sample data. Nothing is sent or saved.',
+  'demo.banner': 'You are looking at sample data. Nothing is sent or saved.',
+
+  // Settings dialog
+  'settings.title': 'Connection settings',
+  'settings.address': 'Service address',
+  'settings.key': 'API key',
+  'settings.keyHelp':
+    'Use the value set as API_KEY on the service. It is kept in this browser tab only and forgotten when you close the tab.',
+  'settings.save': 'Save and connect',
+  'settings.cancel': 'Cancel',
+  'settings.urlScheme': 'Use a URL that starts with http:// or https://.',
+  'settings.urlInvalid': 'Enter a full URL, for example http://localhost:8080.',
+} as const
+
+export type MessageKey = keyof typeof en
+export type Messages = Record<MessageKey, string>

@@ -1,0 +1,31 @@
+rules:
+  - name: github-security-advisory
+    when:
+      source: github
+      eventType: security_advisory
+    then:
+      attentionClass: critical
+      reason: security vulnerability detected
+
+  - name: github-dependabot-alert
+    when:
+      source: github
+      eventType: dependabot_alert
+    then:
+      attentionClass: critical
+      reason: dependency vulnerability detected
+
+  - name: github-star
+    when:
+      source: github
+      eventType: star
+    then:
+      attentionClass: background
+      reason: low-priority social signal
+
+  - name: default-github
+    when:
+      source: github
+    then:
+      attentionClass: standard
+      reason: default routing

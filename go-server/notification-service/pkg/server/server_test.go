@@ -60,18 +60,54 @@ func TestAuthMiddlewareRejectsMissingApiKeyWhenConfigured(t *testing.T) {
 	}
 }
 
-func TestCorsMiddlewareAddsBrowserHeaders(t *testing.T) {
-	s := &Server{cfg: &config.Config{Address: ":8080"}}
-	request := httptest.NewRequest(http.MethodGet, "/health", nil)
-	recorder := httptest.NewRecorder()
-
+func TestCorsMiddlewareOnlyAllowsListedOrigins(t *testing.T) {
+	s := &Server{cfg: &config.Config{CORSAllowedOrigins: []string{"http://localhost:5173"}}}
 	handler := s.corsMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
-	handler.ServeHTTP(recorder, request)
+	tests := []struct {
+		name, origin, want string
+	}{
+		{"allowed origin is echoed", "http://localhost:5173", "http://localhost:5173"},
+		{"unlisted origin gets no header", "http://evil.example", ""},
+		{"no origin gets no header", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/health", nil)
+			if tt.origin != "" {
+				req.Header.Set("Origin", tt.origin)
+			}
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			if got := rr.Header().Get("Access-Control-Allow-Origin"); got != tt.want {
+				t.Fatalf("Allow-Origin = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
-	if recorder.Header().Get("Access-Control-Allow-Origin") != "*" {
-		t.Fatalf("expected cors origin header to be set, got %q", recorder.Header().Get("Access-Control-Allow-Origin"))
+func TestCorsDefaultSendsNoHeaders(t *testing.T) {
+	s := &Server{cfg: &config.Config{}}
+	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req.Header.Set("Origin", "http://anything.example")
+	rr := httptest.NewRecorder()
+	s.corsMiddleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})).ServeHTTP(rr, req)
+	if rr.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Fatal("CORS must be closed by default")
+	}
+}
+
+func TestCorsPreflightShortCircuits(t *testing.T) {
+	s := &Server{cfg: &config.Config{CORSAllowedOrigins: []string{"*"}}}
+	req := httptest.NewRequest(http.MethodOptions, "/notify", nil)
+	req.Header.Set("Origin", "http://x.example")
+	rr := httptest.NewRecorder()
+	s.corsMiddleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("preflight must not reach the handler")
+	})).ServeHTTP(rr, req)
+	if rr.Code != http.StatusNoContent {
+		t.Fatalf("preflight status = %d", rr.Code)
 	}
 }

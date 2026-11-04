@@ -1,19 +1,31 @@
 # Attention Orchestration Platform
 
-This workspace now contains the initial milestone-1 foundation for an attention orchestration platform.
+This workspace contains the foundation for an attention orchestration platform — a system that decides *when, where, whether, and how* someone should be interrupted.
 
-## Included in milestone 1
+## Architecture
 
-- A Go API service with a health endpoint at /health
-- A lightweight React + TypeScript web shell for the future UI
+See [docs/orchestration-platform.md](docs/orchestration-platform.md) for the full architecture, canonical schema, and implementation status.
+
+## Current milestone
+
+**Milestone 13** — Security and production hardening. See [docs/milestone-13.md](docs/milestone-13.md).
+
+## Included
+
+- Go API service with GitHub webhook ingestion, YAML policy rules, and critical-event delivery
+- Pipeline: ingest → policy → deliver (critical) / queue (standard) → persist
+- PostgreSQL persistence with automatic schema migration
+- React + TypeScript web shell
 - Local PostgreSQL via Docker Compose
 - CI wiring for the Go service
 
 ## Structure
 
-- [go-server/notification-service](go-server/notification-service) — Go API service and Docker setup
+- [go-server/notification-service](go-server/notification-service) — Go API service
 - [apps/web](apps/web) — Vite + React + TypeScript frontend shell
-- [docs/milestone-1.md](docs/milestone-1.md) — milestone plan and review notes
+- [docs/](docs/) — architecture and milestone plans
+- [docs/coding-standards.md](docs/coding-standards.md) — production code standards
+- [docs/CHANGELOG.md](docs/CHANGELOG.md) — running record of every change
 
 ## Run locally
 
@@ -23,6 +35,15 @@ docker compose up --build
 
 Then open:
 
-- API: http://localhost:8080/health
+- API health: http://localhost:8080/health
 - UI: http://localhost:3000
+
+Send a test GitHub webhook:
+
+```bash
+curl -X POST http://localhost:8080/webhooks/github \
+  -H "X-GitHub-Event: security_advisory" \
+  -H "Content-Type: application/json" \
+  -d '{"repository":{"full_name":"octo/repo"}}'
+```
 

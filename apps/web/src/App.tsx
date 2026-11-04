@@ -1,105 +1,211 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { EventSheet } from './components/EventSheet'
+import { Lead } from './components/Lead'
+import { Ledger } from './components/Ledger'
+import { EmptyNotice, ErrorNotice } from './components/Notices'
+import { Pager } from './components/Pager'
+import { SettingsDialog } from './components/SettingsDialog'
+import { Sidebar } from './components/Sidebar'
+import { TopBar } from './components/TopBar'
+import { Welcome } from './components/Welcome'
+import { useEvents } from './hooks/useEvents'
+import { useMediaQuery } from './hooks/useMediaQuery'
+import { useRead } from './hooks/useRead'
+import type { Settings } from './lib/api'
+import { groupThreads } from './lib/events'
+import { DEFAULT_FILTERS, countByView, filterEvents, isFiltered, paginate, type Filters } from './lib/filters'
+import { useI18n } from './lib/i18n/I18nContext'
+import { loadSettings, needsWelcome, saveSettings } from './lib/settings'
 
-type FeedbackPayload = {
-  event_id: string
-  action: 'opened' | 'dismissed' | 'replied' | 'ignored'
-  note?: string
-}
+const CLOCK_MS = 30_000
 
-const App = () => {
-  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle')
-  const [message, setMessage] = useState('')
-  const [feedback, setFeedback] = useState<FeedbackPayload>({
-    event_id: 'demo-event-1',
-    action: 'opened',
-    note: 'The dashboard is working.',
-  })
+/** Below these widths the detail sheet covers the page and the sidebar becomes a drawer. */
+const SHEET_COVERS_PAGE = '(max-width: 79.999rem)'
+const SIDEBAR_IS_DRAWER = '(max-width: 61.999rem)'
 
-  const backendUrl = useMemo(() => import.meta.env.VITE_BACKEND_URL || 'http://localhost:8080', [])
+export default function App() {
+  const { t } = useI18n()
+  const [settings, setSettings] = useState<Settings>(loadSettings)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [now, setNow] = useState(() => new Date())
+  const [welcome, setWelcome] = useState(needsWelcome)
+  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
+  const [pageNumber, setPageNumber] = useState(1)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const { feed, reload } = useEvents(settings, !welcome)
+  const { read, markRead, markAllRead } = useRead()
+  const sheetCovers = useMediaQuery(SHEET_COVERS_PAGE)
+  const sidebarIsDrawer = useMediaQuery(SIDEBAR_IS_DRAWER)
 
+  // Keep "2 min ago" honest between refreshes.
   useEffect(() => {
-    const checkHealth = async () => {
-      setStatus('loading')
-      try {
-        const res = await fetch(`${backendUrl}/health`)
-        if (!res.ok) throw new Error(`health check failed: ${res.status}`)
-        setStatus('ok')
-        setMessage('Backend is reachable.')
-      } catch (error) {
-        setStatus('error')
-        setMessage(error instanceof Error ? error.message : 'Unable to reach backend.')
-      }
-    }
+    const timer = window.setInterval(() => setNow(new Date()), CLOCK_MS)
+    return () => window.clearInterval(timer)
+  }, [])
 
-    checkHealth()
-  }, [backendUrl])
+  const events = feed.events
+  const selected = useMemo(() => events.find((e) => e.id === selectedId) ?? null, [events, selectedId])
+  const original = useMemo(
+    () => (selected?.mergedInto ? events.find((e) => e.id === selected.mergedInto) : undefined),
+    [events, selected],
+  )
 
-  const submitFeedback = async () => {
-    try {
-      const res = await fetch(`${backendUrl}/feedback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(feedback),
-      })
+  const counts = useMemo(() => countByView(events), [events])
+  const threads = useMemo(() => groupThreads(filterEvents(events, filters, now, t)), [events, filters, now, t])
+  const page = useMemo(() => paginate(threads, pageNumber), [threads, pageNumber])
+  // Repeats merged into an earlier event do not count as separate unread items.
+  const unread = useMemo(() => events.filter((e) => !e.mergedInto && !read.has(e.id)), [events, read])
 
-      if (!res.ok) throw new Error(`feedback failed: ${res.status}`)
-      setMessage('Feedback submitted successfully.')
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Unable to submit feedback.')
-    }
+  const changeFilters = useCallback((patch: Partial<Filters>) => {
+    setFilters((previous) => ({ ...previous, ...patch }))
+    setPageNumber(1)
+  }, [])
+  const clearFilters = useCallback(() => {
+    setFilters(DEFAULT_FILTERS)
+    setPageNumber(1)
+  }, [])
+
+  const selectEvent = useCallback(
+    (id: string) => {
+      setSelectedId(id)
+      markRead(id)
+    },
+    [markRead],
+  )
+  const closeSheet = useCallback(() => setSelectedId(null), [])
+  const openSettings = useCallback(() => setSettingsOpen(true), [])
+  const closeDrawer = useCallback(() => setDrawerOpen(false), [])
+  const markEverythingRead = useCallback(() => markAllRead(events.map((e) => e.id)), [markAllRead, events])
+
+  const tryDemo = useCallback(() => {
+    const next: Settings = { ...settings, demo: true }
+    saveSettings(next)
+    setSettings(next)
+    setWelcome(false)
+  }, [settings])
+
+  const settingsDialog = (
+    <SettingsDialog
+      open={settingsOpen}
+      settings={settings}
+      onClose={() => setSettingsOpen(false)}
+      onSave={(next) => {
+        saveSettings(next)
+        setSettings(next)
+        setWelcome(false)
+        setSettingsOpen(false)
+      }}
+    />
+  )
+
+  if (welcome) {
+    return (
+      <>
+        <Welcome onTryDemo={tryDemo} onConnect={openSettings} />
+        {settingsDialog}
+      </>
+    )
   }
 
+  const failing = feed.status === 'error'
+  const showEmpty = feed.status === 'ready' && events.length === 0
+  const hasEvents = events.length > 0
+  const demo = settings.demo === true
+  const drawerVisible = drawerOpen && sidebarIsDrawer
+  // While a layer covers the screen, what is behind it must not be reachable.
+  const behindSheet = selected !== null && sheetCovers
+  const workspaceInert = behindSheet || drawerVisible
+
   return (
-    <main style={{ fontFamily: 'Inter, sans-serif', padding: '2rem', maxWidth: '720px', margin: '0 auto', lineHeight: 1.5 }}>
-      <h1>Attention Orchestration Platform</h1>
-      <p>Local operator view for service health and feedback capture.</p>
+    <div className="app" data-sheet={selected ? 'open' : 'closed'}>
+      <Sidebar
+        feed={feed}
+        demo={demo}
+        counts={counts}
+        view={filters.view}
+        onView={(view) => changeFilters({ view })}
+        onOpenSettings={openSettings}
+        open={drawerVisible}
+        onClose={closeDrawer}
+        inert={behindSheet}
+      />
 
-      <section style={{ border: '1px solid #d0d7de', borderRadius: '12px', padding: '1rem', marginBottom: '1rem' }}>
-        <h2>Backend status</h2>
-        <p><strong>Status:</strong> {status}</p>
-        <p>{message}</p>
-      </section>
+      <div className="workspace" {...(workspaceInert ? { inert: '' } : {})}>
+        <TopBar
+          query={filters.query}
+          onQuery={(query) => changeFilters({ query })}
+          range={filters.range}
+          onRange={(range) => changeFilters({ range })}
+          unread={unread}
+          now={now}
+          onOpenEvent={selectEvent}
+          onMarkAllRead={markEverythingRead}
+          onViewAll={clearFilters}
+          onMenu={() => setDrawerOpen(true)}
+          menuOpen={drawerVisible}
+        />
 
-      <section style={{ border: '1px solid #d0d7de', borderRadius: '12px', padding: '1rem' }}>
-        <h2>Submit feedback</h2>
-        <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-          Event ID
-          <input
-            value={feedback.event_id}
-            onChange={(event) => setFeedback({ ...feedback, event_id: event.target.value })}
-            style={{ display: 'block', width: '100%', marginTop: '0.25rem', padding: '0.5rem' }}
-          />
-        </label>
+        <main className="main">
+          <div className="page-head">
+            <h1 className="page-title">
+              {t('page.title')}
+              {unread.length > 0 && <span className="count-badge">{unread.length}</span>}
+            </h1>
+            {hasEvents && (
+              <button type="button" className="text-button" disabled={unread.length === 0} onClick={markEverythingRead}>
+                {t('list.markAll')}
+              </button>
+            )}
+          </div>
 
-        <label style={{ display: 'block', marginBottom: '0.5rem' }}>
-          Action
-          <select
-            value={feedback.action}
-            onChange={(event) => setFeedback({ ...feedback, action: event.target.value as FeedbackPayload['action'] })}
-            style={{ display: 'block', width: '100%', marginTop: '0.25rem', padding: '0.5rem' }}
-          >
-            <option value="opened">opened</option>
-            <option value="dismissed">dismissed</option>
-            <option value="replied">replied</option>
-            <option value="ignored">ignored</option>
-          </select>
-        </label>
+          {demo && (
+            <p className="demo-banner" role="note">
+              {t('demo.banner')}{' '}
+              <button type="button" className="text-button" onClick={openSettings}>
+                {t('welcome.connect')}
+              </button>
+            </p>
+          )}
+          {failing && (
+            <ErrorNotice error={feed.error} settings={settings} onOpenSettings={openSettings} onRetry={reload} />
+          )}
+          {hasEvents && (
+            <>
+              <Lead events={events} now={now} onOpen={selectEvent} />
+              <p className="list-help">{t('list.help')}</p>
+              <Ledger
+                threads={page.items}
+                now={now}
+                selectedId={selectedId}
+                isRead={(id) => read.has(id)}
+                onSelect={selectEvent}
+                filtered={isFiltered(filters)}
+                onClear={clearFilters}
+              />
+              <Pager page={page.page} pages={page.pages} onPage={setPageNumber} />
+            </>
+          )}
+          {showEmpty && <EmptyNotice settings={settings} />}
+          {feed.status === 'loading' && !hasEvents && (
+            <p className="loading" role="status">
+              {t('loading')}
+            </p>
+          )}
+        </main>
+      </div>
 
-        <label style={{ display: 'block', marginBottom: '0.75rem' }}>
-          Note
-          <textarea
-            value={feedback.note || ''}
-            onChange={(event) => setFeedback({ ...feedback, note: event.target.value })}
-            style={{ display: 'block', width: '100%', marginTop: '0.25rem', padding: '0.5rem', minHeight: '90px' }}
-          />
-        </label>
+      {selected && (
+        <EventSheet
+          event={selected}
+          original={original}
+          settings={settings}
+          onOpenOriginal={selectEvent}
+          onClose={closeSheet}
+        />
+      )}
 
-        <button onClick={submitFeedback} style={{ padding: '0.6rem 1rem', cursor: 'pointer' }}>
-          Submit feedback
-        </button>
-      </section>
-    </main>
+      {settingsDialog}
+    </div>
   )
 }
-
-export default App

@@ -1,115 +1,180 @@
 # Attention Orchestration Platform Architecture
 
-Modern notification systems must *respect user attention* rather than simply broadcasting alerts. Early work by Horvitz et al. described a “notification platform” that sits as an **attention-savvy layer** between incoming messages and the user, weighing the value of information against the cost of interruption. In our design, we take this further: instead of a pure “notification delivery platform,” we build an **Attention Orchestration Platform** that uses AI only in the middle layer. The overall flow becomes:
+Modern notification systems must *respect user attention* rather than simply broadcasting alerts. Early work by Horvitz et al. described a "notification platform" that sits as an **attention-savvy layer** between incoming messages and the user, weighing the value of information against the cost of interruption. In our design, we take this further: instead of a pure "notification delivery platform," we build an **Attention Orchestration Platform** that uses AI only in the middle layer.
+
+## Pipeline Overview
 
 ```
-Sources (GitHub, Jira, Webhooks…) 
-   → 1. Event Layer 
-   → 2. Attention Layer (AI) 
-   → 3. Delivery Layer 
-   → 4. Feedback Layer 
+Sources (GitHub, Jira, Webhooks…)
+   → 1. Event Layer        (deterministic: ingest, normalize, validate, dedupe)
+   → 2. Attention Layer   (AI: classify, group, schedule, digest — Standard/Background only)
+   → 3. Delivery Layer    (deterministic: format and route to channels)
+   → 4. Feedback Layer    (capture reactions, preferences, undo)
    → Future Learning
+```
+
+**Critical events bypass Layer 2 entirely.** The pipeline evaluates policy rules in Layer 1 and routes critical events straight to delivery.
+
+```mermaid
+flowchart TD
+    SRC[Source Webhook] --> ING[Ingest + Normalize]
+    ING --> POL[Policy Engine — YAML rules]
+    POL -->|critical| DEL[Delivery Layer]
+    POL -->|standard / background| QUE[Queue for Attention Layer]
+    QUE --> AI[Attention Layer — future milestone]
+    AI --> DEL
+    DEL --> FB[Feedback Layer]
+    POL --> DB[(PostgreSQL)]
+    DEL --> DB
+    QUE --> DB
 ```
 
 Each layer has distinct responsibilities, minimizing where AI is needed and keeping the rest deterministic:
 
-- **Event Layer:** Ingests and normalizes events from all sources (e.g. GitHub PRs, Jira issues, custom webhooks). Here we apply *deterministic logic*: validate fields, deduplicate repeated events, and run data-driven rules to assign a *criticality* or *attention class* (see below).  An **event bus / publish-subscribe** pattern is ideal: each source publishes generic events and subscribers (connectors or processors) consume them without tight coupling. If an event is classified as **Critical**, it bypasses most delays and proceeds immediately. Otherwise it moves to the Attention Layer.
+- **Event Layer:** Ingests and normalizes events from all sources (e.g. GitHub PRs, Jira issues, custom webhooks). Applies *deterministic logic*: validate fields, deduplicate repeated events, and run data-driven rules to assign an *attention class*. An **event bus / publish-subscribe** pattern (NATS, future milestone) decouples sources from processors. If an event is classified as **Critical**, it bypasses the Attention Layer and proceeds immediately to delivery.
 
-- **Attention Layer (LLM Classification):** This is the AI-controlled heart of the system. Using ML/LLM models we classify and group non-critical events, schedule them, assign priorities, and generate summary digests. For example, Apple’s iOS now uses on-device AI to *summarize* and *prioritize* notifications so users see key alerts (“a group chat is active” or urgent texts). Similarly, our LLM examines each event’s content and context to decide whether it should be sent now, merged with others, delayed until after work hours, or held for a digest.  Critical (urgent) events are kept out of this process – only “standard” and “background” events enter the Attention Layer, simplifying AI decisions.
+- **Attention Layer (LLM Classification):** The AI-controlled heart of the system. Classifies and groups non-critical events, schedules them, assigns priorities, and generates summary digests. Only "standard" and "background" events enter this layer. Critical events never touch AI.
 
-- **Delivery Layer:** A multi-channel notification hub sends messages to users. In practice this means integrating with systems like **email**, **Slack**, **SMS**, or a notifications API (e.g. [Novu](https://novu.co) or similar). The delivery layer has *no AI* – it merely formats and routes messages. A unified API (as Novu provides) lets us plug in dozens of providers at once. For example, Novu’s multi-channel service lets us send emails, push/SMS, chat messages, etc., through one platform. This keeps delivery reliable and consistent, regardless of upstream logic. The Delivery Layer also observes success/failure and respects any *user preferences* (channels/timezones), which users can set in advance.
+- **Delivery Layer:** Multi-channel notification hub (email, Slack, SMS) through a provider abstraction. No AI — merely formats and routes messages. Integrates with Novu (or similar) through a `NotificationProvider` interface. Observes success/failure and respects user channel preferences.
 
-- **Feedback Layer:** After delivery, we log user responses (opened/read, dismissed, snoozed, replies, etc.) and allow one-click feedback. Rather than quietly “suppressing” notifications, we present an interactive digest where users can undo or change decisions. For example, a daily summary email or Slack message could show “Merged 8 low-priority Jira comments because you usually ignore them” or “Delayed 3 PR reviews (outside work hours)” and offer buttons: *Always Notify*, *Never Notify*, *Undo*. This interface gathers explicit preferences and trust. It maps to common notification UI patterns: MagicBell’s design guide emphasizes letting users mute, set importance, or mark items as read. By capturing reactions (e.g. user pressed “Never Notify this type”), we feed that back to adjust future rules and model thresholds.
+- **Feedback Layer:** Logs user responses (opened, dismissed, snoozed, replies) and provides one-click feedback in digests. Interactive controls: *Always Notify*, *Never Notify*, *Undo*. Captured reactions feed future learning.
 
-Critically, **all decision details are logged** (not just blindly recomputed). We extend the event schema to include fields like:
+## Canonical Event Schema
 
-```json
-{
-  "attention_class": "critical | standard | background",
-  "decision_state": {
-    "status": "sent | merged | digest | delayed | suppressed",
-    "reason": "...",           
-    "model_version": "...",
-    "confidence": 0.94
-  }
+Every event carries first-class attention metadata. JSON API responses use camelCase; PostgreSQL columns use snake_case.
+
+### Go domain model
+
+```go
+type Event struct {
+    ID             string
+    Source         string                 // e.g. "github"
+    EventType      string                 // e.g. "pull_request"
+    Repository     string                 // e.g. "octo/repo"
+    AttentionClass string                 // "critical" | "standard" | "background"
+    DecisionState  *DecisionState
+    Payload        map[string]interface{} // raw source payload
+}
+
+type DecisionState struct {
+    Status       string  // "sent" | "queued" | "merged" | "digest" | "delayed" | "budget_exceeded"
+    Reason       string  // deterministic reason, never LLM-generated
+    ModelVersion string  // set only when Attention Layer makes the decision
+    Confidence   float64 // 0.0–1.0, set only for AI decisions
+    MatchedRule  string  // name of the policy rule that matched
 }
 ```
 
-This ensures that every notification’s fate is recorded (with reason and model info), so we can always trace “why was this notification hidden six months ago?” without re-running the model.
+### JSON representation
+
+```json
+{
+  "id": "github-pull_request-1234567890",
+  "source": "github",
+  "eventType": "pull_request",
+  "repository": "octo/repo",
+  "attentionClass": "standard",
+  "decisionState": {
+    "status": "queued",
+    "reason": "default routing",
+    "matchedRule": "default-github"
+  },
+  "payload": { }
+}
+```
+
+### Decision status lifecycle
+
+| Status | Set by | Meaning |
+|---|---|---|
+| `sent` | Pipeline (critical) or Attention Layer | Delivered immediately |
+| `queued` | Pipeline (standard/background) | Waiting for Attention Layer |
+| `merged` | Attention Layer | Combined with similar events |
+| `digest` | Attention Layer | Held for digest delivery |
+| `delayed` | Attention Layer | Scheduled for later (e.g. outside work hours) |
+| `budget_exceeded` | Attention Layer | Standard event deferred — daily attention budget spent |
+
+Critically, **all decision details are logged at write time** (not recomputed). This ensures we can always trace "why was this notification hidden six months ago?" without re-running the model.
 
 ## Notification Classes: Critical, Standard, Background
 
-To simplify logic, we pre-classify events into three priority tiers. Each tier carries fixed policies:
+Three priority tiers with fixed policies:
 
-- **CRITICAL**: Must be delivered immediately (bypassing quiet modes, focus filters, or summarization). Never delayed, merged, or suppressed.  *(Example: a P1 incident alert, security breach, or urgent error.)*
+- **CRITICAL**: Delivered immediately. Bypasses quiet modes, focus filters, and AI. Never delayed, merged, or budget-limited. *(P1 incident, security breach, payment failure.)*
 
-- **STANDARD**: Normal priority. The Attention Layer *may* group, delay, or summarize these if needed. *(Example: a PR review request, new assignment, or team comment.)*
+- **STANDARD**: Normal priority. The Attention Layer may group, delay, or summarize. Consumes attention budget when delivered. *(PR review request, new assignment, team comment.)*
 
-- **BACKGROUND**: Low priority. These events may *not* generate real-time alerts; they can be shown only in digests or dropped altogether if things get busy. *(Example: non-critical GitHub events like “someone starred your repo” or minor comments.)*
+- **BACKGROUND**: Low priority. No real-time alerts; shown in digests or dropped when busy. Does not consume attention budget. *(Repo stars, minor comments.)*
 
-This three-tier scheme mirrors mobile interruption levels. For instance, iOS defines **Active** (standard) and **Time-Sensitive** (urgent) notifications that respect focus modes, **Passive** (low-priority, silent) that never interrupt, and **Critical** alerts (which bypass everything). By mapping our tiers accordingly, we hard-wire half the decision: a Critical event is handled before the AI sees it (always sent), and Background events are constrained (often held for digest or filtered out). Standard events are the ones the LLM primarily judges.
+This mirrors iOS interruption levels: Critical alerts bypass everything; Active maps to Standard; Passive maps to Background.
 
 ## Attention Budget vs Suppression
 
-We avoid the term “suppression” because users don’t like feeling ignored. Instead, we think in terms of an **attention budget**. Every person has limited slots for alerts each day. As one recent analysis notes, a user’s *notification budget* is only a few actionable updates per day. In fact, smartphone users already endure 50–60 pushes daily; adding even a handful more from an AI assistant can lead to churn. Therefore, we treat each sent notification as a withdrawal from a finite account. Once the budget is spent, no further “standard” alerts go out — only true critical items can break through.
+We avoid "suppression" — users don't like feeling ignored. Instead, each person has a finite **attention budget** (default: ~5 standard notifications per day):
 
-This reframing is powerful: rather than secretly muting a notification (“suppressed”), we simply allocate from the limited budget. Critical messages cost **zero** attention budget (they must go through). Standard messages *consume budget*. Background messages cost nothing because they don’t draw your immediate attention (they live in the digest or vanish). When the budget is exceeded, we pause sending Standard alerts until it resets the next day. This honors user attention by design, aligning with UX research that finds users severely limit themselves to only a few ‘interruptions’ daily.
+- **Critical** → costs zero budget, always delivered.
+- **Standard** → consumes 1 budget slot when delivered.
+- **Background** → costs zero (lives in digest or vanishes).
+
+When the budget is exceeded, standard events receive `decision_state.status = budget_exceeded` and are held until the next daily reset. Only critical items break through.
 
 ## The Central Role of Digests
 
-Because attentional bandwidth is tight, **digests** are a crucial feature for transparency and trust. A digest gathers background and delayed items into a single summary.  Novu describes a notification digest as “one notification instead of multiple separate messages” when a user would otherwise be bombarded. For example, instead of firing off 100 emails for 100 comments, a daily digest could say “8 new comments from your team.” Empirical guides show that digests dramatically reduce overload: “It solves the problem of users getting too many notifications at once,” Novu explains, and “digest notifications work by collecting multiple trigger events, aggregating them into a single message”.
+Digests are the explainability interface. Instead of "AI decided something," users see:
 
-In our product, the digest becomes the *explainability interface*. Rather than users seeing “AI decided something”, they see: 
+> **Today's Digest:**
+> ✓ *Merged* 8 Jira comments (you usually ignore these).
+> ✓ *Delayed* 3 GitHub PR reviews (outside work hours).
+> ✓ *Sent Immediately* – P1 incident, Security alert.
+> ✓ *Held* – 12 repo stars (background, digest only).
+> *[Undo] [Always Notify] [Never Notify]* on each item.
 
-> **Today’s Digest:**  
-> ✓ *Merged* 8 Jira comments (you usually ignore these).  
-> ✓ *Delayed* 3 GitHub PR reviews (outside work hours).  
-> ✓ *Sent Immediately* – P1 incident, Security alert.  
-> ✓ *Hidden* – 12 repo stars.  
-> *[Undo] [Always Notify] [Never Notify]* buttons on each item.
+Machine logic determines the decision; the LLM only rephrases it into plain English:
 
-This kind of feedback window does double duty. It exposes the *reasoning* behind every move (“because you usually ignore it” or “because it’s not urgent”), building user trust and giving them control. By clicking *Always Notify*, a user effectively adjusts the model or rule for that event type moving forward; *Never Notify* does the opposite. This satisfies product-lead principles of letting users set importance or mute channels (as recommended by design experts) without first building a heavy dashboard. In short, the digest is the explainability and training data center: it collects user corrections that feed back into the system.
+> Machine Logic (exact condition met) → **LLM** → Human-Readable Explanation
+
+This avoids hallucinated explanations and keeps past rationale stable even when models change.
 
 ## User Feedback and Preferences
 
-Direct user feedback is key to personalization. We embed simple controls in notifications so users can instantly signal preferences. (MagicBell’s UI guidelines similarly advise actions like *“set importance”* or *“mute”* on notification items.) Examples of interactions:
+Embedded controls in notifications and digests:
 
-- **Undo / Revert:** allow reversing an AI decision on an alert.  
-- **Always/Never Notify:** binary choices that immediately update user policy for that event.  
-- **Mute Similar:** silence this category (mapped to our “never notify” for that class).  
-- **Looks Good / Thumbs Up:** positive reinforcement.
+- **Undo / Revert** — reverse an AI decision.
+- **Always / Never Notify** — binary policy update for an event type.
+- **Mute Similar** — silence a category.
+- **Looks Good** — positive reinforcement.
 
-Recording these in our Feedback Layer closes the loop: we store the user’s choice and any corrections, then use them to adjust scores, thresholds, or retrain models. The system also respects static user settings: for example, quiet hours or channel preferences (e.g. only Slack, not email) as managed in a user profile or preferences UI. By combining automated attention modeling with explicit user control, we create a transparent, trustable experience.
+Static preferences (quiet hours, channel selection) live in user profiles. Both automated modeling and explicit control combine for a transparent experience.
 
-## Data Schema (Attention Metadata)
+## Rule Engine and Pipeline
 
-To support auditing, we augment each event record with the decisions around it. In addition to the original `criticality` field, we include fields like `attention_class` (Critical/Standard/Background) and a nested `decision_state` object. This records the final outcome (*sent*, *merged*, *digest*, *delayed*, or *suppressed*), the reason (e.g. “outside office hours”), the model version, and confidence. Example JSON snippet:
+Every source plugs into the same framework via **data-driven YAML rules**:
 
-```json
-{
-  "attention_class": "standard",
-  "decision_state": {
-      "status": "delayed",
-      "reason": "low priority, queued for digest",
-      "model_version": "v1.2.3",
-      "confidence": 0.86
-  }
-}
+```yaml
+rules:
+  - name: github-security-alert
+    when:
+      source: github
+      eventType: security_advisory
+    then:
+      attentionClass: critical
+      reason: security vulnerability detected
+
+  - name: default-github
+    when:
+      source: github
+    then:
+      attentionClass: standard
+      reason: default routing
 ```
 
-Storing decisions like this ensures we never have to guess why something was dropped — the exact rationale is logged. It also isolates the explainable logic (a simple rule or threshold comparison) from the LLM output. In other words, the ML only provides classification scores, while the recorded decision (with numeric cost/benefit logic) provides a precise traceable reason.
+Adding a new connector is *connector + rules*, not rewriting core logic. The rule engine evaluates conditions deterministically (source, event type, repository). First match wins.
 
-## Explainability: Machine vs Human Explanation
-
-In line with best practices in explainable AI, we keep the core decision logic **deterministic** and only use the LLM for presentation. For example, we might determine in code that an event was merged because it was from the same entity and actor within 10 minutes (confidence 96%). We then have the LLM rephrase that rule into plain English in the digest. This avoids “hallucinated” explanations and ensures consistency over time (if we swap models or update training data, past rationale remains the same since it’s logged). Think of it as: 
-
-> Machine Logic (exact condition met) → **LLM** → Human-Readable Explanation.
-
-This approach aligns with enterprise trust requirements: the underlying logic can be inspected, audited, and tested independently of the natural-language layer.
+Rules file path is configured via `RULES_PATH` environment variable. Invalid rules fail fast at startup.
 
 ## Multi-Agent Recipients
 
-To enable future agent-to-agent workflows, we abstract recipients as a generic interface. A **Recipient** could be a human (via Email/Slack/SMS), **another AI agent**, a webhook, or a custom workflow endpoint. Concretely, we define something like:
+Recipients are abstracted for future agent-to-agent workflows:
 
 ```go
 type Recipient interface {
@@ -117,34 +182,62 @@ type Recipient interface {
 }
 ```
 
-The Delivery Layer simply hands the notification to whatever `Recipient` endpoint is configured. Initially that means human channels, but later it could include bots or workflow triggers. This keeps V1 simple while leaving the door open to “routing a notification to an AI assistant” or other extensions.
+V1 targets human channels (email, Slack, SMS). Later: AI agents, webhooks, workflow endpoints.
 
-## Rule Engine and Pipeline
+## Delivery Provider Abstraction
 
-The one part of this system that calls for careful design is the **rule engine** governing event handling. Every new source (GitHub, Jira, PagerDuty, etc.) should plug into the same framework. We make these rules *data-driven* from day one. Instead of hard-coding “if event.type == X then critical” in code, we define rules in JSON/YAML that the engine loads. This resembles business rule management systems; popular libraries (or even AWS EventBridge-like rules) can match events based on conditions and tag them accordingly. For example, a YAML rule might say:
+The delivery layer uses a provider interface, never tightly coupled to Novu:
 
-```yaml
-- if:
-    source: github
-    event: "security_alert"
-  then:
-    set attention_class: critical
-    set reason: "security vulnerability"
+```go
+type Provider interface {
+    Send(req NotificationRequest) error
+    Name() string
+}
 ```
 
-Because we use a generic subscription model (e.g. an event bus as in the Observer pattern), adding a new connector is *connector + rules*, not rewriting core logic. Over time this same rule framework can support per-org policies, user overrides, and even AI-generated recommendations for better rules. In short, invest in a flexible pipeline early: ingestion → rule classification → queuing by priority. Established patterns (publish/subscribe queues, Chain-of-Responsibility filters, etc.) make this robust and scalable.
+Implementations: `StubProvider` (dev), `SMTPProvider` (email), future `NovuProvider`, `SlackProvider`.
+
+## Technology Stack
+
+| Component | Choice | Notes |
+|---|---|---|
+| Backend | Go | Clean Architecture, dependency injection |
+| Frontend | React + TypeScript | Dashboard and digest UI |
+| Database | PostgreSQL | Events, decisions, feedback, preferences |
+| Cache | Redis | Future: dedup keys, budget counters |
+| Messaging | NATS | Future: event bus between layers |
+| Delivery | Novu (via abstraction) | Multi-channel routing |
+| AI | Ollama / external LLM | Attention Layer only |
+| Local dev | Docker Compose | Postgres, Ollama, API, UI |
+
+## Implementation Status
+
+| Component | Status |
+|---|---|
+| Event ingestion (GitHub webhook) | Implemented |
+| Policy engine + YAML rules | Milestone 11 |
+| Critical → delivery pipeline | Milestone 11 |
+| PostgreSQL persistence | Milestone 11 |
+| `decision_state` first-class fields | Milestone 11 |
+| SMTP delivery provider | Implemented |
+| Feedback capture (`/feedback`) | Implemented |
+| Attention Layer (AI classify/schedule) | Planned |
+| Attention budget enforcement | Planned |
+| Digest generation + interactive UI | Planned |
+| Novu provider | Planned |
+| NATS event bus | Planned |
+| Deduplication / threading | Planned |
+| Learning from feedback | Stub (Ollama summarizer) |
 
 ## Roadmap Priorities
 
-Based on these design principles, the next steps are:
+1. **Core Pipeline** *(Milestone 11 — current)*: Wire ingestion → policy → critical delivery → persistence. YAML rules. Canonical schema.
+2. **Reliable Delivery**: Novu integration for email, Slack, SMS. Critical delivery guarantees.
+3. **Attention Layer**: AI classifiers for standard events. Deduplication, grouping, scheduling, digests.
+4. **Feedback Loop**: Interactive digest interfaces with Undo/Always/Never. Training labels.
+5. **Learning**: Refine thresholds and personalize attention budget from feedback.
+6. **Advanced**: Admin dashboard, multi-agent routing, analytics, NATS event bus, compliance.
 
-1. **Core Infrastructure:** Build the ingestion pipeline and schema. Implement the rule engine, event bus, and storage. Ensure every event can be tagged with `attention_class` and persisted.
-2. **Reliable Delivery:** Integrate with a notification service (e.g. Novu or custom) for email, Slack, SMS. Guarantee critical alerts (CRITICAL class) never fail.
-3. **Attention Layer:** Develop AI classifiers and LLM prompts for Standard events. Implement deduplication, grouping, scheduling (back-off digests, as Novu describes).
-4. **Feedback Loop:** Build the interactive digest interfaces (email/Slack) with buttons for Undo/Always/Never. Log all user responses to create training labels.
-5. **Learning:** Use collected feedback to refine thresholds and personalize (e.g. adjust a user’s daily budget or scoring based on past dismissals).
-6. **Advanced Features:** Once the basics work, add an admin dashboard, fine-grained controls, multi-agent routing, analytics, compliance checks, etc.
+Each piece depends on the rule/pipeline foundation. The goal is systems that respect attention, reduce friction, and help people stay focused on what matters.
 
-Each piece depends on the foundation of the rule/pipeline system. As Horvitz’s work shows, the goal is “systems that respect attention, reduce friction, and help people stay focused on what matters”. By architecting layers cleanly and leveraging AI only where it adds value (classification, summarization, prioritization), we can achieve a notification platform that truly orchestrates user attention.
-
-**Sources:** We drew on industry and research best practices. For example, Novu’s design guide explains digests and multi-channel notifications, Apple’s documentation describes AI-powered notification summaries, and Microsoft’s Attention research (Horvitz et al.) details an intelligent Notification Platform. UX patterns from platforms like MagicBell also influenced our UI and rule-engine approach. These inform the recommendations above.
+**Sources:** Novu design guide (digests, multi-channel), Apple notification summaries, Horvitz et al. (intelligent notification platform), MagicBell UI patterns.

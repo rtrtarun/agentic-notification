@@ -1,254 +1,212 @@
 package server
 
 import (
-	"encoding/json"
+	"context"
+	"database/sql"
+	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
-	"sync/atomic"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"github.com/example/notification-service/pkg/config"
+	"github.com/example/notification-service/pkg/db"
+	"github.com/example/notification-service/pkg/dedup"
 	"github.com/example/notification-service/pkg/delivery"
 	"github.com/example/notification-service/pkg/event"
 	"github.com/example/notification-service/pkg/feedback"
 	"github.com/example/notification-service/pkg/learning"
+	"github.com/example/notification-service/pkg/metrics"
 	"github.com/example/notification-service/pkg/notification"
 	"github.com/example/notification-service/pkg/notification/impl"
+	"github.com/example/notification-service/pkg/pipeline"
 	"github.com/example/notification-service/pkg/policy"
-	"github.com/example/notification-service/pkg/util"
 )
 
+const (
+	readHeaderTimeout = 10 * time.Second
+	readTimeout       = 30 * time.Second
+	// writeTimeout must exceed the request timeout so handlers can still answer
+	// after a slow delivery hits its own deadline.
+	writeTimeout        = 40 * time.Second
+	idleTimeout         = 120 * time.Second
+	shutdownTimeout     = 10 * time.Second
+	redisConnectTimeout = 5 * time.Second
+	githubEventHeader   = "X-GitHub-Event"
+	githubDeliveryHdr   = "X-GitHub-Delivery"
+	maxDeliveryIDLen    = 64
+	errInternal         = "internal error"
+	errInvalidPayload   = "invalid request payload"
+	errTooLarge         = "request body too large"
+	errMethod           = "method not allowed"
+)
+
+// Server wires the HTTP layer to the pipeline and its dependencies.
 type Server struct {
-	cfg                *config.Config
-	service            notification.NotificationService
-	deliveryService    *delivery.Service
-	eventRepo          event.Repository
-	feedbackRecorder   feedback.Recorder
-	learningService    *learning.Service
-	policyEngine       *policy.Engine
-	http               *http.Server
-	requestsTotal      atomic.Uint64
-	notificationsTotal atomic.Uint64
+	cfg              *config.Config
+	logger           *slog.Logger
+	service          notification.NotificationService
+	deliveryService  *delivery.Service
+	eventRepo        event.Repository
+	feedbackRecorder feedback.Recorder
+	learningService  *learning.Service
+	policyEngine     *policy.Engine
+	eventPipeline    *pipeline.Pipeline
+	metrics          *metrics.Registry
+	purger           event.Purger
+	http             *http.Server
+	closers          []func() error
 }
 
-type statusRecorder struct {
-	http.ResponseWriter
-	statusCode int
-}
-
-func (r *statusRecorder) WriteHeader(code int) {
-	if r.statusCode == 0 {
-		r.statusCode = code
+// NewServer wires the service. ctx bounds start-up work such as the database connection.
+func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*Server, error) {
+	if logger == nil {
+		logger = slog.Default()
 	}
-	r.ResponseWriter.WriteHeader(code)
-}
-
-func NewServer(cfg *config.Config) *Server {
-	var provider delivery.Provider = &delivery.StubProvider{}
-	if cfg != nil && cfg.SMTPHost != "" && cfg.SMTPSender != "" {
-		provider = delivery.NewSMTPProvider(cfg)
+	if cfg == nil {
+		return nil, errors.New("config is required")
 	}
 
-	return &Server{
-		cfg:              cfg,
-		service:          impl.NewNotificationService(cfg),
-		deliveryService:  delivery.NewService(provider),
-		eventRepo:        event.NewInMemoryRepository(),
-		feedbackRecorder: feedback.NewInMemoryRecorder(),
-		learningService:  learning.NewService(""),
-		policyEngine: policy.NewEngine([]policy.Rule{{
-			Name: "default-standard",
-			When: policy.RuleCondition{Source: "github"},
-			Then: policy.RuleOutcome{AttentionClass: "standard", Reason: "default routing"},
-		}}),
-	}
-}
+	s := &Server{cfg: cfg, logger: logger, metrics: metrics.NewRegistry()}
 
-func (s *Server) Run() error {
-	mux := http.NewServeMux()
-	mux.Handle("/notify", s.corsMiddleware(s.authMiddleware(s.loggingMiddleware(http.HandlerFunc(s.notifyHandler)))))
-	mux.Handle("/health", s.corsMiddleware(s.authMiddleware(s.loggingMiddleware(http.HandlerFunc(s.healthHandler)))))
-	mux.Handle("/metrics", s.corsMiddleware(s.authMiddleware(s.loggingMiddleware(http.HandlerFunc(s.metricsHandler)))))
-	mux.Handle("/webhooks/github", s.corsMiddleware(s.loggingMiddleware(http.HandlerFunc(s.githubWebhookHandler))))
-	mux.Handle("/feedback", s.corsMiddleware(s.authMiddleware(s.loggingMiddleware(http.HandlerFunc(s.feedbackHandler)))))
-
-	s.http = &http.Server{
-		Addr:    s.cfg.Address,
-		Handler: mux,
-	}
-
-	log.Printf("notification service listening on %s", s.cfg.Address)
-	return s.http.ListenAndServe()
-}
-
-func (s *Server) notifyHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: "method not allowed"})
-		return
-	}
-
-	var req notification.NotificationRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "invalid request payload"})
-		return
-	}
-
-	if err := s.service.Send(req); err != nil {
-		log.Printf("notification error: %v", err)
-		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: err.Error()})
-		return
-	}
-
-	s.notificationsTotal.Add(1)
-	util.WriteJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
-}
-
-func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
-	util.WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"status":  "ok",
-		"service": "attention-orchestration",
-	})
-}
-
-func (s *Server) metricsHandler(w http.ResponseWriter, r *http.Request) {
-	util.WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"requests":      s.requestsTotal.Load(),
-		"notifications": s.notificationsTotal.Load(),
-	})
-}
-
-func (s *Server) feedbackHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: "method not allowed"})
-		return
-	}
-
-	var fb feedback.EventFeedback
-	if err := json.NewDecoder(r.Body).Decode(&fb); err != nil {
-		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "invalid request payload"})
-		return
-	}
-	if fb.EventID == "" || fb.Action == "" {
-		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "event id and action are required"})
-		return
-	}
-
-	if err := s.feedbackRecorder.Record(fb); err != nil {
-		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: err.Error()})
-		return
-	}
-
-	util.WriteJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
-}
-
-func (s *Server) githubWebhookHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: "method not allowed"})
-		return
-	}
-
-	eventType := r.Header.Get("X-GitHub-Event")
-	if eventType == "" {
-		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "missing github event header"})
-		return
-	}
-
-	var payload map[string]interface{}
-	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "invalid request payload"})
-		return
-	}
-
-	payloadBytes, err := json.Marshal(payload)
+	eventRepo, err := s.initEventRepository(ctx)
 	if err != nil {
-		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "invalid request payload"})
-		return
+		s.releaseOnStartupFailure()
+		return nil, fmt.Errorf("init event repository: %w", err)
 	}
-
-	normalized, err := s.normalizeGitHubEvent(eventType, payloadBytes)
+	deduper, err := s.initDeduper(ctx)
 	if err != nil {
-		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: err.Error()})
-		return
+		s.releaseOnStartupFailure()
+		return nil, fmt.Errorf("init deduper: %w", err)
+	}
+	rules, err := loadPolicyRules(cfg, logger)
+	if err != nil {
+		s.releaseOnStartupFailure()
+		return nil, fmt.Errorf("load policy rules: %w", err)
 	}
 
-	if s.policyEngine != nil {
-		if decision, ok := s.policyEngine.Evaluate(normalized); ok {
-			normalized.Payload["attention_decision"] = map[string]interface{}{
-				"attentionClass": decision.AttentionClass,
-				"reason":         decision.Reason,
-				"matchedRule":    decision.MatchedRule,
-			}
-		}
-	}
+	provider := newProvider(cfg, logger)
+	policyEngine := policy.NewEngine(rules)
+	deliverySvc := delivery.NewService(provider)
 
-	if err := s.eventRepo.Save(normalized); err != nil {
-		log.Printf("event persistence error: %v", err)
-		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: err.Error()})
-		return
+	s.eventRepo = eventRepo
+	s.deliveryService = deliverySvc
+	s.policyEngine = policyEngine
+	s.feedbackRecorder = feedback.NewInMemoryRecorder()
+	s.learningService = learning.NewService("")
+	s.service = notification.NewValidatingService(
+		impl.NewNotificationServiceWith(provider),
+		notification.Limits{
+			AllowedWebhookHosts: cfg.WebhookHostAllowList(),
+			AllowedEmailDomains: cfg.AllowedEmailDomains,
+		},
+	)
+	s.eventPipeline = pipeline.New(
+		policyEngine,
+		deliverySvc,
+		eventRepo,
+		pipeline.Config{
+			DefaultEmailRecipients: cfg.DefaultEmailRecipients(),
+			SlackWebhookURLs:       cfg.SlackWebhookURLs(),
+			TeamsWebhookURLs:       cfg.TeamsWebhookURLs(),
+		},
+	).WithDeduper(deduper).WithLogger(logger)
+	if purger, ok := eventRepo.(event.Purger); ok {
+		s.purger = purger
 	}
-
-	util.WriteJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
+	return s, nil
 }
 
-func (s *Server) normalizeGitHubEvent(eventType string, payload []byte) (event.Event, error) {
-	var body map[string]interface{}
-	if len(payload) > 0 {
-		if err := json.Unmarshal(payload, &body); err != nil {
-			return event.Event{}, fmt.Errorf("invalid payload: %w", err)
-		}
-	} else {
-		body = map[string]interface{}{}
+// newProvider builds the delivery provider: email when SMTP is configured, plus
+// webhooks, which refuse private addresses so a webhook URL cannot reach internal hosts.
+func newProvider(cfg *config.Config, logger *slog.Logger) delivery.Provider {
+	providers := []delivery.Provider{delivery.NewWebhookProvider(true)}
+	if cfg.SMTPHost != "" && cfg.SMTPSender != "" {
+		providers = append(providers, delivery.NewSMTPProvider(cfg))
 	}
-
-	repository := ""
-	if repo, ok := body["repository"].(map[string]interface{}); ok {
-		if fullName, ok := repo["full_name"].(string); ok {
-			repository = fullName
-		}
+	if len(providers) == 1 && cfg.SlackWebhookURL == "" && cfg.TeamsWebhookURL == "" {
+		logger.Warn("no delivery channel configured; critical events will be recorded but not delivered")
 	}
-
-	return event.Event{
-		ID:         fmt.Sprintf("github-%s-%d", eventType, time.Now().UnixNano()),
-		Source:     "github",
-		EventType:  eventType,
-		Repository: repository,
-		Payload:    body,
-	}, nil
+	return delivery.NewMultiProvider(providers...)
 }
 
-func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		start := time.Now()
-		s.requestsTotal.Add(1)
-		recorder := &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
-		log.Printf("incoming request method=%s path=%s remote=%s", r.Method, r.URL.Path, r.RemoteAddr)
-		next.ServeHTTP(recorder, r)
-		log.Printf("completed request method=%s path=%s status=%d duration=%s", r.Method, r.URL.Path, recorder.statusCode, time.Since(start))
+func (s *Server) initEventRepository(ctx context.Context) (event.Repository, error) {
+	if s.cfg.DatabaseURL == "" {
+		return event.NewInMemoryRepository(), nil
+	}
+
+	sqlDB, err := db.Connect(ctx, s.cfg.DatabaseURL, db.PoolConfig{
+		MaxOpenConns:    s.cfg.DBMaxOpenConns,
+		MaxIdleConns:    s.cfg.DBMaxIdleConns,
+		ConnMaxLifetime: s.cfg.DBConnMaxLifetime,
 	})
+	if err != nil {
+		return nil, err
+	}
+	s.closers = append(s.closers, sqlDB.Close)
+	if err := migrate(ctx, sqlDB); err != nil {
+		return nil, err
+	}
+	s.logger.Info("connected to PostgreSQL and ran migrations")
+	return event.NewPostgresRepository(sqlDB), nil
 }
 
-func (s *Server) authMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.cfg.APIKey != "" {
-			if apiKey := r.Header.Get("X-API-Key"); apiKey != s.cfg.APIKey {
-				util.WriteJSON(w, http.StatusUnauthorized, util.ErrorResponse{Error: "missing or invalid api key"})
-				return
-			}
-		}
-		next.ServeHTTP(w, r)
-	})
+func migrate(ctx context.Context, sqlDB *sql.DB) error {
+	return db.MigrateLocked(ctx, sqlDB)
 }
 
-func (s *Server) corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
+// initDeduper shares the dedup window through Redis when REDIS_URL is set, so
+// replicas agree on duplicates; otherwise it dedups within this process only.
+func (s *Server) initDeduper(ctx context.Context) (dedup.Deduper, error) {
+	if s.cfg.RedisURL == "" {
+		return dedup.NewMemoryDeduper(s.cfg.DedupWindow), nil
+	}
+	opts, err := redis.ParseURL(s.cfg.RedisURL)
+	if err != nil {
+		return nil, fmt.Errorf("parse REDIS_URL: %w", err)
+	}
+	client := redis.NewClient(opts)
+	s.closers = append(s.closers, client.Close)
+
+	pingCtx, cancel := context.WithTimeout(ctx, redisConnectTimeout)
+	defer cancel()
+	if err := client.Ping(pingCtx).Err(); err != nil {
+		return nil, fmt.Errorf("ping redis: %w", err)
+	}
+	s.logger.Info("using Redis for deduplication")
+	return dedup.NewRedisDeduper(dedup.NewRedisStore(client), s.cfg.DedupWindow), nil
+}
+
+// releaseOnStartupFailure closes what NewServer opened before it gave up, logging
+// any close error because the caller only sees the original failure.
+func (s *Server) releaseOnStartupFailure() {
+	if err := s.closeAll(); err != nil {
+		s.logger.Warn("release resources after failed start-up", "error", err)
+	}
+}
+
+// closeAll releases the resources opened by NewServer, joining any errors.
+func (s *Server) closeAll() error {
+	var errs []error
+	for _, closeFn := range s.closers {
+		errs = append(errs, closeFn())
+	}
+	s.closers = nil
+	return errors.Join(errs...)
+}
+
+func loadPolicyRules(cfg *config.Config, logger *slog.Logger) ([]policy.Rule, error) {
+	if cfg != nil && cfg.RulesPath != "" {
+		rules, err := policy.LoadRulesFromFile(cfg.RulesPath)
+		if err != nil {
+			return nil, err
 		}
-		next.ServeHTTP(w, r)
-	})
+		logger.Info("loaded policy rules", "count", len(rules), "path", cfg.RulesPath)
+		return rules, nil
+	}
+	rules := policy.DefaultRules()
+	logger.Info("using built-in default policy rules", "count", len(rules))
+	return rules, nil
 }
