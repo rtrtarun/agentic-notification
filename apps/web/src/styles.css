@@ -35,6 +35,9 @@
   --space-5: 4rem;
 
   --measure: 62ch;
+
+  /* Strong ease-out: starts fast so the interface answers at once. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 *,
@@ -50,11 +53,14 @@ html {
   font-size: 100%;
   line-height: 1.55;
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
 }
 
 body {
   margin: 0;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 button,
@@ -62,6 +68,14 @@ input,
 textarea {
   font: inherit;
   color: inherit;
+}
+
+/* Controls are not content: no double-tap delay, no long-press text selection. */
+button {
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 :focus-visible {
@@ -78,6 +92,7 @@ textarea {
     'masthead'
     'main';
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .masthead {
@@ -86,7 +101,8 @@ textarea {
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-3) 0;
+  padding: max(var(--space-3), env(safe-area-inset-top)) max(var(--space-3), env(safe-area-inset-right)) 0
+    max(var(--space-3), env(safe-area-inset-left));
   max-width: 60rem;
   width: 100%;
   margin-inline: auto;
@@ -94,7 +110,8 @@ textarea {
 
 .main {
   grid-area: main;
-  padding: var(--space-4) var(--space-3) var(--space-5);
+  padding: var(--space-4) max(var(--space-3), env(safe-area-inset-right))
+    max(var(--space-5), calc(var(--space-3) + env(safe-area-inset-bottom))) max(var(--space-3), env(safe-area-inset-left));
   max-width: 60rem;
   width: 100%;
   margin-inline: auto;
@@ -171,14 +188,11 @@ textarea {
   text-align: left;
   font: inherit;
   letter-spacing: inherit;
+
   text-decoration: underline;
   text-decoration-color: var(--distress);
   text-decoration-thickness: 0.07em;
   text-underline-offset: 0.12em;
-}
-
-.lead-link:hover {
-  text-decoration-thickness: 0.14em;
 }
 
 .lead-detail {
@@ -205,6 +219,7 @@ textarea {
   background: none;
   cursor: pointer;
   font-weight: 500;
+  transition: transform 140ms var(--ease-out);
 }
 
 .filter[aria-pressed='true'] {
@@ -243,10 +258,7 @@ textarea {
   background: none;
   cursor: pointer;
   text-align: left;
-}
-
-.row:hover {
-  background: var(--deck);
+  transition: transform 140ms var(--ease-out);
 }
 
 .row[aria-current='true'] {
@@ -330,7 +342,6 @@ textarea {
   font-stretch: 85%;
 }
 
-.merged-row:hover,
 .merged-row[aria-current='true'] {
   background: var(--deck);
 }
@@ -386,7 +397,9 @@ textarea {
   inset: 0;
   z-index: 10;
   overflow-y: auto;
-  padding: var(--space-3);
+  overscroll-behavior: contain;
+  padding: max(var(--space-3), env(safe-area-inset-top)) max(var(--space-3), env(safe-area-inset-right))
+    max(var(--space-3), env(safe-area-inset-bottom)) max(var(--space-3), env(safe-area-inset-left));
   background: var(--deck);
 }
 
@@ -478,11 +491,7 @@ textarea {
   background: transparent;
   cursor: pointer;
   font-weight: 650;
-}
-
-.button:hover:not(:disabled) {
-  background: var(--sea);
-  color: var(--harbour);
+  transition: transform 140ms var(--ease-out);
 }
 
 .button:disabled {
@@ -495,11 +504,6 @@ textarea {
   color: var(--harbour);
 }
 
-.button-primary:hover:not(:disabled) {
-  background: var(--signal);
-  border-color: var(--signal);
-}
-
 .text-button {
   padding: 0;
   border: 0;
@@ -509,10 +513,8 @@ textarea {
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 0.2em;
-}
-
-.text-button:hover:not(:disabled) {
-  text-decoration-thickness: 0.15em;
+  display: inline-block;
+  transition: transform 140ms var(--ease-out);
 }
 
 .field-label {
@@ -604,6 +606,7 @@ textarea {
     inset: auto;
     align-self: start;
     height: 100vh;
+    height: 100dvh;
     border-left: 1px solid var(--fog);
   }
 }
@@ -638,17 +641,84 @@ textarea {
   }
 }
 
-/* ---------- Motion: only answers an action ---------- */
+/* ---------- Hover: only where the pointer can hover (touch has no hover) ---------- */
 
-@media (prefers-reduced-motion: no-preference) {
-  .sheet {
-    animation: sheet-in 180ms ease-out;
+@media (hover: hover) and (pointer: fine) {
+  .lead-link:hover {
+    text-decoration-thickness: 0.14em;
   }
 
-  @keyframes sheet-in {
+  .row:hover,
+  .merged-row:hover {
+    background: var(--deck);
+  }
+
+  .button,
+  .button-primary {
+    transition:
+      transform 140ms var(--ease-out),
+      background-color 120ms ease,
+      color 120ms ease;
+  }
+
+  .button:hover:not(:disabled) {
+    background: var(--sea);
+    color: var(--harbour);
+  }
+
+  .button-primary:hover:not(:disabled) {
+    background: var(--signal);
+    border-color: var(--signal);
+  }
+
+  .text-button:hover:not(:disabled) {
+    text-decoration-thickness: 0.15em;
+  }
+}
+
+/* ---------- Press feedback: works for mouse, touch and pen ---------- */
+
+.button:active:not(:disabled),
+.text-button:active:not(:disabled),
+.filter:active {
+  transform: scale(0.97);
+}
+
+.row:active,
+.merged-row:active {
+  transform: scale(0.99);
+}
+
+/* ---------- Motion: only answers an action ---------- */
+
+.sheet {
+  animation: sheet-in 180ms var(--ease-out);
+}
+
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateX(1.5rem);
+  }
+}
+
+/* Reduced motion keeps the fade (it shows something changed) and drops the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .sheet {
+    animation-name: sheet-fade;
+  }
+
+  @keyframes sheet-fade {
     from {
       opacity: 0;
-      transform: translateX(1.5rem);
     }
+  }
+
+  .button:active:not(:disabled),
+  .text-button:active:not(:disabled),
+  .filter:active,
+  .row:active,
+  .merged-row:active {
+    transform: none;
   }
 }

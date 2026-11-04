@@ -62,7 +62,7 @@ Shape means the meaning survives without colour vision. In forced-colours mode t
 
 ### Motion
 
-One thing moves: the detail sheet slides in when someone opens an event, which shows what changed. Nothing animates on load, on scroll or on hover. `prefers-reduced-motion` removes it.
+One thing moves: the detail sheet fades and slides in (180 ms, strong ease-out) when someone opens an event, which shows what changed. Controls scale to 0.97 while pressed (140 ms). Nothing animates on load or scroll, and closing the sheet is instant. `prefers-reduced-motion` keeps a fade and removes the movement and the press scale.
 
 ## Screens and states
 
@@ -118,7 +118,7 @@ Rules: components render; `lib/` holds logic and has the unit tests; only `lib/a
 
 ## Accessibility
 
-Visible keyboard focus (3px Signal blue ring), native `<dialog>` for settings (focus trap and Escape), the detail sheet moves focus to its heading and returns it on close and closes on Escape, status text is announced (`role="status"` and `role="alert"`), state is never colour-only, reduced motion is respected, and the layout holds down to 390px wide.
+Visible keyboard focus (3px Signal blue ring), native `<dialog>` for settings (focus trap and Escape), the detail sheet moves focus to its heading and returns it on close and closes on Escape, status text is announced (`role="status"` and `role="alert"`), state is never colour-only, reduced motion is respected, and the layout holds down to 390px wide. Below 62rem, where the sheet covers the screen, the page behind it is `inert`. Hover styles apply only to devices that can hover; touch devices get press feedback instead. See [ui-architecture.md](ui-architecture.md) section 15 for the mobile checklist.
 
 ## Run, test, build
 

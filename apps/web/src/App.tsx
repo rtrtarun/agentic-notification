@@ -6,10 +6,14 @@ import { Ledger } from './components/Ledger'
 import { EmptyNotice, ErrorNotice } from './components/Notices'
 import { SettingsDialog } from './components/SettingsDialog'
 import { useEvents } from './hooks/useEvents'
+import { useMediaQuery } from './hooks/useMediaQuery'
 import type { Settings } from './lib/api'
 import { loadSettings, saveSettings } from './lib/settings'
 
 const CLOCK_MS = 30_000
+
+/** Below this width the detail sheet covers the whole screen instead of docking beside the list. */
+const SHEET_COVERS_PAGE = '(max-width: 61.999rem)'
 
 export default function App() {
   const [settings, setSettings] = useState<Settings>(loadSettings)
@@ -17,6 +21,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [now, setNow] = useState(() => new Date())
   const { feed, reload } = useEvents(settings)
+  const sheetCovers = useMediaQuery(SHEET_COVERS_PAGE)
 
   // Keep "2 min ago" honest between refreshes.
   useEffect(() => {
@@ -36,12 +41,14 @@ export default function App() {
   const failing = feed.status === 'error'
   const showEmpty = feed.status === 'ready' && feed.events.length === 0
   const hasEvents = feed.events.length > 0
+  // When the sheet covers the screen, the page behind it must not be reachable by keyboard or screen reader.
+  const behindSheet = selected !== null && sheetCovers
 
   return (
     <div className="page" data-sheet={selected ? 'open' : 'closed'}>
-      <Header feed={feed} onOpenSettings={openSettings} />
+      <Header feed={feed} onOpenSettings={openSettings} inert={behindSheet} />
 
-      <main className="main">
+      <main className="main" {...(behindSheet ? { inert: '' } : {})}>
         {failing && (
           <ErrorNotice error={feed.error} settings={settings} onOpenSettings={openSettings} onRetry={reload} />
         )}
