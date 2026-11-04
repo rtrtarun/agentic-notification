@@ -1,18 +1,19 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { LOCALES, isLocale } from '../lib/i18n'
 import { useI18n } from '../lib/i18n/I18nContext'
-import { THEMES, applyTheme, detectTheme, saveTheme, type ThemeId } from '../lib/theme'
+import { THEMES, THEME_EVENT, changeTheme, detectTheme, type ThemeId } from '../lib/theme'
 
 /** Language and colour theme. Both apply at once and are remembered in this browser. */
 export function Appearance() {
   const { t, locale, setLocale } = useI18n()
   const [theme, setTheme] = useState<ThemeId>(() => detectTheme())
 
-  const chooseTheme = (id: ThemeId) => {
-    saveTheme(id)
-    applyTheme(id)
-    setTheme(id)
-  }
+  // The command palette can change the theme too, so follow it.
+  useEffect(() => {
+    const onTheme = (e: Event) => setTheme((e as CustomEvent<ThemeId>).detail)
+    window.addEventListener(THEME_EVENT, onTheme)
+    return () => window.removeEventListener(THEME_EVENT, onTheme)
+  }, [])
 
   return (
     <div className="appearance">
@@ -44,7 +45,7 @@ export function Appearance() {
                 name="theme"
                 value={th.id}
                 checked={theme === th.id}
-                onChange={() => chooseTheme(th.id)}
+                onChange={() => changeTheme(th.id)}
               />
               <span className="swatch-chip" style={{ background: th.background, borderColor: th.accent }}>
                 <span className="swatch-dot" style={{ background: th.accent }} />

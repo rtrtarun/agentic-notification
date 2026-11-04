@@ -1,0 +1,81 @@
+/*
+  Design tokens for the application shell and the components built on it.
+
+  The "attention" theme is the dark-first default. It reuses the variables the
+  older console already understands (--harbour page, --deck raised surface,
+  --sea ink, --signal accent), so every existing screen follows the theme
+  without changes. The semantic tokens below (--bg, --surface, --text, ...)
+  are what new components use; they are aliases, so they follow every theme.
+
+  Contrast (WCAG), measured against the page and the raised surface:
+  ink #f5f7ff 16:1, muted text #9ba8c7 7:1, accent #8f7bff 5.1:1,
+  critical #ff526d 5.3:1, warning #f5b942 10:1.
+*/
+
+:root[data-theme='attention'] {
+  color-scheme: dark;
+  --harbour: #0b1020;
+  --deck: #151e32;
+  --sea: #f5f7ff;
+  --signal: #8f7bff;
+  --distress: #ff526d;
+  --pennant: #f5b942;
+  --fog: #3b4a66;
+  --on-ink: #0b1020;
+  --on-signal: #0b1020;
+  --on-distress: #0b1020;
+  --unread: #f5b942;
+  --scrim: rgb(5 8 18 / 0.7);
+
+  --cat-security: #ffb4ae;
+  --cat-security-bg: #4a1f2a;
+  --cat-code: #a9c8ff;
+  --cat-code-bg: #1c3354;
+  --cat-issues: #d2bdff;
+  --cat-issues-bg: #34285a;
+  --cat-build: #8fe0d8;
+  --cat-build-bg: #123f3c;
+  --cat-release: #a6e3b0;
+  --cat-release-bg: #1b3d24;
+  --cat-social: #f5d58a;
+  --cat-social-bg: #4a3a10;
+  --cat-other: #c3cfd8;
+  --cat-other-bg: #2b3a46;
+
+  --sidebar-bg: #10172a;
+  --elevated: #1b2740;
+  --border-color: #27344d;
+  --text-muted: #9ba8c7;
+  --success: #20c997;
+  --info: #4389ff;
+  --primary: #7257ff;
+}
+
+:root {
+  /* Semantic aliases. Components use these, never the raw theme variables. */
+  --bg: var(--harbour);
+  --surface: var(--deck);
+  --text: var(--sea);
+  --accent: var(--signal);
+  --danger: var(--distress);
+  --warning: var(--pennant);
+  --sidebar-bg: var(--deck);
+  --elevated: var(--deck);
+  --border-color: color-mix(in srgb, var(--sea) 18%, transparent);
+  --text-muted: color-mix(in srgb, var(--sea) 68%, var(--harbour));
+  --success: #1a8f6c;
+  --info: var(--signal);
+  --primary: var(--signal);
+
+  --radius: 0.75rem;
+  --radius-sm: 0.5rem;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.18);
+  --sidebar-collapsed: 4.25rem;
+  --topbar-height: 3.75rem;
+  --bottom-nav-height: 3.5rem;
+}
+
+:root[data-theme='night'] {
+  --sidebar-bg: #11202d;
+  --success: #3ccf9f;
+}

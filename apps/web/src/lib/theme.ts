@@ -2,7 +2,7 @@
 // <html data-theme="...">; see styles.css. The class colours keep their meaning
 // in every theme: red stays critical.
 
-export type ThemeId = 'harbour' | 'violet' | 'forest' | 'sunset' | 'night'
+export type ThemeId = 'attention' | 'harbour' | 'violet' | 'forest' | 'sunset' | 'night'
 
 export interface ThemeInfo {
   id: ThemeId
@@ -13,6 +13,7 @@ export interface ThemeInfo {
 }
 
 export const THEMES: ThemeInfo[] = [
+  { id: 'attention', background: '#0b1020', accent: '#8f7bff' },
   { id: 'harbour', background: '#e6ecee', accent: '#2058b8' },
   { id: 'violet', background: '#ece9f6', accent: '#5b3fd0' },
   { id: 'forest', background: '#e7efe8', accent: '#17734a' },
@@ -26,7 +27,7 @@ export function isThemeId(value: unknown): value is ThemeId {
   return typeof value === 'string' && THEMES.some((t) => t.id === value)
 }
 
-/** Saved choice first, then the system's dark setting, then the default. */
+/** Saved choice first, then light only if the system asks for it, otherwise the dark default. */
 export function detectTheme(): ThemeId {
   try {
     const saved = localStorage.getItem(STORAGE_KEY)
@@ -34,8 +35,9 @@ export function detectTheme(): ThemeId {
   } catch {
     // fall through
   }
-  if (typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches) return 'night'
-  return 'harbour'
+  // Dark first: only a system that asks for light gets the light theme.
+  if (typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: light)').matches) return 'harbour'
+  return 'attention'
 }
 
 export function saveTheme(id: ThemeId): void {
@@ -50,5 +52,14 @@ export function saveTheme(id: ThemeId): void {
 export function applyTheme(id: ThemeId): void {
   document.documentElement.dataset.theme = id
   const info = THEMES.find((t) => t.id === id)
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', info?.background ?? '#e6ecee')
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', info?.background ?? '#0b1020')
+}
+
+export const THEME_EVENT = 'attention:theme'
+
+/** Saves and applies a theme, and tells anything showing the current theme (the sidebar, the palette). */
+export function changeTheme(id: ThemeId): void {
+  saveTheme(id)
+  applyTheme(id)
+  window.dispatchEvent(new CustomEvent(THEME_EVENT, { detail: id }))
 }

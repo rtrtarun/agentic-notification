@@ -4,6 +4,8 @@ import App from './App'
 import { I18nProvider } from './lib/i18n/I18nContext'
 import { applyTheme, detectTheme } from './lib/theme'
 import './styles.css'
+import './design/tokens.css'
+import './app/shell.css'
 
 // Apply the saved theme before the first paint so there is no flash of the wrong colours.
 applyTheme(detectTheme())
