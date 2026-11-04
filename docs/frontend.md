@@ -2,7 +2,7 @@
 
 The web app in [`apps/web`](../apps/web) is an operator console. It answers two questions for the person running the platform: **what did the system decide about each event, and why?** and **was that right?** It reads from `GET /events` and writes to `POST /feedback`.
 
-Architecture context: [architecture.md](architecture.md) (sections 9, 10.6, 19). Milestone record: [milestone-14.md](milestone-14.md).
+Component-level detail, design tokens, wireframes and the skills audit: [ui-architecture.md](ui-architecture.md). Architecture context: [architecture.md](architecture.md) (sections 9, 10.6, 19). Milestone record: [milestone-14.md](milestone-14.md).
 
 ## Audience and job
 

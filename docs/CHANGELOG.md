@@ -5,6 +5,7 @@ Every change to this repository is recorded here, newest first. Milestone-level 
 ## Unreleased
 
 ### Added
+- [ui-architecture.md](ui-architecture.md): component reference, state and data flow, design tokens, wireframes, accessibility, and an audit of the console against the `mobile-native`, `tarun-design-eng` and `pick-ui-library` skills with a prioritised fix list. No code changed.
 - Milestone 14 (operator console and read API, see [milestone-14.md](milestone-14.md)): `GET /events` (newest first, no raw payloads, `?limit=1..500`) and `Event.CreatedAt`; a new **Attention console** in `apps/web` with its own design language ([frontend.md](frontend.md)): latest critical event and a last-hour sentence, a ledger whose row size and type width follow the attention class, merged events nested on a thread line, a detail sheet with the decision reason and feedback (Dismiss, Always notify me, Never notify me, notes, Undo), specific empty and error states, connection settings kept in `sessionStorage`. 34 Vitest tests and `npm test` in CI.
 - [apps/web/README.md](../apps/web/README.md), a runbook section for the console, and sections 9.1, 10.6, 11.4a and 23 (change record) in [architecture.md](architecture.md).
 - [architecture.md](architecture.md): complete architecture reference for the Go backend (layers, components, flows, data contracts, ER, UML, state machine, patterns, API, discrepancies, roadmap). All 15 Mermaid diagrams validated.
