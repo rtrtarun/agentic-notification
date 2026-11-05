@@ -8,6 +8,9 @@ import { ToastProvider } from './design/Toast'
 import { HOME_PATH, NAV_ITEMS } from './lib/nav'
 
 const InboxPage = lazy(() => import('./pages/InboxPage'))
+const OverviewPage = lazy(() => import('./pages/OverviewPage'))
+const ActivityPage = lazy(() => import('./pages/ActivityPage'))
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
 const AllPage = lazy(() => import('./pages/AllPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const PlannedPage = lazy(() => import('./pages/PlannedPage'))
@@ -15,7 +18,10 @@ const PlannedPage = lazy(() => import('./pages/PlannedPage'))
 /** Screens that exist today. Everything else in the navigation resolves to a plain "not built yet" page. */
 const BUILT: Record<string, React.ReactElement> = {
   inbox: <InboxPage />,
+  overview: <OverviewPage />,
   all: <AllPage />,
+  activity: <ActivityPage />,
+  analytics: <AnalyticsPage />,
   settings: <SettingsPage />,
 }
 

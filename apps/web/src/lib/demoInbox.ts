@@ -262,3 +262,17 @@ export function resetDemoInbox(): void {
   states.clear()
   events = null
 }
+
+/** Every visible demo notification, archived and merged ones included, for the demo analytics. */
+export function demoAllItems(): InboxItem[] {
+  return visible().map(toItem)
+}
+
+/** People's actions in demo mode, newest first. */
+export function demoActions(): { eventId: string; step: string; detail?: string; at: string }[] {
+  const rows: { eventId: string; step: string; detail?: string; at: string }[] = []
+  for (const e of visible()) {
+    for (const t of stateOf(e.id).trail) rows.push({ eventId: e.id, step: t.step, detail: t.detail, at: t.at })
+  }
+  return rows.sort((a, b) => b.at.localeCompare(a.at))
+}

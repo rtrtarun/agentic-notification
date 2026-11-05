@@ -46,7 +46,9 @@ func (r *statusRecorder) status() int {
 // scanners probing random paths cannot create unbounded label cardinality.
 var knownRoutes = map[string]bool{
 	"/notify": true, "/health": true, "/metrics": true, "/webhooks/github": true, "/feedback": true, "/events": true,
-	inboxPrefix: true,
+	inboxPrefix:      true,
+	"/api/analytics": true, "/api/activity": true, "/api/rules": true, "/api/policies": true,
+	"/api/channels": true, "/api/integrations": true, "/api/preferences": true, "/api/stream": true,
 }
 
 func routeLabel(path string) string {
@@ -56,6 +58,13 @@ func routeLabel(path string) string {
 	}
 	if knownRoutes[path] {
 		return path
+	}
+	// /api/rules/{id} and similar collapse to their collection for the same reason.
+	if rest, ok := strings.CutPrefix(path, "/api/"); ok {
+		collection := "/api/" + strings.SplitN(rest, "/", 2)[0]
+		if knownRoutes[collection] {
+			return collection
+		}
 	}
 	return "other"
 }

@@ -335,7 +335,7 @@
   color: var(--text-muted);
 }
 
-.legend {
+.chart-legend {
   display: flex;
   flex-wrap: wrap;
   gap: 0.9rem;
@@ -359,9 +359,9 @@
 .legend-swatch[data-level='normal'] { background: var(--info); }
 .legend-swatch[data-level='low'] { background: var(--text-muted); }
 
-/* ---------- Timeline ---------- */
+/* ---------- Activity feed ---------- */
 
-.timeline {
+.feed {
   display: grid;
   gap: 0;
   margin: 0;
@@ -369,7 +369,7 @@
   list-style: none;
 }
 
-.timeline-item {
+.feed-item {
   display: grid;
   grid-template-columns: 1.5rem 1fr;
   gap: 0.6rem;
@@ -377,7 +377,7 @@
   position: relative;
 }
 
-.timeline-item::before {
+.feed-item::before {
   content: '';
   position: absolute;
   inset-block: 1.6rem -0.2rem;
@@ -386,11 +386,11 @@
   background: var(--border-color);
 }
 
-.timeline-item:last-child::before {
+.feed-item:last-child::before {
   display: none;
 }
 
-.timeline-dot {
+.feed-dot {
   inline-size: 0.8rem;
   block-size: 0.8rem;
   margin: 0.35rem 0 0 0.3rem;
@@ -398,21 +398,21 @@
   background: var(--accent);
 }
 
-[dir='rtl'] .timeline-dot {
+[dir='rtl'] .feed-dot {
   margin: 0.35rem 0.3rem 0 0;
 }
 
-.timeline-dot[data-level='critical'] { background: var(--danger); }
-.timeline-dot[data-level='high'] { background: var(--warning); }
-.timeline-dot[data-level='normal'] { background: var(--info); }
-.timeline-dot[data-level='low'] { background: var(--text-muted); }
+.feed-dot[data-level='critical'] { background: var(--danger); }
+.feed-dot[data-level='high'] { background: var(--warning); }
+.feed-dot[data-level='normal'] { background: var(--info); }
+.feed-dot[data-level='low'] { background: var(--text-muted); }
 
-.timeline-title {
+.feed-title {
   margin: 0;
   font-weight: 650;
 }
 
-.timeline-meta {
+.feed-meta {
   margin: 0.1rem 0 0;
   font-size: var(--step--1);
   color: var(--text-muted);
@@ -514,11 +514,6 @@
   border-radius: 999px;
   font-size: var(--step--1);
   color: var(--text-muted);
-}
-
-.mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.85em;
 }
 
 .switch {

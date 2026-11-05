@@ -18,6 +18,7 @@ import (
 	"github.com/example/notification-service/pkg/event"
 	"github.com/example/notification-service/pkg/feedback"
 	"github.com/example/notification-service/pkg/inbox"
+	"github.com/example/notification-service/pkg/insights"
 	"github.com/example/notification-service/pkg/learning"
 	"github.com/example/notification-service/pkg/metrics"
 	"github.com/example/notification-service/pkg/notification"
@@ -53,6 +54,7 @@ type Server struct {
 	eventRepo        event.Repository
 	sqlDB            *sql.DB
 	inbox            *inbox.Service
+	insights         *insights.Service
 	feedbackRecorder feedback.Recorder
 	learningService  *learning.Service
 	policyEngine     *policy.Engine
@@ -96,6 +98,7 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 
 	s.eventRepo = eventRepo
 	s.inbox = inbox.NewService(eventRepo, s.initInboxRepository())
+	s.insights = insights.NewService(s.inbox)
 	s.deliveryService = deliverySvc
 	s.policyEngine = policyEngine
 	s.feedbackRecorder = feedback.NewInMemoryRecorder()
