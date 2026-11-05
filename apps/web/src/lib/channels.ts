@@ -6,13 +6,15 @@ import { request, type Settings } from './api'
 import { demoEvents } from './demo'
 
 export interface Channel {
-  id: 'email' | 'slack' | 'teams'
+  id: 'email' | 'slack' | 'teams' | 'sms'
   name: string
   configured: boolean
   /** Already masked by the service. */
   target?: string
   receives: string[]
   setup: string
+  /** 'mock' when messages are only logged and never leave the service. */
+  mode?: 'mock'
 }
 
 export type IntegrationStatus = 'ready' | 'unsigned' | 'blocked'
@@ -49,8 +51,9 @@ export const demoChannelsClient: ChannelsClient = {
   async channels() {
     return [
       { id: 'email', name: 'Email', configured: true, target: 'o***@example.com', receives: ['critical'], setup: 'SMTP_HOST, SMTP_SENDER and DEFAULT_NOTIFY_EMAIL' },
-      { id: 'slack', name: 'Slack', configured: true, target: 'hooks.slack.com/…', receives: ['critical'], setup: 'SLACK_WEBHOOK_URL' },
+      { id: 'slack', name: 'Slack', configured: true, target: 'hooks.slack.com/…', receives: ['critical', 'standard'], setup: 'SLACK_WEBHOOK_URL' },
       { id: 'teams', name: 'Microsoft Teams', configured: false, receives: ['critical'], setup: 'TEAMS_WEBHOOK_URL' },
+      { id: 'sms', name: 'SMS', configured: true, target: '+14*******00', receives: ['critical'], setup: 'SMS_GATEWAY (mock, http or sns) and SMS_RECIPIENTS', mode: 'mock' },
     ]
   },
   async test(id) {

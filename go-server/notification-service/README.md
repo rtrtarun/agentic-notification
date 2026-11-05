@@ -41,6 +41,8 @@ The API fails closed: with no `API_KEY` every protected route returns 503. Set `
 
 `DEFAULT_NOTIFY_EMAIL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_SENDER`, `SLACK_WEBHOOK_URL`, `TEAMS_WEBHOOK_URL`, `LOG_LEVEL` (`debug`/`info`/`warn`/`error`, default `info`, JSON on stdout), `PORT` (default `8080`).
 
+Routing and SMS (milestone 22; all optional): `NOTIFY_STANDARD_CHANNELS` and `NOTIFY_BACKGROUND_CHANNELS` (comma lists of `email`, `slack`, `teams`, `sms`; empty means that class is only recorded), `SMS_GATEWAY` (`mock`, `http`, `sns`), `SMS_RECIPIENTS` (E.164), `SMS_DAILY_LIMIT` (default `50`, `0` = no cap), `SMS_HTTP_URL`, `SMS_HTTP_HEADERS` (`Name=value,...`), `SMS_HTTP_BODY` (template with `{{to}}` and `{{text}}`), `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`.
+
 ## Endpoints
 
 | Route | Auth | Purpose |
@@ -50,6 +52,7 @@ The API fails closed: with no `API_KEY` every protected route returns 503. Set `
 | `GET /events` | API key | Recent events, newest first, without raw payloads. `?limit=1..500` (default 100). Used by the [web console](../../apps/web/README.md) |
 | `POST /notify` | API key | Send a notification (validated, see below) |
 | `POST /feedback` | API key | Record feedback |
+| `GET /api/deliveries` | API key | Delivery log and queue with counts by status (no targets or message text). `POST /api/deliveries/{id}/retry` sends a dead delivery again |
 | `POST /webhooks/github` | HMAC signature | Ingest a GitHub event. Redeliveries (same `X-GitHub-Delivery`) return `200 {"status":"duplicate"}` and notify nothing |
 
 `POST /notify`:

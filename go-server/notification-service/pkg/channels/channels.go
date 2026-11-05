@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/example/notification-service/pkg/notification"
+	"github.com/example/notification-service/pkg/sms"
 )
 
 // Channel IDs.
@@ -21,6 +22,7 @@ const (
 	IDEmail = "email"
 	IDSlack = "slack"
 	IDTeams = "teams"
+	IDSMS   = "sms"
 )
 
 // Errors the HTTP layer maps to status codes.
@@ -37,6 +39,12 @@ type Settings struct {
 	EmailRecipients []string
 	SlackWebhookURL string
 	TeamsWebhookURL string
+	// SMSGateway is "mock", "http" or "sns"; empty means SMS is off.
+	SMSGateway    string
+	SMSRecipients []string
+	// StandardChannels and BackgroundChannels are the channel IDs those classes are routed to.
+	StandardChannels   []string
+	BackgroundChannels []string
 }
 
 // Channel is one delivery channel as shown to people. Target is always masked.
@@ -49,12 +57,23 @@ type Channel struct {
 	Receives []string `json:"receives"`
 	// Setup names the environment variables that configure the channel.
 	Setup string `json:"setup"`
+	// Mode is "mock" when messages are only logged and never leave the service.
+	Mode string `json:"mode,omitempty"`
 }
 
 // Describe lists every channel with its masked target.
 func Describe(s Settings) []Channel {
-	receives := []string{"critical"}
-	email := Channel{ID: IDEmail, Name: "Email", Receives: receives, Setup: "SMTP_HOST, SMTP_SENDER and DEFAULT_NOTIFY_EMAIL"}
+	receivesFor := func(id string) []string {
+		out := []string{"critical"}
+		if contains(s.StandardChannels, id) {
+			out = append(out, "standard")
+		}
+		if contains(s.BackgroundChannels, id) {
+			out = append(out, "background")
+		}
+		return out
+	}
+	email := Channel{ID: IDEmail, Name: "Email", Receives: receivesFor(IDEmail), Setup: "SMTP_HOST, SMTP_SENDER and DEFAULT_NOTIFY_EMAIL"}
 	if s.SMTPHost != "" && s.SMTPSender != "" && len(s.EmailRecipients) > 0 {
 		email.Configured = true
 		masked := make([]string, 0, len(s.EmailRecipients))
@@ -63,15 +82,36 @@ func Describe(s Settings) []Channel {
 		}
 		email.Target = strings.Join(masked, ", ")
 	}
-	slack := Channel{ID: IDSlack, Name: "Slack", Receives: receives, Setup: "SLACK_WEBHOOK_URL"}
+	slack := Channel{ID: IDSlack, Name: "Slack", Receives: receivesFor(IDSlack), Setup: "SLACK_WEBHOOK_URL"}
 	if s.SlackWebhookURL != "" {
 		slack.Configured, slack.Target = true, hostOnly(s.SlackWebhookURL)
 	}
-	teams := Channel{ID: IDTeams, Name: "Microsoft Teams", Receives: receives, Setup: "TEAMS_WEBHOOK_URL"}
+	teams := Channel{ID: IDTeams, Name: "Microsoft Teams", Receives: receivesFor(IDTeams), Setup: "TEAMS_WEBHOOK_URL"}
 	if s.TeamsWebhookURL != "" {
 		teams.Configured, teams.Target = true, hostOnly(s.TeamsWebhookURL)
 	}
-	return []Channel{email, slack, teams}
+	smsChannel := Channel{ID: IDSMS, Name: "SMS", Receives: receivesFor(IDSMS), Setup: "SMS_GATEWAY (mock, http or sns) and SMS_RECIPIENTS"}
+	if s.SMSGateway != "" && len(s.SMSRecipients) > 0 {
+		smsChannel.Configured = true
+		masked := make([]string, 0, len(s.SMSRecipients))
+		for _, n := range s.SMSRecipients {
+			masked = append(masked, sms.MaskNumber(n))
+		}
+		smsChannel.Target = strings.Join(masked, ", ")
+		if s.SMSGateway == "mock" {
+			smsChannel.Mode = "mock"
+		}
+	}
+	return []Channel{email, slack, teams, smsChannel}
+}
+
+func contains(list []string, v string) bool {
+	for _, x := range list {
+		if x == v {
+			return true
+		}
+	}
+	return false
 }
 
 // maskEmail keeps the first letter and the domain: "alice@example.com" becomes "a***@example.com".
@@ -143,6 +183,11 @@ func (t *Tester) Test(ctx context.Context, id string) error {
 			return ErrNotConfigured
 		}
 		req.TeamsWebhookURLs = []string{t.settings.TeamsWebhookURL}
+	case IDSMS:
+		if !t.channel(id).Configured {
+			return ErrNotConfigured
+		}
+		req.SMSRecipients = t.settings.SMSRecipients
 	default:
 		return ErrUnknown
 	}

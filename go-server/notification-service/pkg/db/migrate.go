@@ -128,6 +128,28 @@ func Migrate(ctx context.Context, db Execer) error {
 			id       TEXT PRIMARY KEY,
 			body     JSONB NOT NULL
 		)`,
+		// Queued and logged deliveries. Targets are never stored: they come from configuration
+		// when a job is sent. UNIQUE (event_id, channel) makes enqueueing idempotent. See pkg/delivery.
+		`CREATE TABLE IF NOT EXISTS delivery_jobs (
+			id              TEXT PRIMARY KEY,
+			event_id        TEXT NOT NULL,
+			channel         TEXT NOT NULL,
+			class           TEXT NOT NULL DEFAULT '',
+			title           TEXT NOT NULL,
+			message         TEXT NOT NULL DEFAULT '',
+			grp             TEXT NOT NULL DEFAULT '',
+			status          TEXT NOT NULL,
+			attempts        INT  NOT NULL DEFAULT 0,
+			next_attempt_at TIMESTAMPTZ NOT NULL,
+			lease_until     TIMESTAMPTZ,
+			last_error      TEXT NOT NULL DEFAULT '',
+			direct          BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (event_id, channel)
+		)`,
+		`CREATE INDEX IF NOT EXISTS delivery_jobs_due_idx ON delivery_jobs (status, next_attempt_at)`,
+		`CREATE INDEX IF NOT EXISTS delivery_jobs_created_idx ON delivery_jobs (created_at DESC)`,
 	}
 	for _, stmt := range statements {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {

@@ -27,21 +27,37 @@ const (
 
 // Config holds every runtime setting. Zero values are safe: they fail closed.
 type Config struct {
-	Address               string
-	APIKey                string
-	AllowUnauthenticated  bool
-	DatabaseURL           string
-	RedisURL              string
-	RulesPath             string
-	DedupWindow           time.Duration
-	DefaultNotifyEmail    string
-	SMTPHost              string
-	SMTPPort              int
-	SMTPUsername          string
-	SMTPPassword          string
-	SMTPSender            string
-	SlackWebhookURL       string
-	TeamsWebhookURL       string
+	Address              string
+	APIKey               string
+	AllowUnauthenticated bool
+	DatabaseURL          string
+	RedisURL             string
+	RulesPath            string
+	DedupWindow          time.Duration
+	DefaultNotifyEmail   string
+	SMTPHost             string
+	SMTPPort             int
+	SMTPUsername         string
+	SMTPPassword         string
+	SMTPSender           string
+	SlackWebhookURL      string
+	TeamsWebhookURL      string
+	// SMSGateway selects how texts leave the service: "" (off), "mock", "http" or "sns".
+	SMSGateway     string
+	SMSRecipients  []string
+	SMSHTTPURL     string
+	SMSHTTPHeaders map[string]string
+	SMSHTTPBody    string
+	// SMSDailyLimit caps queued SMS per UTC day. 0 means no cap. Critical events are never capped.
+	SMSDailyLimit      int
+	AWSRegion          string
+	AWSAccessKeyID     string
+	AWSSecretAccessKey string
+	AWSSessionToken    string
+	// StandardChannels and BackgroundChannels list the channels that receive
+	// those attention classes. Empty (the default) means the class is only recorded.
+	StandardChannels      []string
+	BackgroundChannels    []string
 	GitHubWebhookSecret   string
 	AllowUnsignedWebhooks bool
 	MaxBodyBytes          int64
@@ -124,6 +140,28 @@ func LoadConfig() (*Config, error) {
 	cfg.SlackWebhookURL = os.Getenv("SLACK_WEBHOOK_URL")
 	cfg.TeamsWebhookURL = os.Getenv("TEAMS_WEBHOOK_URL")
 	cfg.GitHubWebhookSecret = os.Getenv("GITHUB_WEBHOOK_SECRET")
+
+	cfg.SMSGateway = strings.ToLower(strings.TrimSpace(os.Getenv("SMS_GATEWAY")))
+	switch cfg.SMSGateway {
+	case "", "mock", "http", "sns":
+	default:
+		return nil, fmt.Errorf("invalid SMS_GATEWAY: %q (use mock, http or sns)", cfg.SMSGateway)
+	}
+	cfg.SMSRecipients = envList("SMS_RECIPIENTS", "")
+	cfg.SMSHTTPURL = os.Getenv("SMS_HTTP_URL")
+	cfg.SMSHTTPBody = os.Getenv("SMS_HTTP_BODY")
+	if cfg.SMSHTTPHeaders, err = parseHeaders(os.Getenv("SMS_HTTP_HEADERS")); err != nil {
+		return nil, err
+	}
+	if cfg.SMSDailyLimit, err = envInt("SMS_DAILY_LIMIT", defaultSMSDailyLimit, 0, 100000); err != nil {
+		return nil, err
+	}
+	cfg.AWSRegion = os.Getenv("AWS_REGION")
+	cfg.AWSAccessKeyID = os.Getenv("AWS_ACCESS_KEY_ID")
+	cfg.AWSSecretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	cfg.AWSSessionToken = os.Getenv("AWS_SESSION_TOKEN")
+	cfg.StandardChannels = envList("NOTIFY_STANDARD_CHANNELS", "")
+	cfg.BackgroundChannels = envList("NOTIFY_BACKGROUND_CHANNELS", "")
 	cfg.CORSAllowedOrigins = envList("CORS_ALLOWED_ORIGINS", "")
 	cfg.AllowedWebhookHosts = envList("NOTIFY_ALLOWED_WEBHOOK_HOSTS", defaultWebhookHostList)
 	cfg.AllowedEmailDomains = envList("NOTIFY_ALLOWED_EMAIL_DOMAINS", "")
@@ -201,6 +239,22 @@ func envBool(name string) (bool, error) {
 		return false, fmt.Errorf("invalid %s: %q", name, v)
 	}
 	return b, nil
+}
+
+// defaultSMSDailyLimit bounds queued SMS spend until an operator chooses otherwise.
+const defaultSMSDailyLimit = 50
+
+// parseHeaders reads "Name=value,Name2=value2" into a map.
+func parseHeaders(s string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, pair := range splitList(s) {
+		name, value, ok := strings.Cut(pair, "=")
+		if name = strings.TrimSpace(name); !ok || name == "" {
+			return nil, fmt.Errorf("invalid SMS_HTTP_HEADERS entry %q (use Name=value)", pair)
+		}
+		out[name] = strings.TrimSpace(value)
+	}
+	return out, nil
 }
 
 func envList(name, def string) []string {

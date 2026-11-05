@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/example/notification-service/pkg/dedup"
@@ -29,12 +30,20 @@ type Config struct {
 	DefaultEmailRecipients []string
 	SlackWebhookURLs       []string
 	TeamsWebhookURLs       []string
+	SMSRecipients          []string
 }
 
 // Preferences adjusts non-critical events (quiet hours, muted sources). It is
 // consulted only for events that are not critical.
 type Preferences interface {
 	Decide(evt event.Event) (preferences.Adjustment, bool)
+}
+
+// Outbox queues non-critical deliveries and logs critical ones. It is a plain
+// routing table plus a queue; nothing in it decides by model.
+type Outbox interface {
+	Enqueue(ctx context.Context, m delivery.Message) (int, error)
+	RecordDirect(ctx context.Context, m delivery.Message, channels string, sendErr error) error
 }
 
 // Publisher is told when an event has been processed, so connected consoles can refresh.
@@ -44,6 +53,7 @@ type Publisher interface {
 
 type Pipeline struct {
 	prefs        Preferences
+	outbox       Outbox
 	publisher    Publisher
 	policyEngine *policy.Engine
 	deliverySvc  *delivery.Service
@@ -82,6 +92,13 @@ func (p *Pipeline) WithPreferences(pref Preferences) *Pipeline {
 	return p
 }
 
+// WithOutbox sends standard and background events to the channels they are routed to,
+// and logs each critical delivery.
+func (p *Pipeline) WithOutbox(o Outbox) *Pipeline {
+	p.outbox = o
+	return p
+}
+
 // WithPublisher announces each processed event to live consoles.
 func (p *Pipeline) WithPublisher(pub Publisher) *Pipeline {
 	p.publisher = pub
@@ -110,7 +127,9 @@ func (p *Pipeline) Handle(ctx context.Context, evt event.Event) (event.Event, er
 
 	switch evt.AttentionClass {
 	case event.AttentionCritical:
-		if err := p.deliverCritical(ctx, evt); err != nil {
+		err := p.deliverCritical(ctx, evt)
+		p.logDirect(ctx, evt, err)
+		if err != nil {
 			p.forgetDedup(evt)
 			return evt, fmt.Errorf("deliver critical event: %w", err)
 		}
@@ -124,6 +143,9 @@ func (p *Pipeline) Handle(ctx context.Context, evt event.Event) (event.Event, er
 		if evt.DecisionState.Status == "" {
 			evt.DecisionState.Status = event.DecisionQueued
 		}
+		if evt.DecisionState.Status == event.DecisionQueued && !duplicate {
+			p.enqueueDelivery(ctx, evt)
+		}
 	}
 
 	if err := p.eventRepo.Save(ctx, evt); err != nil {
@@ -135,6 +157,41 @@ func (p *Pipeline) Handle(ctx context.Context, evt event.Event) (event.Event, er
 		p.publisher.Publish(stream.Message{Type: stream.TypeEvent, ID: evt.ID, AttentionClass: evt.AttentionClass})
 	}
 	return evt, nil
+}
+
+// enqueueDelivery queues the event for the channels its class is routed to. Only
+// events still "queued" get here: a muted, held or merged event stays quiet. A queue
+// failure is logged and never fails the event, which is saved either way.
+func (p *Pipeline) enqueueDelivery(ctx context.Context, evt event.Event) {
+	if p.outbox == nil {
+		return
+	}
+	if _, err := p.outbox.Enqueue(ctx, deliveryMessage(evt)); err != nil {
+		p.logger.Warn("queue delivery failed; event kept without delivery", "event_id", evt.ID, "error", delivery.RedactError(err))
+	}
+}
+
+// logDirect records a critical delivery next to the queued ones.
+func (p *Pipeline) logDirect(ctx context.Context, evt event.Event, sendErr error) {
+	if p.outbox == nil {
+		return
+	}
+	if err := p.outbox.RecordDirect(ctx, deliveryMessage(evt), p.deliverySvc.ProviderName(), sendErr); err != nil {
+		p.logger.Warn("log critical delivery failed", "event_id", evt.ID, "error", delivery.RedactError(err))
+	}
+}
+
+func deliveryMessage(evt event.Event) delivery.Message {
+	reason := ""
+	if evt.DecisionState != nil {
+		reason = evt.DecisionState.Reason
+	}
+	return delivery.Message{
+		EventID: evt.ID, Class: string(evt.AttentionClass), Group: evt.Source,
+		Title: fmt.Sprintf("[%s] %s/%s", strings.ToUpper(string(evt.AttentionClass)), evt.Source, evt.EventType),
+		Body: fmt.Sprintf("%s\nSource: %s\nEvent: %s\nRepository: %s\nReason: %s",
+			evt.AttentionClass, evt.Source, evt.EventType, evt.Repository, reason),
+	}
 }
 
 // applyPreferences lets a person's quiet hours and mutes change a non-critical
@@ -221,5 +278,6 @@ func (p *Pipeline) deliverCritical(ctx context.Context, evt event.Event) error {
 		EmailRecipients:  p.cfg.DefaultEmailRecipients,
 		SlackWebhookURLs: p.cfg.SlackWebhookURLs,
 		TeamsWebhookURLs: p.cfg.TeamsWebhookURLs,
+		SMSRecipients:    p.cfg.SMSRecipients,
 	})
 }

@@ -21,6 +21,8 @@ func (s *Server) channelSettings() channels.Settings {
 	return channels.Settings{
 		SMTPHost: s.cfg.SMTPHost, SMTPSender: s.cfg.SMTPSender, EmailRecipients: s.cfg.DefaultEmailRecipients(),
 		SlackWebhookURL: s.cfg.SlackWebhookURL, TeamsWebhookURL: s.cfg.TeamsWebhookURL,
+		SMSGateway: s.cfg.SMSGateway, SMSRecipients: s.cfg.SMSRecipients,
+		StandardChannels: s.cfg.StandardChannels, BackgroundChannels: s.cfg.BackgroundChannels,
 	}
 }
 

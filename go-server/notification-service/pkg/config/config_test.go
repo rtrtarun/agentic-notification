@@ -89,3 +89,46 @@ func TestRecipientHelpers(t *testing.T) {
 		})
 	}
 }
+
+func TestSMSAndRoutingSettings(t *testing.T) {
+	t.Setenv("SMS_GATEWAY", " Mock ")
+	t.Setenv("SMS_RECIPIENTS", "+14155550100, +14155550101")
+	t.Setenv("SMS_HTTP_HEADERS", "Authorization=Bearer abc, X-Key=1")
+	t.Setenv("SMS_DAILY_LIMIT", "5")
+	t.Setenv("NOTIFY_STANDARD_CHANNELS", "slack, email")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SMSGateway != "mock" || len(cfg.SMSRecipients) != 2 || cfg.SMSDailyLimit != 5 {
+		t.Fatalf("sms settings = %+v", cfg)
+	}
+	if cfg.SMSHTTPHeaders["Authorization"] != "Bearer abc" || cfg.SMSHTTPHeaders["X-Key"] != "1" {
+		t.Fatalf("headers = %v", cfg.SMSHTTPHeaders)
+	}
+	if len(cfg.StandardChannels) != 2 || len(cfg.BackgroundChannels) != 0 {
+		t.Fatalf("routes = %v / %v", cfg.StandardChannels, cfg.BackgroundChannels)
+	}
+}
+
+func TestSMSSettingsAreValidated(t *testing.T) {
+	t.Setenv("SMS_GATEWAY", "carrier-pigeon")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("an unknown gateway must be rejected")
+	}
+	t.Setenv("SMS_GATEWAY", "")
+	t.Setenv("SMS_HTTP_HEADERS", "no-equals-sign")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("a malformed header must be rejected")
+	}
+}
+
+func TestSMSDefaults(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SMSGateway != "" || cfg.SMSDailyLimit != 50 || len(cfg.StandardChannels) != 0 {
+		t.Fatalf("defaults = %+v", cfg)
+	}
+}

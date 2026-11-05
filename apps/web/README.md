@@ -27,7 +27,7 @@ Design language, states, copy rules and structure: [docs/frontend.md](../../docs
 | Activity Timeline | `#/activity` | `/api/activity` |
 | Rules and Workflows | `#/rules` | `/api/rules` |
 | Priority Policies | `#/policies` | `/api/policies` |
-| Notification Channels | `#/channels` | `/api/channels` |
+| Notification Channels | `#/channels` | `/api/channels`, `/api/deliveries` |
 | Integrations | `#/integrations` | `/api/integrations` |
 | Analytics | `#/analytics` | `/api/analytics` |
 | Preferences | `#/preferences` | `/api/preferences`, `/api/stream` |

@@ -31,7 +31,7 @@ func byID(list []channels.Channel, id string) channels.Channel {
 
 func TestDescribeMasksEveryTarget(t *testing.T) {
 	list := channels.Describe(full())
-	if len(list) != 3 {
+	if len(list) != 4 {
 		t.Fatalf("channels = %d", len(list))
 	}
 	email := byID(list, channels.IDEmail)
@@ -143,5 +143,55 @@ func TestTestIsRateLimitedPerChannel(t *testing.T) {
 	}
 	if len(sender.got) != 3 {
 		t.Fatalf("sent %d", len(sender.got))
+	}
+}
+
+func TestSMSChannelMasksNumbersAndFlagsTheMock(t *testing.T) {
+	s := channels.Settings{SMSGateway: "mock", SMSRecipients: []string{"+14155550100"}}
+	sms := byID(channels.Describe(s), channels.IDSMS)
+	if !sms.Configured || sms.Target != "+14*******00" || sms.Mode != "mock" {
+		t.Fatalf("sms = %+v", sms)
+	}
+	s.SMSGateway = "sns"
+	if m := byID(channels.Describe(s), channels.IDSMS).Mode; m != "" {
+		t.Fatalf("a real gateway must not be flagged as mock: %q", m)
+	}
+	if byID(channels.Describe(channels.Settings{SMSGateway: "mock"}), channels.IDSMS).Configured {
+		t.Fatal("sms without recipients is not configured")
+	}
+	if byID(channels.Describe(channels.Settings{SMSRecipients: []string{"+14155550100"}}), channels.IDSMS).Configured {
+		t.Fatal("sms without a gateway is not configured")
+	}
+}
+
+func TestReceivesFollowsTheRouteTable(t *testing.T) {
+	s := full()
+	s.StandardChannels = []string{"slack", "email"}
+	s.BackgroundChannels = []string{"slack"}
+	list := channels.Describe(s)
+	if got := strings.Join(byID(list, channels.IDSlack).Receives, ","); got != "critical,standard,background" {
+		t.Fatalf("slack receives %s", got)
+	}
+	if got := strings.Join(byID(list, channels.IDEmail).Receives, ","); got != "critical,standard" {
+		t.Fatalf("email receives %s", got)
+	}
+	if got := strings.Join(byID(list, channels.IDTeams).Receives, ","); got != "critical" {
+		t.Fatalf("teams receives %s", got)
+	}
+}
+
+func TestSMSTestUsesOnlyTheSMSChannel(t *testing.T) {
+	sender := &fakeSender{}
+	s := full()
+	s.SMSGateway, s.SMSRecipients = "mock", []string{"+14155550100"}
+	if err := channels.NewTester(sender, s, 0).Test(context.Background(), channels.IDSMS); err != nil {
+		t.Fatal(err)
+	}
+	r := sender.got[0]
+	if len(r.SMSRecipients) != 1 || len(r.EmailRecipients) != 0 || len(r.SlackWebhookURLs) != 0 {
+		t.Fatalf("sms test touched other channels: %+v", r)
+	}
+	if err := channels.NewTester(sender, full(), 0).Test(context.Background(), channels.IDSMS); !errors.Is(err, channels.ErrNotConfigured) {
+		t.Fatalf("unconfigured sms = %v", err)
 	}
 }

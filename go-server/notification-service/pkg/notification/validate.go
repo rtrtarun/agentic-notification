@@ -44,6 +44,10 @@ func (l Limits) Validate(req NotificationRequest) error {
 		return invalid("message exceeds %d characters", maxMessageLength)
 	}
 
+	if len(req.SMSRecipients) > 0 {
+		// Text messages cost money and reach a phone; callers may not choose the numbers.
+		return invalid("sms recipients are configured on the server and cannot be supplied")
+	}
 	if err := l.validateRecipients(req.EmailRecipients); err != nil {
 		return err
 	}

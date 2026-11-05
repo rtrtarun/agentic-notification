@@ -38,6 +38,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/api/policies", protected(s.policiesHandler))
 	mux.Handle(channelsPrefix, protected(s.channelsHandler))
 	mux.Handle(channelsPrefix+"/", protected(s.channelsHandler))
+	mux.Handle(deliveriesPrefix, protected(s.deliveriesHandler))
+	mux.Handle(deliveriesPrefix+"/", protected(s.deliveriesHandler))
 	mux.Handle("/api/integrations", protected(s.integrationsHandler))
 	mux.Handle("/api/preferences", protected(s.preferencesHandler))
 	// The stream is long-lived, so it skips the request timeout; it extends its own write deadline.
@@ -74,6 +76,14 @@ func (s *Server) Run(ctx context.Context) error {
 		go func() {
 			defer background.Done()
 			s.runRetention(ctx, s.purger)
+		}()
+	}
+
+	if s.dispatcher != nil {
+		background.Add(1)
+		go func() {
+			defer background.Done()
+			s.dispatcher.Run(ctx)
 		}()
 	}
 

@@ -52,7 +52,7 @@ var knownRoutes = map[string]bool{
 	"/notify": true, "/health": true, "/metrics": true, "/webhooks/github": true, "/feedback": true, "/events": true,
 	inboxPrefix:      true,
 	"/api/analytics": true, "/api/activity": true, "/api/rules": true, "/api/policies": true,
-	"/api/channels": true, "/api/integrations": true, "/api/preferences": true, "/api/stream": true,
+	"/api/channels": true, "/api/deliveries": true, "/api/integrations": true, "/api/preferences": true, "/api/stream": true,
 }
 
 func routeLabel(path string) string {

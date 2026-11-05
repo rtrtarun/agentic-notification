@@ -13,4 +13,7 @@ type NotificationRequest struct {
 	EmailRecipients  []string  `json:"emailRecipients,omitempty"`
 	SlackWebhookURLs []string  `json:"slackWebhookUrls,omitempty"`
 	TeamsWebhookURLs []string  `json:"teamsWebhookUrls,omitempty"`
+	// SMSRecipients are E.164 numbers. Only the server fills this in from its own
+	// configuration; the public API rejects it (see Limits.Validate).
+	SMSRecipients []string `json:"smsRecipients,omitempty"`
 }

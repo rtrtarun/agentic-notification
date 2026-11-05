@@ -79,6 +79,12 @@ Preferences (Preferences screen, `GET`/`PUT /api/preferences`) apply to standard
 ### Channel test returns 429, 409 or 502
 `POST /api/channels/{id}/test`: 429 means a test was sent in the last 10 seconds; 409 means the channel is not configured (see the variable named on the Channels screen); 502 means delivery failed, and the reason is in the service log, not in the response.
 
+### Standard events are not being delivered
+Check `NOTIFY_STANDARD_CHANNELS` (empty means standard events are only recorded) and that the named channel is configured on Channels. Muted, held, quiet-hours and merged events are not delivered by design. Open Channels > Deliveries: *Waiting* means the dispatcher has not reached the job or it is backing off; *Gave up* shows the redacted error and a Retry button. A job is dead at once if its number is invalid or its channel was un-configured after queuing.
+
+### SMS
+`SMS_GATEWAY=mock` only logs (the Channels screen shows "Mock"). For production set `SMS_GATEWAY=sns` with `AWS_REGION`, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (SNS must be out of the SMS sandbox for the account), or `http` with `SMS_HTTP_URL`, `SMS_HTTP_HEADERS` and `SMS_HTTP_BODY`. Numbers are E.164 and come only from `SMS_RECIPIENTS`. `SMS_DAILY_LIMIT` (default 50) caps queued texts per UTC day; critical events are never capped.
+
 ## Deploying
 
 1. Create the Secret (`k8s/secret.example.yaml` shows the keys). Never commit real values.
