@@ -38,6 +38,9 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle(usersPrefix, protected(s.usersHandler))
 	mux.Handle(usersPrefix+"/", protected(s.usersHandler))
 	mux.Handle("/api/audit", protected(s.auditHandler))
+	mux.Handle(digestsPrefix, protected(s.digestsHandler))
+	mux.Handle(digestsPrefix+"/", protected(s.digestsHandler))
+	mux.Handle(explainPrefix, protected(s.explainHandler))
 	mux.Handle(overridesPrefix, protected(s.overridesHandler))
 	mux.Handle(overridesPrefix+"/", protected(s.overridesHandler))
 	mux.Handle("/notify", protected(s.notifyHandler))
@@ -99,6 +102,14 @@ func (s *Server) Run(ctx context.Context) error {
 		go func() {
 			defer background.Done()
 			s.dispatcher.Run(ctx)
+		}()
+	}
+
+	if s.digestScheduler != nil {
+		background.Add(1)
+		go func() {
+			defer background.Done()
+			s.digestScheduler.Run(ctx)
 		}()
 	}
 

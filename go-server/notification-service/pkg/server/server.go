@@ -12,6 +12,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/example/notification-service/pkg/attention"
 	"github.com/example/notification-service/pkg/auth"
 	"github.com/example/notification-service/pkg/channels"
 	"github.com/example/notification-service/pkg/config"
@@ -78,6 +79,10 @@ type Server struct {
 	shutdownOnce    sync.Once
 	feedback        *feedback.Service
 	feedbackStore   feedback.Store
+	digests         *attention.Generator
+	digestStore     attention.DigestStore
+	digestScheduler *attention.Scheduler
+	explainer       attention.Explainer
 	overrides       *overrides.Service
 	learningService *learning.Service
 	policyEngine    *policy.Engine
@@ -149,6 +154,7 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 	}
 	s.deliveryStore = s.initDeliveryStore()
 	outbox := delivery.NewOutbox(s.deliveryStore, targets, routes)
+	s.initAttention(outbox)
 	s.dispatcher = delivery.NewDispatcher(s.deliveryStore, targets, channelProviders(cfg, smsGateway), logger).
 		WithDailyCap(delivery.ChannelSMS, cfg.SMSDailyLimit)
 	s.channelTester = channels.NewTester(deliverySvc, s.channelSettings(), channelTestGap)
@@ -185,6 +191,9 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 			SMSRecipients:          targets.SMS,
 		},
 	).WithOutbox(outbox).WithOverrides(s.overrides).WithDeduper(deduper).WithLogger(logger).WithPreferences(s.preferences).WithPublisher(s.broker)
+	if cfg.AttentionClassify {
+		s.eventPipeline.WithClassifier(attention.NewHeuristic())
+	}
 	if purger, ok := eventRepo.(event.Purger); ok {
 		s.purger = purger
 	}

@@ -116,6 +116,7 @@ export default function RulesPage() {
                             {t(`class.${rule.then.attentionClass}`)}
                           </span>
                           <div className="form-help">{rule.then.reason}</div>
+                          {rule.then.adaptive && <div className="form-help">{t('rules.adaptiveTag')}</div>}
                         </td>
                         <td>
                           <label className="switch">

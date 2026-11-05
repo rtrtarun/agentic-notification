@@ -59,7 +59,11 @@ func buildRoutes(cfg *config.Config) (map[string][]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("NOTIFY_BACKGROUND_CHANNELS: %w", err)
 	}
-	return map[string][]string{"standard": standard, "background": background}, nil
+	digest, err := delivery.ParseChannels(cfg.DigestChannels)
+	if err != nil {
+		return nil, fmt.Errorf("NOTIFY_DIGEST_CHANNELS: %w", err)
+	}
+	return map[string][]string{"standard": standard, "background": background, "digest": digest}, nil
 }
 
 // initDeliveryStore keeps the queue in PostgreSQL when there is a database, otherwise in memory.

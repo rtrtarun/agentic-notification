@@ -94,6 +94,9 @@ Register an app in Entra ID, add `PUBLIC_URL/api/auth/oidc/callback` as a web re
 ### An event was not delivered because of an override
 Open the event: its decision reason names the override ("never notify override for github / star"). Preferences > Always and never notify lists every override with who chose it; remove it there. Critical events ignore overrides, so a missing critical alert is a different problem (see "Critical alerts are not arriving"). To stop members from creating overrides set `OVERRIDES_ADMIN_ONLY=true`.
 
+### Digests are empty, or something was held that should not be
+A digest covers events whose outcome is `digest` or `delayed` since the last one. If it is empty, nothing was held: check Activity for outcomes. If something was held that should not be, open it and press "Explain in words": it names the rule, any override and whether Attention Intelligence took part. To stop Attention refining a rule, edit the rule and turn off "Let Attention refine this"; to stop it everywhere set `ATTENTION_CLASSIFY=false`. A digest is only delivered when `NOTIFY_DIGEST_CHANNELS` names a configured channel; otherwise it is stored and visible under Digests. Digests are made every `ATTENTION_DIGEST_EVERY` after start (`24h` is typical) or by an admin on request.
+
 ## Deploying
 
 1. Create the Secret (`k8s/secret.example.yaml` shows the keys). Never commit real values.

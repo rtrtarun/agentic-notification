@@ -81,7 +81,13 @@ type Config struct {
 	OIDCClientSecret   string
 	OIDCAllowedDomains []string
 	// OverridesAdminOnly stops members from creating always/never notify overrides (their feedback is then only a signal).
-	OverridesAdminOnly    bool
+	OverridesAdminOnly bool
+	// AttentionClassify lets Attention Intelligence refine events whose rule allows it (default on).
+	AttentionClassify bool
+	// AttentionDigestEvery is how often a digest is generated; zero means only on request.
+	AttentionDigestEvery time.Duration
+	// DigestChannels lists the channels a digest is delivered to; empty means digests are only stored.
+	DigestChannels        []string
 	GitHubWebhookSecret   string
 	AllowUnsignedWebhooks bool
 	MaxBodyBytes          int64
@@ -216,6 +222,16 @@ func LoadConfig() (*Config, error) {
 	cfg.AWSSecretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
 	cfg.AWSSessionToken = os.Getenv("AWS_SESSION_TOKEN")
 	cfg.StandardChannels = envList("NOTIFY_STANDARD_CHANNELS", "")
+	cfg.DigestChannels = envList("NOTIFY_DIGEST_CHANNELS", "")
+	cfg.AttentionClassify = true
+	if v := os.Getenv("ATTENTION_CLASSIFY"); v != "" {
+		if cfg.AttentionClassify, err = envBool("ATTENTION_CLASSIFY"); err != nil {
+			return nil, err
+		}
+	}
+	if cfg.AttentionDigestEvery, err = envDuration("ATTENTION_DIGEST_EVERY", 0, true); err != nil {
+		return nil, err
+	}
 	cfg.BackgroundChannels = envList("NOTIFY_BACKGROUND_CHANNELS", "")
 	cfg.CORSAllowedOrigins = envList("CORS_ALLOWED_ORIGINS", "")
 	cfg.AllowedWebhookHosts = envList("NOTIFY_ALLOWED_WEBHOOK_HOSTS", defaultWebhookHostList)

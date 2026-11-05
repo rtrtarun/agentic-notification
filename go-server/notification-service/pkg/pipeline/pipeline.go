@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/example/notification-service/pkg/attention"
 	"github.com/example/notification-service/pkg/dedup"
 	"github.com/example/notification-service/pkg/delivery"
 	"github.com/example/notification-service/pkg/event"
@@ -50,6 +51,8 @@ type Overrides interface {
 // routing table plus a queue; nothing in it decides by model.
 type Outbox interface {
 	Enqueue(ctx context.Context, m delivery.Message) (int, error)
+	// Routed reports whether the class has a configured channel to be sent to.
+	Routed(class string) bool
 	RecordDirect(ctx context.Context, m delivery.Message, channels string, sendErr error) error
 }
 
@@ -61,6 +64,7 @@ type Publisher interface {
 type Pipeline struct {
 	prefs        Preferences
 	overrides    Overrides
+	classifier   attention.Classifier
 	outbox       Outbox
 	publisher    Publisher
 	policyEngine *policy.Engine
@@ -100,6 +104,14 @@ func (p *Pipeline) WithPreferences(pref Preferences) *Pipeline {
 	return p
 }
 
+// WithClassifier lets Attention Intelligence refine non-critical events whose rule
+// allows it. The classifier is wrapped so it can never see a critical event or
+// escalate one. Without it, rules alone decide.
+func (p *Pipeline) WithClassifier(c attention.Classifier) *Pipeline {
+	p.classifier = attention.Guarded(c)
+	return p
+}
+
 // WithOverrides applies always and never notify choices before quiet hours and mutes.
 func (p *Pipeline) WithOverrides(o Overrides) *Pipeline {
 	p.overrides = o
@@ -136,7 +148,7 @@ func (p *Pipeline) Handle(ctx context.Context, evt event.Event) (event.Event, er
 		return evt, ErrDuplicateDelivery
 	}
 
-	evt = p.applyPolicy(evt)
+	evt, adaptive := p.applyPolicy(evt)
 	duplicate := p.applyDedup(ctx, &evt)
 
 	switch evt.AttentionClass {
@@ -152,10 +164,11 @@ func (p *Pipeline) Handle(ctx context.Context, evt event.Event) (event.Event, er
 		if duplicate {
 			evt.DecisionState.Status = event.DecisionMerged
 		} else {
+			p.applyAttention(ctx, &evt, adaptive)
 			p.applyPreferences(&evt)
 		}
 		if evt.DecisionState.Status == "" {
-			evt.DecisionState.Status = event.DecisionQueued
+			evt.DecisionState.Status = p.defaultStatus(evt)
 		}
 		if evt.DecisionState.Status == event.DecisionQueued && !duplicate {
 			p.enqueueDelivery(ctx, evt)
@@ -273,7 +286,41 @@ func (p *Pipeline) forgetDedup(evt event.Event) {
 	}
 }
 
-func (p *Pipeline) applyPolicy(evt event.Event) event.Event {
+// defaultStatus is "queued", except for background events when nothing is
+// configured to deliver them: those are held for the digest.
+func (p *Pipeline) defaultStatus(evt event.Event) string {
+	if evt.AttentionClass == event.AttentionBackground && (p.outbox == nil || !p.outbox.Routed(event.AttentionBackground)) {
+		return event.DecisionDigest
+	}
+	return event.DecisionQueued
+}
+
+// applyAttention lets Attention Intelligence refine an event whose rule allows it
+// (or that no rule decided). It only ever moves a standard event to background, and
+// only for an event that is not critical. A failure keeps the rule's decision.
+func (p *Pipeline) applyAttention(ctx context.Context, evt *event.Event, adaptive bool) {
+	if p.classifier == nil || !adaptive || evt.AttentionClass != event.AttentionStandard {
+		return
+	}
+	// A person's explicit choice outranks judgement: leave events an override covers alone.
+	if p.overrides != nil {
+		if _, ok := p.overrides.Decide(*evt); ok {
+			return
+		}
+	}
+	c, err := p.classifier.Classify(ctx, *evt)
+	if err != nil {
+		p.logger.Warn("classification failed; keeping the rule's decision", "event_id", evt.ID, "error", err)
+		return
+	}
+	evt.DecisionState.ModelVersion, evt.DecisionState.Confidence = c.Model, c.Confidence
+	evt.DecisionState.Reason += "; attention " + c.Reason()
+	if c.Class == event.AttentionBackground {
+		evt.AttentionClass = event.AttentionBackground
+	}
+}
+
+func (p *Pipeline) applyPolicy(evt event.Event) (event.Event, bool) {
 	decision, matched := p.policyEngine.Evaluate(evt)
 	if matched {
 		evt.AttentionClass = decision.AttentionClass
@@ -281,13 +328,14 @@ func (p *Pipeline) applyPolicy(evt event.Event) event.Event {
 			Reason:      decision.Reason,
 			MatchedRule: decision.MatchedRule,
 		}
-	} else {
-		evt.AttentionClass = event.AttentionStandard
-		evt.DecisionState = &event.DecisionState{
-			Reason: "no matching rule, default standard",
-		}
+		return evt, decision.Adaptive
 	}
-	return evt
+	// No rule decided, so nothing explicit can be second-guessed: the event is adaptive.
+	evt.AttentionClass = event.AttentionStandard
+	evt.DecisionState = &event.DecisionState{
+		Reason: "no matching rule, default standard",
+	}
+	return evt, true
 }
 
 func (p *Pipeline) deliverCritical(ctx context.Context, evt event.Event) error {

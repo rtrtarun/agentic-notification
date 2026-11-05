@@ -203,6 +203,14 @@ func Migrate(ctx context.Context, db Execer) error {
 			note       TEXT NOT NULL DEFAULT '',
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
+		// Digests written by Attention Intelligence. See pkg/attention.
+		`CREATE TABLE IF NOT EXISTS digests (
+			id         TEXT PRIMARY KEY,
+			window_end TIMESTAMPTZ NOT NULL,
+			body       JSONB NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS digests_created_idx ON digests (created_at DESC)`,
 		`CREATE TABLE IF NOT EXISTS audit_log (
 			id     BIGSERIAL PRIMARY KEY,
 			at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -298,6 +298,9 @@ func normalise(in policy.Rule, existing []policy.Rule, ownID string) (policy.Rul
 	default:
 		return r, fmt.Errorf("%w: attentionClass must be critical, standard or background", ErrInvalid)
 	}
+	if r.Then.Adaptive && r.Then.AttentionClass == event.AttentionCritical {
+		return r, fmt.Errorf("%w: a critical rule cannot be adaptive; critical events never reach Attention Intelligence", ErrInvalid)
+	}
 	if r.Then.Reason == "" {
 		r.Then.Reason = "matched rule " + r.Name
 	}

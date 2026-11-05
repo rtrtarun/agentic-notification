@@ -79,6 +79,7 @@ const NAV_PATHS: Record<string, string> = {
   inbox: 'M4 13V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7M4 13l2.2 6h11.6L20 13M4 13h4.5a3.5 3.5 0 0 0 7 0H20',
   list: 'M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01',
   activity: 'M3 12h4l3-8 4 16 3-8h4',
+  digests: 'M4 6h16v12H4zM4 9l8 5 8-5',
   rules: 'M4 6h10M18 6h2M4 12h2M10 12h10M4 18h12M20 18h0M14 4v4M8 10v4M16 16v4',
   policies: 'M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6Zm-3 9 2 2 4-4',
   channels: 'M4 5h16v10H9l-5 4Z',

@@ -156,5 +156,15 @@ func (o *Outbox) RecordDirect(ctx context.Context, m Message, channels string, s
 	return o.store.Record(ctx, j)
 }
 
+// Routed reports whether any configured channel receives the class.
+func (o *Outbox) Routed(class string) bool {
+	for _, c := range o.routes[class] {
+		if len(o.targets.For(c)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // Targets returns the configured targets.
 func (o *Outbox) Targets() Targets { return o.targets }

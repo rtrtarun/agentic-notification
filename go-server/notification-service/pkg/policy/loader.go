@@ -64,7 +64,7 @@ func DefaultRules() []Rule {
 			ID:   "builtin-default-github",
 			Name: "default-github",
 			When: RuleCondition{Source: "github"},
-			Then: RuleOutcome{AttentionClass: "standard", Reason: "default routing"},
+			Then: RuleOutcome{AttentionClass: "standard", Reason: "default routing", Adaptive: true},
 		},
 	}
 }

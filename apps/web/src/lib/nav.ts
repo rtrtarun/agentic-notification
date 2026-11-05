@@ -11,6 +11,7 @@ export type NavIconName =
   | 'inbox'
   | 'list'
   | 'activity'
+  | 'digests'
   | 'rules'
   | 'policies'
   | 'channels'
@@ -44,6 +45,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'inbox', path: '/inbox', group: 'workspace', label: 'nav.inbox', icon: 'inbox', primary: true },
   { id: 'all', path: '/all', group: 'workspace', label: 'nav.all', icon: 'list' },
   { id: 'activity', path: '/activity', group: 'workspace', label: 'nav.activity', icon: 'activity', primary: true },
+  { id: 'digests', path: '/digests', group: 'workspace', label: 'nav.digests', icon: 'digests' },
   { id: 'rules', path: '/rules', group: 'manage', label: 'nav.rules', icon: 'rules' },
   { id: 'policies', path: '/policies', group: 'manage', label: 'nav.policies', icon: 'policies' },
   { id: 'channels', path: '/channels', group: 'manage', label: 'nav.channels', icon: 'channels' },

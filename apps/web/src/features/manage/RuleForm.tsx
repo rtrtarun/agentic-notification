@@ -76,6 +76,13 @@ export function RuleForm({ initial, ownId, others, busy, serverError, onSubmit, 
       </div>
       <p className="form-help">{t('rules.patternHelp')}</p>
       {draft.then.attentionClass === 'critical' && <p className="form-help">{t('rules.criticalNote')}</p>}
+      {draft.then.attentionClass !== 'critical' && (
+        <label className="switch">
+          <input type="checkbox" checked={draft.then.adaptive === true} onChange={(e) => set({ then: { ...draft.then, adaptive: e.target.checked } })} />
+          {t('rules.adaptive')}
+        </label>
+      )}
+      {draft.then.attentionClass !== 'critical' && <p className="form-help">{t('rules.adaptiveHelp')}</p>}
       {serverError && (
         <p className="field-error" role="alert">
           {serverError}

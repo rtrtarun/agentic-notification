@@ -1,3 +1,4 @@
+import { ExplainButton } from './ExplainButton'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApp } from '../../app/AppState'
 import { Chip } from '../../components/Chip'
@@ -118,6 +119,7 @@ export function NotificationDrawer({ id }: { id: string }) {
       <h3 className="sheet-subtitle">{t('drawer.why')}</h3>
       <p className="prose">{reason ? `${reason}.` : t('sheet.noReason')}</p>
       <p className="prose">{classExplanation(item.attentionClass, t)}</p>
+      <ExplainButton eventId={item.id} />
 
       <h3 className="sheet-subtitle">{t('drawer.decision')}</h3>
       <dl className="facts">

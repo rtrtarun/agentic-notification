@@ -28,11 +28,11 @@ Design language, states, copy rules and structure: [docs/frontend.md](../../docs
 | Rules and Workflows | `#/rules` | `/api/rules` |
 | Priority Policies | `#/policies` | `/api/policies` |
 | Notification Channels | `#/channels` | `/api/channels`, `/api/deliveries` |
-| Preferences | `#/preferences` | `/api/preferences`, `/api/overrides` |
+| Digests | `#/digests` | `/api/digests`, `/api/explain` |
 | Users & Access | `#/users` | `/api/users`, `/api/audit`, `/api/auth/*` |
 | Integrations | `#/integrations` | `/api/integrations` |
 | Analytics | `#/analytics` | `/api/analytics` |
-| Preferences | `#/preferences` | `/api/preferences`, `/api/stream` |
+| Preferences | `#/preferences` | `/api/preferences`, `/api/overrides`, `/api/stream` |
 | Settings | `#/settings` | none |
 | Help and Support | `#/help` | `/health` |
 
