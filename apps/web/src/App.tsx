@@ -8,12 +8,32 @@ import { ToastProvider } from './design/Toast'
 import { HOME_PATH, NAV_ITEMS } from './lib/nav'
 
 const InboxPage = lazy(() => import('./pages/InboxPage'))
+const OverviewPage = lazy(() => import('./pages/OverviewPage'))
+const ActivityPage = lazy(() => import('./pages/ActivityPage'))
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage'))
+const RulesPage = lazy(() => import('./pages/RulesPage'))
+const PoliciesPage = lazy(() => import('./pages/PoliciesPage'))
+const ChannelsPage = lazy(() => import('./pages/ChannelsPage'))
+const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'))
+const PreferencesPage = lazy(() => import('./pages/PreferencesPage'))
+const HelpPage = lazy(() => import('./pages/HelpPage'))
+const AllPage = lazy(() => import('./pages/AllPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const PlannedPage = lazy(() => import('./pages/PlannedPage'))
 
 /** Screens that exist today. Everything else in the navigation resolves to a plain "not built yet" page. */
 const BUILT: Record<string, React.ReactElement> = {
   inbox: <InboxPage />,
+  overview: <OverviewPage />,
+  all: <AllPage />,
+  help: <HelpPage />,
+  preferences: <PreferencesPage />,
+  channels: <ChannelsPage />,
+  integrations: <IntegrationsPage />,
+  rules: <RulesPage />,
+  policies: <PoliciesPage />,
+  activity: <ActivityPage />,
+  analytics: <AnalyticsPage />,
   settings: <SettingsPage />,
 }
 

@@ -16,3 +16,22 @@ npm run build    # type-check and production build
 Open the console with no service running and choose **Try the demo** to explore it with sample data. The GitHub Pages build starts in demo mode; see [docs/deployment.md](../../docs/deployment.md).
 
 Design language, states, copy rules and structure: [docs/frontend.md](../../docs/frontend.md).
+
+## Screens
+
+| Screen | Route | Needs |
+|---|---|---|
+| Overview | `#/overview` | `/api/analytics`, `/api/notifications` |
+| Inbox | `#/inbox` | `/api/notifications` |
+| All Notifications | `#/all` | `/api/notifications` |
+| Activity Timeline | `#/activity` | `/api/activity` |
+| Rules and Workflows | `#/rules` | `/api/rules` |
+| Priority Policies | `#/policies` | `/api/policies` |
+| Notification Channels | `#/channels` | `/api/channels` |
+| Integrations | `#/integrations` | `/api/integrations` |
+| Analytics | `#/analytics` | `/api/analytics` |
+| Preferences | `#/preferences` | `/api/preferences`, `/api/stream` |
+| Settings | `#/settings` | none |
+| Help and Support | `#/help` | `/health` |
+
+Every screen works in demo mode. Screens from milestone 16 on are English first; see the language note in [docs/milestone-16.md](../../docs/milestone-16.md).

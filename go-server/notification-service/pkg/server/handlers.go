@@ -31,6 +31,17 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/events", protected(s.eventsHandler))
 	mux.Handle(inboxPrefix, protected(s.inboxHandler))
 	mux.Handle(inboxPrefix+"/", protected(s.inboxHandler))
+	mux.Handle("/api/analytics", protected(s.analyticsHandler))
+	mux.Handle("/api/activity", protected(s.activityHandler))
+	mux.Handle(rulesPrefix, protected(s.rulesHandler))
+	mux.Handle(rulesPrefix+"/", protected(s.rulesHandler))
+	mux.Handle("/api/policies", protected(s.policiesHandler))
+	mux.Handle(channelsPrefix, protected(s.channelsHandler))
+	mux.Handle(channelsPrefix+"/", protected(s.channelsHandler))
+	mux.Handle("/api/integrations", protected(s.integrationsHandler))
+	mux.Handle("/api/preferences", protected(s.preferencesHandler))
+	// The stream is long-lived, so it skips the request timeout; it extends its own write deadline.
+	mux.Handle("/api/stream", s.corsMiddleware(s.loggingMiddleware(s.authMiddleware(http.HandlerFunc(s.streamHandler)))))
 	// Health is unauthenticated so orchestrator probes and the dashboard work without a key.
 	mux.Handle("/health", s.corsMiddleware(s.loggingMiddleware(http.HandlerFunc(s.healthHandler))))
 	mux.Handle("/webhooks/github", s.corsMiddleware(s.loggingMiddleware(
@@ -69,6 +80,8 @@ func (s *Server) Run(ctx context.Context) error {
 	shutdownDone := make(chan error, 1)
 	go func() {
 		<-ctx.Done()
+		// End live streams first; a stream never finishes on its own, so Shutdown would wait for it.
+		s.stopStreams()
 		// ctx is already cancelled, so shutdown keeps its values but gets its own deadline.
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
 		defer cancel()

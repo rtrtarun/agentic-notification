@@ -109,6 +109,24 @@ func (r *PostgresRepository) Trail(ctx context.Context, id string) ([]TrailEntry
 	return out, rows.Err()
 }
 
+func (r *PostgresRepository) RecentTrail(ctx context.Context, limit int) ([]TrailRow, error) {
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT event_id, step, detail, at FROM event_trail ORDER BY at DESC, id DESC LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []TrailRow
+	for rows.Next() {
+		var row TrailRow
+		if err := rows.Scan(&row.EventID, &row.Step, &row.Detail, &row.At); err != nil {
+			return nil, err
+		}
+		out = append(out, row)
+	}
+	return out, rows.Err()
+}
+
 func nullTime(t sql.NullTime) *time.Time {
 	if !t.Valid {
 		return nil

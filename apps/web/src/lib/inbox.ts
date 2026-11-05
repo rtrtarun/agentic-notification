@@ -77,6 +77,12 @@ export interface InboxQuery {
   sort: SortOrder
   /** ISO time; only events created at or after it. */
   from?: string
+  /** ISO time; only events created before it. */
+  to?: string
+  /** Exact source, for example "github". */
+  source?: string
+  /** Exact repository. */
+  repository?: string
   page: number
   pageSize: number
 }
@@ -125,6 +131,9 @@ export function queryString(q: InboxQuery): string {
   if (q.archived) p.set('archived', 'true')
   if (q.sort !== 'newest') p.set('sort', q.sort)
   if (q.from) p.set('from', q.from)
+  if (q.to) p.set('to', q.to)
+  if (q.source) p.set('source', q.source)
+  if (q.repository) p.set('repo', q.repository)
   p.set('page', String(q.page))
   p.set('pageSize', String(q.pageSize))
   return p.toString()

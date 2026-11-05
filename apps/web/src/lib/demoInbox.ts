@@ -77,6 +77,9 @@ function matches(it: InboxItem, q: InboxQuery): boolean {
   if (q.outcomes.length && !q.outcomes.includes(it.outcome)) return false
   if (q.unread && it.read) return false
   if (q.from && it.createdAt < q.from) return false
+  if (q.to && it.createdAt >= q.to) return false
+  if (q.source && it.source !== q.source) return false
+  if (q.repository && it.repository !== q.repository) return false
   const terms = q.text.toLowerCase().split(/\s+/).filter(Boolean)
   if (terms.length === 0) return true
   const text = [
@@ -258,4 +261,18 @@ export const demoInbox: InboxClient = {
 export function resetDemoInbox(): void {
   states.clear()
   events = null
+}
+
+/** Every visible demo notification, archived and merged ones included, for the demo analytics. */
+export function demoAllItems(): InboxItem[] {
+  return visible().map(toItem)
+}
+
+/** People's actions in demo mode, newest first. */
+export function demoActions(): { eventId: string; step: string; detail?: string; at: string }[] {
+  const rows: { eventId: string; step: string; detail?: string; at: string }[] = []
+  for (const e of visible()) {
+    for (const t of stateOf(e.id).trail) rows.push({ eventId: e.id, step: t.step, detail: t.detail, at: t.at })
+  }
+  return rows.sort((a, b) => b.at.localeCompare(a.at))
 }

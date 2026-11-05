@@ -477,3 +477,23 @@ func (s *Service) Bulk(ctx context.Context, ids []string, a Action) ([]BulkResul
 	}
 	return results, nil
 }
+
+// Items returns every visible notification, archived ones included, newest
+// first, for analytics. Hidden (deleted) notifications are left out.
+func (s *Service) Items(ctx context.Context) ([]Item, error) {
+	views, repeats, err := s.load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]Item, 0, len(views))
+	for _, v := range views {
+		items = append(items, s.item(v, repeats))
+	}
+	sortItems(items, SortNewest)
+	return items, nil
+}
+
+// RecentActions returns the newest user actions across all notifications.
+func (s *Service) RecentActions(ctx context.Context, limit int) ([]TrailRow, error) {
+	return s.state.RecentTrail(ctx, limit)
+}

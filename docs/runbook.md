@@ -67,6 +67,18 @@ Retention deletes events older than `EVENT_RETENTION` (default 90 days) every ho
 ### Requests return 413
 Body over `MAX_BODY_BYTES` (default 1 MiB). GitHub payloads are capped at 25 MB by GitHub; raise the limit only if you receive such events.
 
+### Rules edits do not seem to apply
+Rules are stored in the `policy_rules` table and edited in the console (Rules and Workflows). `RULES_PATH` or the built-in defaults only **seed an empty table**; after the first start the stored rules win, so editing `rules.yaml` alone changes nothing. The one exception: a `locked: true` rule in the file that is missing from the table is added back at start-up. To start over, `DELETE FROM policy_rules;` and restart.
+
+### Live updates show "Reconnecting"
+The console reads `GET /api/stream` (server-sent events) and falls back to polling every 15 seconds, so nothing is lost while it reconnects. Behind a reverse proxy the stream needs response buffering off and a read timeout above 60 seconds (the service already sends `X-Accel-Buffering: no` and a heartbeat every 25 seconds). A wrong API key or a `503` makes the console retry slowly on purpose. The broker is in process: with several replicas a console hears about events handled by the replica it is connected to, and polling covers the rest. At most 100 streams are accepted per replica (`503` with `Retry-After` beyond that).
+
+### A muted or quiet-hours event looks wrong
+Preferences (Preferences screen, `GET`/`PUT /api/preferences`) apply to standard and background events only. A muted source or repository becomes `background` with status `digest` and the reason "muted in your preferences"; quiet hours give a standard event status `delayed` and a reason naming when the window ends. Critical events are never changed. Preferences are one row in the `preferences` table.
+
+### Channel test returns 429, 409 or 502
+`POST /api/channels/{id}/test`: 429 means a test was sent in the last 10 seconds; 409 means the channel is not configured (see the variable named on the Channels screen); 502 means delivery failed, and the reason is in the service log, not in the response.
+
 ## Deploying
 
 1. Create the Secret (`k8s/secret.example.yaml` shows the keys). Never commit real values.

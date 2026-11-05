@@ -116,6 +116,18 @@ func Migrate(ctx context.Context, db Execer) error {
 			at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 		`CREATE INDEX IF NOT EXISTS event_trail_event_id_idx ON event_trail (event_id, at)`,
+		// One row of workspace preferences (quiet hours, muted sources). See pkg/preferences.
+		`CREATE TABLE IF NOT EXISTS preferences (
+			id         INT PRIMARY KEY CHECK (id = 1),
+			body       JSONB NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		// Editable policy rules, kept in evaluation order. See pkg/rules.
+		`CREATE TABLE IF NOT EXISTS policy_rules (
+			position INT  NOT NULL,
+			id       TEXT PRIMARY KEY,
+			body     JSONB NOT NULL
+		)`,
 	}
 	for _, stmt := range statements {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {

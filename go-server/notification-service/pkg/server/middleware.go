@@ -20,6 +20,10 @@ type statusRecorder struct {
 	statusCode int
 }
 
+// Unwrap lets http.ResponseController reach the real writer, which streaming
+// responses need to flush and to extend their write deadline.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 func (r *statusRecorder) WriteHeader(code int) {
 	if r.statusCode == 0 {
 		r.statusCode = code
@@ -46,7 +50,9 @@ func (r *statusRecorder) status() int {
 // scanners probing random paths cannot create unbounded label cardinality.
 var knownRoutes = map[string]bool{
 	"/notify": true, "/health": true, "/metrics": true, "/webhooks/github": true, "/feedback": true, "/events": true,
-	inboxPrefix: true,
+	inboxPrefix:      true,
+	"/api/analytics": true, "/api/activity": true, "/api/rules": true, "/api/policies": true,
+	"/api/channels": true, "/api/integrations": true, "/api/preferences": true, "/api/stream": true,
 }
 
 func routeLabel(path string) string {
@@ -56,6 +62,13 @@ func routeLabel(path string) string {
 	}
 	if knownRoutes[path] {
 		return path
+	}
+	// /api/rules/{id} and similar collapse to their collection for the same reason.
+	if rest, ok := strings.CutPrefix(path, "/api/"); ok {
+		collection := "/api/" + strings.SplitN(rest, "/", 2)[0]
+		if knownRoutes[collection] {
+			return collection
+		}
 	}
 	return "other"
 }
@@ -109,7 +122,7 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 		if origin := r.Header.Get("Origin"); origin != "" && originAllowed(s.cfg, origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Add("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Request-ID")
 			w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID")
 		}

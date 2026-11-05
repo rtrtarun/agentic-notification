@@ -1,13 +1,16 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useEvents, type Feed } from '../hooks/useEvents'
 import { useInboxSummary, type InboxSummary } from '../hooks/useInboxSummary'
 import type { Settings } from '../lib/api'
 import { inboxClientFor, type InboxClient } from '../lib/inbox'
 import { DEFAULT_FILTERS, type InboxFilters } from '../lib/inboxQuery'
 import { migrateLocalRead } from '../lib/read'
+import { connectLive, type LiveStatus } from '../lib/live'
 import { loadSettings, needsWelcome, saveSettings } from '../lib/settings'
 
 const CLOCK_MS = 30_000
+/** Several messages in a burst cause one refresh. */
+const LIVE_REFRESH_MS = 300
 
 /** Everything the shell and the screens share: the connection, the inbox client, the unread summary and filters. */
 export interface AppState {
@@ -24,6 +27,8 @@ export interface AppState {
   closeSettings: () => void
   saveConnection: (next: Settings) => void
   client: InboxClient
+  /** State of the live connection; 'off' in demo mode. */
+  liveStatus: LiveStatus
   /** Changes whenever something was updated; lists and the summary reload on it. */
   version: number
   /** Tell every list that something changed. */
@@ -49,7 +54,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
   const [now, setNow] = useState(() => new Date())
+  const [liveStatus, setLiveStatus] = useState<LiveStatus>('off')
   const { feed, reload } = useEvents(settings, !welcome)
+  const reloadRef = useRef(reload)
+  reloadRef.current = reload
   const client = useMemo(() => inboxClientFor(settings), [settings])
   const summary = useInboxSummary(client, !welcome, version)
 
@@ -60,6 +68,32 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const invalidate = useCallback(() => setVersion((v) => v + 1), [])
+
+  // Live updates: the service announces changes and the lists refresh at once.
+  // Polling stays as the fallback, so a dropped connection costs freshness, not correctness.
+  const liveEnabled = !welcome && !settings.demo && settings.backendUrl.trim() !== ''
+  useEffect(() => {
+    if (!liveEnabled) {
+      setLiveStatus('off')
+      return
+    }
+    let timer: number | undefined
+    const handle = connectLive(settings, {
+      onStatus: setLiveStatus,
+      onMessage: (m) => {
+        if (m.type === 'ready') return
+        window.clearTimeout(timer)
+        timer = window.setTimeout(() => {
+          setVersion((v) => v + 1)
+          reloadRef.current()
+        }, LIVE_REFRESH_MS)
+      },
+    })
+    return () => {
+      window.clearTimeout(timer)
+      handle.close()
+    }
+  }, [liveEnabled, settings])
 
   // Read state used to be kept in this browser; send it to the service once.
   const connected = summary.status === 'ready' && !settings.demo
@@ -115,6 +149,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       closeSettings: () => setSettingsOpen(false),
       saveConnection,
       client,
+      liveStatus,
       version,
       invalidate,
       summary,
@@ -127,7 +162,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setFilters,
     }),
     [
-      settings, feed, reload, now, welcome, tryDemo, settingsOpen, saveConnection, client, version,
+      settings, feed, reload, now, welcome, tryDemo, settingsOpen, saveConnection, client, liveStatus, version,
       invalidate, summary, markEverythingRead, selectedId, selectEvent, closeEvent, filters, changeFilters,
     ],
   )

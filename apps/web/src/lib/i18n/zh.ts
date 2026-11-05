@@ -1,6 +1,6 @@
 import type { Messages } from './en'
 
-export const zh: Messages = {
+export const zh: Partial<Messages> = {
   'app.name': 'Attention',
   'nav.views': '视图',
   'nav.openMenu': '打开菜单',

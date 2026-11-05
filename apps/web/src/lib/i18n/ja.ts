@@ -1,6 +1,6 @@
 import type { Messages } from './en'
 
-export const ja: Messages = {
+export const ja: Partial<Messages> = {
   'app.name': 'Attention',
   'nav.views': 'ビュー',
   'nav.openMenu': 'メニューを開く',

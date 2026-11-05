@@ -60,6 +60,12 @@ type TrailEntry struct {
 	Reconstructed bool      `json:"reconstructed,omitempty"`
 }
 
+// TrailRow is a user action with the event it belongs to.
+type TrailRow struct {
+	EventID string `json:"eventId"`
+	TrailEntry
+}
+
 // Item is one row of the inbox: an event summary plus the person's state.
 type Item struct {
 	ID               string               `json:"id"`

@@ -39,18 +39,18 @@ export const NAV_GROUPS: { id: NavGroup; label: MessageKey }[] = [
 ]
 
 export const NAV_ITEMS: NavItem[] = [
-  { id: 'overview', path: '/overview', group: 'workspace', label: 'nav.overview', icon: 'overview', plannedIn: 17, primary: true },
+  { id: 'overview', path: '/overview', group: 'workspace', label: 'nav.overview', icon: 'overview', primary: true },
   { id: 'inbox', path: '/inbox', group: 'workspace', label: 'nav.inbox', icon: 'inbox', primary: true },
-  { id: 'all', path: '/all', group: 'workspace', label: 'nav.all', icon: 'list', plannedIn: 16 },
-  { id: 'activity', path: '/activity', group: 'workspace', label: 'nav.activity', icon: 'activity', plannedIn: 17, primary: true },
-  { id: 'rules', path: '/rules', group: 'manage', label: 'nav.rules', icon: 'rules', plannedIn: 18 },
-  { id: 'policies', path: '/policies', group: 'manage', label: 'nav.policies', icon: 'policies', plannedIn: 18 },
-  { id: 'channels', path: '/channels', group: 'manage', label: 'nav.channels', icon: 'channels', plannedIn: 19 },
-  { id: 'integrations', path: '/integrations', group: 'manage', label: 'nav.integrations', icon: 'integrations', plannedIn: 19 },
-  { id: 'analytics', path: '/analytics', group: 'manage', label: 'nav.analytics', icon: 'analytics', plannedIn: 17 },
-  { id: 'preferences', path: '/preferences', group: 'personal', label: 'nav.preferences', icon: 'preferences', plannedIn: 20 },
+  { id: 'all', path: '/all', group: 'workspace', label: 'nav.all', icon: 'list' },
+  { id: 'activity', path: '/activity', group: 'workspace', label: 'nav.activity', icon: 'activity', primary: true },
+  { id: 'rules', path: '/rules', group: 'manage', label: 'nav.rules', icon: 'rules' },
+  { id: 'policies', path: '/policies', group: 'manage', label: 'nav.policies', icon: 'policies' },
+  { id: 'channels', path: '/channels', group: 'manage', label: 'nav.channels', icon: 'channels' },
+  { id: 'integrations', path: '/integrations', group: 'manage', label: 'nav.integrations', icon: 'integrations' },
+  { id: 'analytics', path: '/analytics', group: 'manage', label: 'nav.analytics', icon: 'analytics' },
+  { id: 'preferences', path: '/preferences', group: 'personal', label: 'nav.preferences', icon: 'preferences' },
   { id: 'settings', path: '/settings', group: 'personal', label: 'nav.settings', icon: 'settings', primary: true },
-  { id: 'help', path: '/help', group: 'personal', label: 'nav.help', icon: 'help', plannedIn: 21 },
+  { id: 'help', path: '/help', group: 'personal', label: 'nav.help', icon: 'help' },
 ]
 
 /** The screen shown at "/". */
