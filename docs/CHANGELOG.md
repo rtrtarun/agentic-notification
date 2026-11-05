@@ -5,6 +5,7 @@ Every change to this repository is recorded here, newest first. Milestone-level 
 ## Unreleased
 
 ### Added
+- Milestone 20 (Preferences and real-time updates, see [milestone-20.md](milestone-20.md)): new `pkg/preferences` and `pkg/stream`, `GET`/`PUT /api/preferences`, `GET /api/stream` (server-sent events), table `preferences`, quiet hours and mutes that never touch critical events, a Preferences screen and a Live indicator. Fixed CORS to allow `PUT`. 176 Vitest tests; Go module passes.
 - Milestone 19 (Channels and Integrations, see [milestone-19.md](milestone-19.md)): new `pkg/channels` and `pkg/integrations`, `GET /api/channels`, `POST /api/channels/{id}/test` (rate limited, masked targets) and `GET /api/integrations`, and the Channels and Integrations screens. 159 Vitest tests; Go module passes.
 - Milestone 18 (Rules and Policies, see [milestone-18.md](milestone-18.md)): new `pkg/rules`, `/api/rules` (CRUD, reorder, dry run) and `/api/policies`, table `policy_rules`, run-time reloadable `policy.Engine` with `disabled`/`locked` flags and `*` wildcards, locked critical rules, and the Rules and Policies screens. Rules in `config/rules.yaml` for critical events are now `locked: true`. 155 Vitest tests; Go module passes.
 - Milestone 17 (Overview, Activity and Analytics, see [milestone-17.md](milestone-17.md)): new `pkg/insights`, `GET /api/analytics` and `GET /api/activity`, `inbox.Repository.RecentTrail`, three new screens with accessible CSS charts, and a TypeScript mirror for demo mode. 145 Vitest tests; Go module passes.

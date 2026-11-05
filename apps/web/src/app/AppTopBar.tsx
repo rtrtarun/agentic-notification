@@ -24,7 +24,7 @@ export function paletteShortcut(): string {
 /** Menu (small screens), search, time range, palette, bell and account menu. */
 export function AppTopBar({ onMenu, menuOpen, onPalette }: AppTopBarProps) {
   const { t } = useI18n()
-  const { filters, changeFilters, setFilters, summary, now, selectEvent, markEverythingRead } = useApp()
+  const { filters, changeFilters, setFilters, summary, now, selectEvent, markEverythingRead, liveStatus } = useApp()
   const toast = useToast()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -75,6 +75,12 @@ export function AppTopBar({ onMenu, menuOpen, onPalette }: AppTopBarProps) {
           </button>
         ))}
       </div>
+
+      {liveStatus !== 'off' && (
+        <span className="live-dot" data-live={liveStatus === 'live'} role="status">
+          {t(`live.${liveStatus}`)}
+        </span>
+      )}
 
       <NotificationBell
         unread={summary.items}

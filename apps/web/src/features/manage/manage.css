@@ -567,3 +567,9 @@
   white-space: nowrap;
   border: 0;
 }
+
+@media (max-width: 62rem) {
+  .topbar .live-dot {
+    display: none;
+  }
+}

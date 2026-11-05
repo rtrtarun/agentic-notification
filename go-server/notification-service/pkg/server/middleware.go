@@ -20,6 +20,10 @@ type statusRecorder struct {
 	statusCode int
 }
 
+// Unwrap lets http.ResponseController reach the real writer, which streaming
+// responses need to flush and to extend their write deadline.
+func (r *statusRecorder) Unwrap() http.ResponseWriter { return r.ResponseWriter }
+
 func (r *statusRecorder) WriteHeader(code int) {
 	if r.statusCode == 0 {
 		r.statusCode = code
@@ -118,7 +122,7 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 		if origin := r.Header.Get("Origin"); origin != "" && originAllowed(s.cfg, origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Add("Vary", "Origin")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Request-ID")
 			w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID")
 		}

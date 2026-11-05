@@ -12,6 +12,8 @@ import (
 	"github.com/example/notification-service/pkg/event"
 	"github.com/example/notification-service/pkg/notification"
 	"github.com/example/notification-service/pkg/policy"
+	"github.com/example/notification-service/pkg/preferences"
+	"github.com/example/notification-service/pkg/stream"
 )
 
 // ErrDuplicateDelivery means an event with the same ID was already processed,
@@ -29,7 +31,20 @@ type Config struct {
 	TeamsWebhookURLs       []string
 }
 
+// Preferences adjusts non-critical events (quiet hours, muted sources). It is
+// consulted only for events that are not critical.
+type Preferences interface {
+	Decide(evt event.Event) (preferences.Adjustment, bool)
+}
+
+// Publisher is told when an event has been processed, so connected consoles can refresh.
+type Publisher interface {
+	Publish(m stream.Message)
+}
+
 type Pipeline struct {
+	prefs        Preferences
+	publisher    Publisher
 	policyEngine *policy.Engine
 	deliverySvc  *delivery.Service
 	eventRepo    event.Repository
@@ -58,6 +73,18 @@ func (p *Pipeline) WithLogger(l *slog.Logger) *Pipeline {
 	if l != nil {
 		p.logger = l
 	}
+	return p
+}
+
+// WithPreferences applies quiet hours and muted sources to non-critical events.
+func (p *Pipeline) WithPreferences(pref Preferences) *Pipeline {
+	p.prefs = pref
+	return p
+}
+
+// WithPublisher announces each processed event to live consoles.
+func (p *Pipeline) WithPublisher(pub Publisher) *Pipeline {
+	p.publisher = pub
 	return p
 }
 
@@ -91,6 +118,8 @@ func (p *Pipeline) Handle(ctx context.Context, evt event.Event) (event.Event, er
 	default:
 		if duplicate {
 			evt.DecisionState.Status = event.DecisionMerged
+		} else {
+			p.applyPreferences(&evt)
 		}
 		if evt.DecisionState.Status == "" {
 			evt.DecisionState.Status = event.DecisionQueued
@@ -102,7 +131,26 @@ func (p *Pipeline) Handle(ctx context.Context, evt event.Event) (event.Event, er
 		p.forgetDedup(evt)
 		return evt, fmt.Errorf("persist event: %w", err)
 	}
+	if p.publisher != nil {
+		p.publisher.Publish(stream.Message{Type: stream.TypeEvent, ID: evt.ID, AttentionClass: evt.AttentionClass})
+	}
 	return evt, nil
+}
+
+// applyPreferences lets a person's quiet hours and mutes change a non-critical
+// event's outcome. It never runs for critical events: Handle only calls it from
+// the non-critical branch, and preferences.Decide refuses critical events too.
+func (p *Pipeline) applyPreferences(evt *event.Event) {
+	if p.prefs == nil || evt.AttentionClass == event.AttentionCritical {
+		return
+	}
+	adj, ok := p.prefs.Decide(*evt)
+	if !ok {
+		return
+	}
+	evt.AttentionClass = adj.AttentionClass
+	evt.DecisionState.Status = adj.Status
+	evt.DecisionState.Reason = adj.Reason
 }
 
 // applyDedup tags the event with its dedup key and thread. It reports whether the

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -26,7 +27,9 @@ import (
 	"github.com/example/notification-service/pkg/notification/impl"
 	"github.com/example/notification-service/pkg/pipeline"
 	"github.com/example/notification-service/pkg/policy"
+	"github.com/example/notification-service/pkg/preferences"
 	"github.com/example/notification-service/pkg/rules"
+	"github.com/example/notification-service/pkg/stream"
 )
 
 const (
@@ -49,16 +52,21 @@ const (
 
 // Server wires the HTTP layer to the pipeline and its dependencies.
 type Server struct {
-	cfg              *config.Config
-	logger           *slog.Logger
-	service          notification.NotificationService
-	deliveryService  *delivery.Service
-	eventRepo        event.Repository
-	sqlDB            *sql.DB
-	inbox            *inbox.Service
-	insights         *insights.Service
-	rules            *rules.Service
-	channelTester    *channels.Tester
+	cfg             *config.Config
+	logger          *slog.Logger
+	service         notification.NotificationService
+	deliveryService *delivery.Service
+	eventRepo       event.Repository
+	sqlDB           *sql.DB
+	inbox           *inbox.Service
+	insights        *insights.Service
+	rules           *rules.Service
+	channelTester   *channels.Tester
+	preferences     *preferences.Service
+	broker          *stream.Broker
+	// shutdown is closed when the server stops, so live streams end instead of delaying shutdown.
+	shutdown         chan struct{}
+	shutdownOnce     sync.Once
 	feedbackRecorder feedback.Recorder
 	learningService  *learning.Service
 	policyEngine     *policy.Engine
@@ -78,7 +86,7 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 		return nil, errors.New("config is required")
 	}
 
-	s := &Server{cfg: cfg, logger: logger, metrics: metrics.NewRegistry()}
+	s := &Server{cfg: cfg, logger: logger, metrics: metrics.NewRegistry(), shutdown: make(chan struct{}), broker: stream.NewBroker(maxLiveConnections)}
 
 	eventRepo, err := s.initEventRepository(ctx)
 	if err != nil {
@@ -109,6 +117,12 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 	s.eventRepo = eventRepo
 	s.rules = ruleService
 	s.channelTester = channels.NewTester(deliverySvc, s.channelSettings(), channelTestGap)
+	prefService, err := preferences.NewService(ctx, s.initPreferencesStore())
+	if err != nil {
+		s.releaseOnStartupFailure()
+		return nil, fmt.Errorf("init preferences: %w", err)
+	}
+	s.preferences = prefService
 	s.inbox = inbox.NewService(eventRepo, s.initInboxRepository())
 	s.insights = insights.NewService(s.inbox)
 	s.deliveryService = deliverySvc
@@ -131,7 +145,7 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 			SlackWebhookURLs:       cfg.SlackWebhookURLs(),
 			TeamsWebhookURLs:       cfg.TeamsWebhookURLs(),
 		},
-	).WithDeduper(deduper).WithLogger(logger)
+	).WithDeduper(deduper).WithLogger(logger).WithPreferences(s.preferences).WithPublisher(s.broker)
 	if purger, ok := eventRepo.(event.Purger); ok {
 		s.purger = purger
 	}
@@ -189,6 +203,14 @@ func (s *Server) initRulesStore() rules.Store {
 	return rules.NewPostgresStore(s.sqlDB)
 }
 
+// initPreferencesStore keeps preferences in PostgreSQL when there is a database, otherwise in memory.
+func (s *Server) initPreferencesStore() preferences.Store {
+	if s.sqlDB == nil {
+		return preferences.NewMemoryStore()
+	}
+	return preferences.NewPostgresStore(s.sqlDB)
+}
+
 func migrate(ctx context.Context, sqlDB *sql.DB) error {
 	return db.MigrateLocked(ctx, sqlDB)
 }
@@ -213,6 +235,15 @@ func (s *Server) initDeduper(ctx context.Context) (dedup.Deduper, error) {
 	}
 	s.logger.Info("using Redis for deduplication")
 	return dedup.NewRedisDeduper(dedup.NewRedisStore(client), s.cfg.DedupWindow), nil
+}
+
+// stopStreams ends every live stream. Safe to call more than once.
+func (s *Server) stopStreams() {
+	s.shutdownOnce.Do(func() {
+		if s.shutdown != nil {
+			close(s.shutdown)
+		}
+	})
 }
 
 // releaseOnStartupFailure closes what NewServer opened before it gave up, logging

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/example/notification-service/pkg/inbox"
+	"github.com/example/notification-service/pkg/stream"
 	"github.com/example/notification-service/pkg/util"
 )
 
@@ -28,6 +29,16 @@ func (s *Server) inboxHandler(w http.ResponseWriter, r *http.Request) {
 	if s.inbox == nil {
 		util.WriteJSON(w, http.StatusServiceUnavailable, util.ErrorResponse{Error: "inbox is not available"})
 		return
+	}
+	if r.Method != http.MethodGet {
+		// A change made here should show up in other open consoles.
+		rec := &statusRecorder{ResponseWriter: w}
+		defer func() {
+			if rec.status() < http.StatusMultipleChoices {
+				s.publish(stream.Message{Type: stream.TypeInbox})
+			}
+		}()
+		w = rec
 	}
 	rest := strings.Trim(strings.TrimPrefix(r.URL.Path, inboxPrefix), "/")
 	parts := strings.Split(rest, "/")
