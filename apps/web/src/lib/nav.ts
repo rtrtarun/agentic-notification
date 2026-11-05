@@ -50,7 +50,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'analytics', path: '/analytics', group: 'manage', label: 'nav.analytics', icon: 'analytics' },
   { id: 'preferences', path: '/preferences', group: 'personal', label: 'nav.preferences', icon: 'preferences' },
   { id: 'settings', path: '/settings', group: 'personal', label: 'nav.settings', icon: 'settings', primary: true },
-  { id: 'help', path: '/help', group: 'personal', label: 'nav.help', icon: 'help', plannedIn: 21 },
+  { id: 'help', path: '/help', group: 'personal', label: 'nav.help', icon: 'help' },
 ]
 
 /** The screen shown at "/". */

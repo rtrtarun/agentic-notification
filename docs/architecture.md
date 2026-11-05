@@ -1177,4 +1177,18 @@ Everything changed on `feature-impl` since the milestone 13 plan, in the order i
 
 **Breaking changes to know about:** protected routes return 503 until `API_KEY` is set; `/metrics` is Prometheus text; the log field `status` is now `http_status`; webhook event IDs embed the delivery ID; `dedup.Deduper`, `event.Repository` and `db.Connect` changed signature. Full list: [CHANGELOG.md](CHANGELOG.md).
 
+### 23a. Milestones 15 to 21 (console and operations)
+
+| Milestone | Backend | Console |
+|---|---|---|
+| 15 | `pkg/inbox`, `/api/notifications` (state, trail, bulk), tables `notification_state`, `event_trail` | Routed shell, Inbox v2, detail drawer |
+| 16 | none (existing filters reused) | All Notifications table, CSV export |
+| 17 | `pkg/insights`, `/api/analytics`, `/api/activity`, `inbox.Repository.RecentTrail` | Overview, Activity, Analytics |
+| 18 | `pkg/rules`, `/api/rules` (CRUD, reorder, dry run), `/api/policies`, table `policy_rules`, run-time `policy.Engine.SetRules`, locked rules | Rules, Policies |
+| 19 | `pkg/channels`, `pkg/integrations`, `/api/channels`, `/api/channels/{id}/test`, `/api/integrations` | Channels, Integrations |
+| 20 | `pkg/preferences`, `pkg/stream`, `/api/preferences`, `/api/stream` (SSE), table `preferences`, pipeline hooks | Preferences, live indicator |
+| 21 | none | Help and Support, diagnostics |
+
+Layer rules held throughout: Layer 1 stays deterministic (rules, preferences and dedup contain no AI), and critical events are never merged, delayed, muted or lowered. That is enforced in `pkg/rules` (locked rules), `pkg/preferences` (`Decide`) and `pkg/inbox` (priority guard), each with tests. Details: [milestone-16.md](milestone-16.md) to [milestone-21.md](milestone-21.md).
+
 **Still open:** user authentication, pagination and search, persisted and validated feedback, the AI attention worker, digests, Novu, tracing, STARTTLS requirement, and the Java service review (section 13).

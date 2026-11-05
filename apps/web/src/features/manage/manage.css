@@ -234,7 +234,7 @@
 
 .stat-value {
   margin: 0.15rem 0 0;
-  font-size: var(--step-3);
+  font-size: clamp(1.4rem, 2.4vw, 2rem);
   font-weight: 750;
   line-height: 1.1;
   font-variant-numeric: tabular-nums;
@@ -486,6 +486,17 @@
 .status[data-state='warn']::before { background: var(--warning); }
 .status[data-state='bad']::before { background: var(--danger); }
 
+.card-list,
+.chip-group,
+.bars,
+.feed,
+.columns,
+.chart-legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
 .card-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
@@ -501,6 +512,10 @@
   border-radius: var(--radius);
   background: var(--surface);
   min-inline-size: 0;
+}
+
+.item-card .kv {
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .item-card h3 {

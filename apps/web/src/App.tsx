@@ -16,6 +16,7 @@ const PoliciesPage = lazy(() => import('./pages/PoliciesPage'))
 const ChannelsPage = lazy(() => import('./pages/ChannelsPage'))
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'))
 const PreferencesPage = lazy(() => import('./pages/PreferencesPage'))
+const HelpPage = lazy(() => import('./pages/HelpPage'))
 const AllPage = lazy(() => import('./pages/AllPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const PlannedPage = lazy(() => import('./pages/PlannedPage'))
@@ -25,6 +26,7 @@ const BUILT: Record<string, React.ReactElement> = {
   inbox: <InboxPage />,
   overview: <OverviewPage />,
   all: <AllPage />,
+  help: <HelpPage />,
   preferences: <PreferencesPage />,
   channels: <ChannelsPage />,
   integrations: <IntegrationsPage />,

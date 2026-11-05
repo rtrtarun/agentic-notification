@@ -8,14 +8,14 @@ See [docs/orchestration-platform.md](docs/orchestration-platform.md) for the ful
 
 ## Current milestone
 
-**Milestone 13** — Security and production hardening. See [docs/milestone-13.md](docs/milestone-13.md).
+**Milestone 21** — Help and Support, closing the console build-out (milestones 15 to 21: inbox, tables, analytics, rules, channels, preferences, live updates). See [docs/milestone-21.md](docs/milestone-21.md). Earlier: [milestone 13](docs/milestone-13.md), security and production hardening.
 
 ## Included
 
 - Go API service with GitHub webhook ingestion, YAML policy rules, and critical-event delivery
 - Pipeline: ingest → policy → deliver (critical) / queue (standard) → persist
 - PostgreSQL persistence with automatic schema migration
-- React + TypeScript web shell
+- React + TypeScript operator console: inbox, all notifications, overview, activity, analytics, rules and policies, channels, integrations, preferences, live updates, help
 - Local PostgreSQL via Docker Compose
 - CI wiring for the Go service
 
