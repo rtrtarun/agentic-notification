@@ -175,6 +175,34 @@ func Migrate(ctx context.Context, db Execer) error {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 		`CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id)`,
+		// What people said about notifications, and the always/never choices that came from it.
+		// See pkg/feedback and pkg/overrides.
+		`CREATE TABLE IF NOT EXISTS feedback (
+			id          TEXT PRIMARY KEY,
+			event_id    TEXT NOT NULL,
+			user_id     TEXT NOT NULL DEFAULT '',
+			action      TEXT NOT NULL,
+			scope       TEXT NOT NULL DEFAULT '',
+			reason      TEXT NOT NULL DEFAULT '',
+			override_id TEXT NOT NULL DEFAULT '',
+			source      TEXT NOT NULL DEFAULT '',
+			event_type  TEXT NOT NULL DEFAULT '',
+			repository  TEXT NOT NULL DEFAULT '',
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS feedback_event_idx ON feedback (event_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS feedback_created_idx ON feedback (created_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS overrides (
+			id         TEXT PRIMARY KEY,
+			scope_key  TEXT NOT NULL UNIQUE,
+			source     TEXT NOT NULL DEFAULT '',
+			event_type TEXT NOT NULL DEFAULT '',
+			repository TEXT NOT NULL DEFAULT '',
+			mode       TEXT NOT NULL CHECK (mode IN ('always','never')),
+			created_by TEXT NOT NULL DEFAULT '',
+			note       TEXT NOT NULL DEFAULT '',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
 		`CREATE TABLE IF NOT EXISTS audit_log (
 			id     BIGSERIAL PRIMARY KEY,
 			at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),

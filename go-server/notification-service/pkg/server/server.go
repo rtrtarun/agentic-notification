@@ -26,6 +26,7 @@ import (
 	"github.com/example/notification-service/pkg/metrics"
 	"github.com/example/notification-service/pkg/notification"
 	"github.com/example/notification-service/pkg/notification/impl"
+	"github.com/example/notification-service/pkg/overrides"
 	"github.com/example/notification-service/pkg/pipeline"
 	"github.com/example/notification-service/pkg/policy"
 	"github.com/example/notification-service/pkg/preferences"
@@ -73,16 +74,18 @@ type Server struct {
 	preferences     *preferences.Service
 	broker          *stream.Broker
 	// shutdown is closed when the server stops, so live streams end instead of delaying shutdown.
-	shutdown         chan struct{}
-	shutdownOnce     sync.Once
-	feedbackRecorder feedback.Recorder
-	learningService  *learning.Service
-	policyEngine     *policy.Engine
-	eventPipeline    *pipeline.Pipeline
-	metrics          *metrics.Registry
-	purger           event.Purger
-	http             *http.Server
-	closers          []func() error
+	shutdown        chan struct{}
+	shutdownOnce    sync.Once
+	feedback        *feedback.Service
+	feedbackStore   feedback.Store
+	overrides       *overrides.Service
+	learningService *learning.Service
+	policyEngine    *policy.Engine
+	eventPipeline   *pipeline.Pipeline
+	metrics         *metrics.Registry
+	purger          event.Purger
+	http            *http.Server
+	closers         []func() error
 }
 
 // NewServer wires the service. ctx bounds start-up work such as the database connection.
@@ -159,7 +162,10 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 	s.insights = insights.NewService(s.inbox)
 	s.deliveryService = deliverySvc
 	s.policyEngine = policyEngine
-	s.feedbackRecorder = feedback.NewInMemoryRecorder()
+	if err := s.initFeedback(ctx); err != nil {
+		s.releaseOnStartupFailure()
+		return nil, fmt.Errorf("init feedback: %w", err)
+	}
 	s.learningService = learning.NewService("")
 	s.service = notification.NewValidatingService(
 		impl.NewNotificationServiceWith(provider),
@@ -178,7 +184,7 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 			TeamsWebhookURLs:       cfg.TeamsWebhookURLs(),
 			SMSRecipients:          targets.SMS,
 		},
-	).WithOutbox(outbox).WithDeduper(deduper).WithLogger(logger).WithPreferences(s.preferences).WithPublisher(s.broker)
+	).WithOutbox(outbox).WithOverrides(s.overrides).WithDeduper(deduper).WithLogger(logger).WithPreferences(s.preferences).WithPublisher(s.broker)
 	if purger, ok := eventRepo.(event.Purger); ok {
 		s.purger = purger
 	}

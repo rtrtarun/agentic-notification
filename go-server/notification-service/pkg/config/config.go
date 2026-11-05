@@ -74,12 +74,14 @@ type Config struct {
 	// ConsoleURL is where the browser is sent after single sign-on.
 	ConsoleURL string
 	// Single sign-on through any OpenID Connect provider. EntraTenantID is a shortcut for Microsoft Entra ID.
-	EntraTenantID         string
-	OIDCIssuer            string
-	OIDCName              string
-	OIDCClientID          string
-	OIDCClientSecret      string
-	OIDCAllowedDomains    []string
+	EntraTenantID      string
+	OIDCIssuer         string
+	OIDCName           string
+	OIDCClientID       string
+	OIDCClientSecret   string
+	OIDCAllowedDomains []string
+	// OverridesAdminOnly stops members from creating always/never notify overrides (their feedback is then only a signal).
+	OverridesAdminOnly    bool
 	GitHubWebhookSecret   string
 	AllowUnsignedWebhooks bool
 	MaxBodyBytes          int64
@@ -182,6 +184,9 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("invalid AUTH_COOKIE_SAMESITE: %q (use lax, strict or none)", cfg.AuthCookieSameSite)
 	}
 	cfg.AuthSecret = os.Getenv("AUTH_SECRET")
+	if cfg.OverridesAdminOnly, err = envBool("OVERRIDES_ADMIN_ONLY"); err != nil {
+		return nil, err
+	}
 	cfg.PublicURL = strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_URL")), "/")
 	cfg.ConsoleURL = strings.TrimSpace(os.Getenv("CONSOLE_URL"))
 	cfg.EntraTenantID = strings.TrimSpace(os.Getenv("ENTRA_TENANT_ID"))

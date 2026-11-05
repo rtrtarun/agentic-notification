@@ -93,10 +93,21 @@ export async function fetchEvents(settings: Settings, signal?: AbortSignal, limi
   return body.events
 }
 
+/** How widely "always" or "never" applies: this kind of event, this repository, or this source. */
+export type FeedbackScope = 'type' | 'repository' | 'source'
+
+export interface FeedbackResult {
+  /** True when the choice was recorded as a signal only, because only admins may change what is delivered. */
+  overrideSkipped?: boolean
+  /** True when undo removed an always or never choice. */
+  reverted?: boolean
+}
+
 export async function sendFeedback(
   settings: Settings,
-  feedback: { eventId: string; action: FeedbackAction; reason?: string },
-): Promise<void> {
-  if (settings.demo) return // nothing is stored in demo mode
-  await request(settings, '/feedback', { method: 'POST', body: JSON.stringify(feedback) })
+  feedback: { eventId: string; action: FeedbackAction; reason?: string; scope?: FeedbackScope },
+): Promise<FeedbackResult> {
+  if (settings.demo) return {} // nothing is stored in demo mode
+  const res = await request(settings, '/feedback', { method: 'POST', body: JSON.stringify(feedback) })
+  return (await res.json().catch(() => ({}))) as FeedbackResult
 }

@@ -32,7 +32,7 @@ func newAuthServer(t *testing.T, mutate func(*config.Config)) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.APIKey = testAPIKey
+	cfg.APIKey, cfg.AllowUnsignedWebhooks = testAPIKey, true
 	cfg.AuthBootstrapEmail, cfg.AuthBootstrapPassword = adminEmail, adminPass
 	cfg.CORSAllowedOrigins = []string{"http://console.test"}
 	if mutate != nil {

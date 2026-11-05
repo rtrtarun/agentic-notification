@@ -12,6 +12,7 @@ import (
 	"github.com/example/notification-service/pkg/delivery"
 	"github.com/example/notification-service/pkg/event"
 	"github.com/example/notification-service/pkg/notification"
+	"github.com/example/notification-service/pkg/overrides"
 	"github.com/example/notification-service/pkg/policy"
 	"github.com/example/notification-service/pkg/preferences"
 	"github.com/example/notification-service/pkg/stream"
@@ -39,6 +40,12 @@ type Preferences interface {
 	Decide(evt event.Event) (preferences.Adjustment, bool)
 }
 
+// Overrides holds the always and never notify choices people made from feedback.
+// They outrank preferences and never answer for a critical event.
+type Overrides interface {
+	Decide(evt event.Event) (overrides.Decision, bool)
+}
+
 // Outbox queues non-critical deliveries and logs critical ones. It is a plain
 // routing table plus a queue; nothing in it decides by model.
 type Outbox interface {
@@ -53,6 +60,7 @@ type Publisher interface {
 
 type Pipeline struct {
 	prefs        Preferences
+	overrides    Overrides
 	outbox       Outbox
 	publisher    Publisher
 	policyEngine *policy.Engine
@@ -89,6 +97,12 @@ func (p *Pipeline) WithLogger(l *slog.Logger) *Pipeline {
 // WithPreferences applies quiet hours and muted sources to non-critical events.
 func (p *Pipeline) WithPreferences(pref Preferences) *Pipeline {
 	p.prefs = pref
+	return p
+}
+
+// WithOverrides applies always and never notify choices before quiet hours and mutes.
+func (p *Pipeline) WithOverrides(o Overrides) *Pipeline {
+	p.overrides = o
 	return p
 }
 
@@ -198,7 +212,22 @@ func deliveryMessage(evt event.Event) delivery.Message {
 // event's outcome. It never runs for critical events: Handle only calls it from
 // the non-critical branch, and preferences.Decide refuses critical events too.
 func (p *Pipeline) applyPreferences(evt *event.Event) {
-	if p.prefs == nil || evt.AttentionClass == event.AttentionCritical {
+	if evt.AttentionClass == event.AttentionCritical {
+		return
+	}
+	// A person's explicit choice outranks quiet hours and mutes: "never" sends the
+	// event to the digest, and "always" keeps it queued whatever the preferences say.
+	if p.overrides != nil {
+		if d, ok := p.overrides.Decide(*evt); ok {
+			evt.DecisionState.Reason = d.Reason
+			if d.Mode == overrides.ModeNever {
+				evt.AttentionClass = event.AttentionBackground
+				evt.DecisionState.Status = event.DecisionDigest
+			}
+			return
+		}
+	}
+	if p.prefs == nil {
 		return
 	}
 	adj, ok := p.prefs.Decide(*evt)

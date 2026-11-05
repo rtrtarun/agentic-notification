@@ -91,6 +91,9 @@ Set `AUTH_BOOTSTRAP_EMAIL` and `AUTH_BOOTSTRAP_PASSWORD` once to create the firs
 ### Single sign-on (Microsoft Entra ID)
 Register an app in Entra ID, add `PUBLIC_URL/api/auth/oidc/callback` as a web redirect URI, create a client secret, then set `ENTRA_TENANT_ID` (a tenant ID or domain, not `common`), `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `PUBLIC_URL`, `CONSOLE_URL` and `OIDC_ALLOWED_DOMAINS` (comma list of email domains whose people may be created as members; empty means only existing accounts can sign in). With several replicas set the same `AUTH_SECRET` on each. A refused sign-in returns to the console with `?signin=denied` or `failed`; the reason is in the service log, never in the address.
 
+### An event was not delivered because of an override
+Open the event: its decision reason names the override ("never notify override for github / star"). Preferences > Always and never notify lists every override with who chose it; remove it there. Critical events ignore overrides, so a missing critical alert is a different problem (see "Critical alerts are not arriving"). To stop members from creating overrides set `OVERRIDES_ADMIN_ONLY=true`.
+
 ## Deploying
 
 1. Create the Secret (`k8s/secret.example.yaml` shows the keys). Never commit real values.

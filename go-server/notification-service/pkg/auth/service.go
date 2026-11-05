@@ -359,6 +359,12 @@ func (s *Service) Audit(ctx context.Context, limit int) ([]AuditEntry, error) {
 	return s.store.ListAudit(ctx, limit)
 }
 
+// AuditEvent records an entry for an action taken elsewhere (for example an
+// override), so the security log has one place. It never fails the caller.
+func (s *Service) AuditEvent(ctx context.Context, actor, action, target, ip, detail string) {
+	s.audit(ctx, actor, action, target, ip, detail)
+}
+
 // audit records an entry. A failure to write it must never block the action it describes.
 func (s *Service) audit(ctx context.Context, actor, action, target, ip, detail string) {
 	_ = s.store.AddAudit(ctx, AuditEntry{At: s.now(), Actor: actor, Action: action, Target: target, IP: ip, Detail: detail})

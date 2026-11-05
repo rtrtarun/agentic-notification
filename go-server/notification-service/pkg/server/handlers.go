@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/feedback"
 	"github.com/example/notification-service/pkg/notification"
 	"github.com/example/notification-service/pkg/pipeline"
 	"github.com/example/notification-service/pkg/util"
@@ -39,6 +38,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle(usersPrefix, protected(s.usersHandler))
 	mux.Handle(usersPrefix+"/", protected(s.usersHandler))
 	mux.Handle("/api/audit", protected(s.auditHandler))
+	mux.Handle(overridesPrefix, protected(s.overridesHandler))
+	mux.Handle(overridesPrefix+"/", protected(s.overridesHandler))
 	mux.Handle("/notify", protected(s.notifyHandler))
 	mux.Handle("/metrics", protected(s.metricsHandler))
 	mux.Handle("/feedback", protected(s.feedbackHandler))
@@ -157,30 +158,6 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) metricsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	s.metrics.WritePrometheus(w)
-}
-
-func (s *Server) feedbackHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: errMethod})
-		return
-	}
-
-	var fb feedback.EventFeedback
-	if !s.decodeJSON(w, r, &fb) {
-		return
-	}
-	if fb.EventID == "" || fb.Action == "" {
-		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "event id and action are required"})
-		return
-	}
-
-	if err := s.feedbackRecorder.Record(fb); err != nil {
-		s.logFor(r.Context()).Error("record feedback failed", "error", err)
-		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: errInternal})
-		return
-	}
-
-	util.WriteJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
 }
 
 func (s *Server) githubWebhookHandler(w http.ResponseWriter, r *http.Request) {
