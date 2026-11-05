@@ -11,6 +11,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/example/notification-service/pkg/channels"
 	"github.com/example/notification-service/pkg/config"
 	"github.com/example/notification-service/pkg/db"
 	"github.com/example/notification-service/pkg/dedup"
@@ -57,6 +58,7 @@ type Server struct {
 	inbox            *inbox.Service
 	insights         *insights.Service
 	rules            *rules.Service
+	channelTester    *channels.Tester
 	feedbackRecorder feedback.Recorder
 	learningService  *learning.Service
 	policyEngine     *policy.Engine
@@ -106,6 +108,7 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 
 	s.eventRepo = eventRepo
 	s.rules = ruleService
+	s.channelTester = channels.NewTester(deliverySvc, s.channelSettings(), channelTestGap)
 	s.inbox = inbox.NewService(eventRepo, s.initInboxRepository())
 	s.insights = insights.NewService(s.inbox)
 	s.deliveryService = deliverySvc
