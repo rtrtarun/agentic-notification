@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/example/notification-service/pkg/auth"
 	"github.com/example/notification-service/pkg/config"
 	"github.com/example/notification-service/pkg/util"
 )
@@ -52,7 +53,7 @@ var knownRoutes = map[string]bool{
 	"/notify": true, "/health": true, "/metrics": true, "/webhooks/github": true, "/feedback": true, "/events": true,
 	inboxPrefix:      true,
 	"/api/analytics": true, "/api/activity": true, "/api/rules": true, "/api/policies": true,
-	"/api/channels": true, "/api/deliveries": true, "/api/integrations": true, "/api/preferences": true, "/api/stream": true,
+	"/api/channels": true, "/api/deliveries": true, "/api/auth": true, "/api/users": true, "/api/audit": true, "/api/integrations": true, "/api/preferences": true, "/api/stream": true,
 }
 
 func routeLabel(path string) string {
@@ -88,23 +89,43 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-// authMiddleware enforces the X-API-Key header. It fails closed: with no API key
-// configured every request is refused unless ALLOW_UNAUTHENTICATED_API is set.
+// authMiddleware lets a request through when it carries the API key (services)
+// or a valid sign-in session (people). A key that is sent but wrong is refused
+// outright. A session cookie on a state-changing request must also carry the
+// session's CSRF token. With no API key configured and no session, every
+// request is refused unless ALLOW_UNAUTHENTICATED_API is set (fail closed).
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
+	service := principal{service: true}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if key := r.Header.Get("X-API-Key"); key != "" && s.cfg.APIKey != "" {
+			if !validAPIKey(s.cfg.APIKey, key) {
+				util.WriteJSON(w, http.StatusUnauthorized, util.ErrorResponse{Error: "missing or invalid api key"})
+				return
+			}
+			next.ServeHTTP(w, withPrincipal(r, service))
+			return
+		}
+		if s.auth != nil {
+			if c, err := r.Cookie(sessionCookie); err == nil {
+				if user, sess, err := s.auth.Authenticate(r.Context(), c.Value); err == nil {
+					if unsafeMethod(r.Method) && !auth.ValidCSRF(sess, r.Header.Get(csrfHeader)) {
+						util.WriteJSON(w, http.StatusForbidden, util.ErrorResponse{Error: "missing or invalid csrf token"})
+						return
+					}
+					next.ServeHTTP(w, withPrincipal(r, principal{user: user, session: sess}))
+					return
+				}
+			}
+		}
 		if s.cfg.APIKey == "" {
 			if !s.cfg.AllowUnauthenticated {
 				util.WriteJSON(w, http.StatusServiceUnavailable, util.ErrorResponse{Error: "api key not configured"})
 				return
 			}
-			next.ServeHTTP(w, r)
+			next.ServeHTTP(w, withPrincipal(r, service))
 			return
 		}
-		if !validAPIKey(s.cfg.APIKey, r.Header.Get("X-API-Key")) {
-			util.WriteJSON(w, http.StatusUnauthorized, util.ErrorResponse{Error: "missing or invalid api key"})
-			return
-		}
-		next.ServeHTTP(w, r)
+		util.WriteJSON(w, http.StatusUnauthorized, util.ErrorResponse{Error: "missing or invalid api key"})
 	})
 }
 
@@ -123,7 +144,11 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Add("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Request-ID")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-API-Key, X-Request-ID, X-CSRF-Token")
+			// Cookies cross origins only for an origin named exactly: a "*" entry never gets credentials.
+			if originExact(s.cfg, origin) {
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			}
 			w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID")
 		}
 		if r.Method == http.MethodOptions {
@@ -132,6 +157,15 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+func originExact(cfg *config.Config, origin string) bool {
+	for _, allowed := range cfg.CORSAllowedOrigins {
+		if allowed != "*" && strings.EqualFold(allowed, origin) {
+			return true
+		}
+	}
+	return false
 }
 
 func originAllowed(cfg *config.Config, origin string) bool {

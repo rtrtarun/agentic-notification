@@ -185,7 +185,6 @@ export const pt: Partial<Messages> = {
   'shell.workspaceNote': 'A troca de espaço de trabalho chegará com o login. Este é o seu único espaço por enquanto.',
   'top.palette': 'Pesquisar ou executar um comando',
   'top.account': 'Menu da conta',
-  'top.accountNote': 'Login e perfis de usuário ainda não foram desenvolvidos.',
   'palette.title': 'Paleta de comandos',
   'palette.placeholder': 'Digite um comando ou o nome de uma tela',
   'palette.empty': 'Nenhum comando corresponde.',

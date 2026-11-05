@@ -25,6 +25,20 @@ func (s *Server) Handler() http.Handler {
 	protected := func(h http.HandlerFunc) http.Handler {
 		return s.corsMiddleware(s.loggingMiddleware(s.authMiddleware(s.timeoutMiddleware(h))))
 	}
+	// Sign-in routes that must work before anyone is signed in.
+	public := func(h http.HandlerFunc) http.Handler {
+		return s.corsMiddleware(s.loggingMiddleware(s.timeoutMiddleware(h)))
+	}
+	mux.Handle(authPrefix+"/status", public(s.authStatusHandler))
+	mux.Handle(authPrefix+"/login", public(s.loginHandler))
+	mux.Handle(authPrefix+"/oidc/start", public(s.oidcStartHandler))
+	mux.Handle(authPrefix+"/oidc/callback", public(s.oidcCallbackHandler))
+	mux.Handle(authPrefix+"/logout", protected(s.logoutHandler))
+	mux.Handle(authPrefix+"/me", protected(s.meHandler))
+	mux.Handle(authPrefix+"/password", protected(s.passwordHandler))
+	mux.Handle(usersPrefix, protected(s.usersHandler))
+	mux.Handle(usersPrefix+"/", protected(s.usersHandler))
+	mux.Handle("/api/audit", protected(s.auditHandler))
 	mux.Handle("/notify", protected(s.notifyHandler))
 	mux.Handle("/metrics", protected(s.metricsHandler))
 	mux.Handle("/feedback", protected(s.feedbackHandler))

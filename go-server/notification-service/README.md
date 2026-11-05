@@ -43,6 +43,8 @@ The API fails closed: with no `API_KEY` every protected route returns 503. Set `
 
 Routing and SMS (milestone 22; all optional): `NOTIFY_STANDARD_CHANNELS` and `NOTIFY_BACKGROUND_CHANNELS` (comma lists of `email`, `slack`, `teams`, `sms`; empty means that class is only recorded), `SMS_GATEWAY` (`mock`, `http`, `sns`), `SMS_RECIPIENTS` (E.164), `SMS_DAILY_LIMIT` (default `50`, `0` = no cap), `SMS_HTTP_URL`, `SMS_HTTP_HEADERS` (`Name=value,...`), `SMS_HTTP_BODY` (template with `{{to}}` and `{{text}}`), `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`.
 
+Accounts and sign-in (milestone 23; all optional, the API key keeps working): `AUTH_BOOTSTRAP_EMAIL` and `AUTH_BOOTSTRAP_PASSWORD` (first admin, together), `AUTH_SESSION_TTL` (default `12h`), `AUTH_COOKIE_SECURE` (`auto`, `true`, `false`), `AUTH_COOKIE_SAMESITE` (`lax`, `strict`, `none`), `AUTH_SECRET`, `PUBLIC_URL`, `CONSOLE_URL`, `ENTRA_TENANT_ID` or `OIDC_ISSUER`, `OIDC_NAME`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_ALLOWED_DOMAINS`.
+
 ## Endpoints
 
 | Route | Auth | Purpose |
@@ -52,6 +54,8 @@ Routing and SMS (milestone 22; all optional): `NOTIFY_STANDARD_CHANNELS` and `NO
 | `GET /events` | API key | Recent events, newest first, without raw payloads. `?limit=1..500` (default 100). Used by the [web console](../../apps/web/README.md) |
 | `POST /notify` | API key | Send a notification (validated, see below) |
 | `POST /feedback` | API key | Record feedback |
+| `GET /api/auth/status`, `POST /api/auth/login`, `GET /api/auth/oidc/start` | none | Sign-in (see [milestone-23](../../docs/milestone-23.md)). `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/password` need a session or the API key |
+| `GET/POST /api/users`, `PATCH /api/users/{id}`, `GET /api/audit` | admin | Accounts and the security log |
 | `GET /api/deliveries` | API key | Delivery log and queue with counts by status (no targets or message text). `POST /api/deliveries/{id}/retry` sends a dead delivery again |
 | `POST /webhooks/github` | HMAC signature | Ingest a GitHub event. Redeliveries (same `X-GitHub-Delivery`) return `200 {"status":"duplicate"}` and notify nothing |
 

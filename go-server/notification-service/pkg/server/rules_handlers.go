@@ -26,6 +26,10 @@ func (s *Server) rulesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rest := strings.Trim(strings.TrimPrefix(r.URL.Path, rulesPrefix), "/")
+	// Reading rules and the dry run are open to every signed-in person; changing them is for admins.
+	if r.Method != http.MethodGet && rest != "test" && !s.requireAdmin(w, r) {
+		return
+	}
 	switch {
 	case rest == "":
 		s.rulesCollection(w, r)

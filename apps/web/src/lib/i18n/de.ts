@@ -185,7 +185,6 @@ export const de: Partial<Messages> = {
   'shell.workspaceNote': 'Der Wechsel zwischen Arbeitsbereichen kommt mit der Anmeldung. Dies ist vorerst Ihr einziger Arbeitsbereich.',
   'top.palette': 'Suchen oder Befehl ausführen',
   'top.account': 'Kontomenü',
-  'top.accountNote': 'Anmeldung und Benutzerprofile sind noch nicht umgesetzt.',
   'palette.title': 'Befehlspalette',
   'palette.placeholder': 'Befehl oder Bildschirmnamen eingeben',
   'palette.empty': 'Kein Befehl passt.',

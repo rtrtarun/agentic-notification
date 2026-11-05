@@ -49,6 +49,9 @@ func (s *Server) channelsHandler(w http.ResponseWriter, r *http.Request) {
 		methodNotAllowed(w, http.MethodPost)
 		return
 	}
+	if !s.requireAdmin(w, r) {
+		return
+	}
 	if s.channelTester == nil {
 		util.WriteJSON(w, http.StatusServiceUnavailable, util.ErrorResponse{Error: "channel tests are not available"})
 		return

@@ -45,6 +45,9 @@ func (s *Server) deliveriesHandler(w http.ResponseWriter, r *http.Request) {
 			util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: errMethod})
 			return
 		}
+		if !s.requireAdmin(w, r) {
+			return
+		}
 		s.retryDelivery(w, r, id)
 	}
 }

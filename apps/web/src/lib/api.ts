@@ -46,6 +46,14 @@ export class ApiError extends Error {
   }
 }
 
+// The CSRF token of a signed-in session. It is kept in memory only: the session
+// cookie is HttpOnly and the token is fetched again from /api/auth/me on load.
+let csrfToken = ''
+
+export function setCsrfToken(token: string): void {
+  csrfToken = token
+}
+
 function endpoint(settings: Settings, path: string): string {
   return settings.backendUrl.replace(/\/+$/, '') + path
 }
@@ -53,11 +61,15 @@ function endpoint(settings: Settings, path: string): string {
 export async function request(settings: Settings, path: string, init: RequestInit = {}): Promise<Response> {
   let res: Response
   try {
+    const method = (init.method ?? 'GET').toUpperCase()
     res = await fetch(endpoint(settings, path), {
       ...init,
+      // The session cookie travels with every call; an API key, when entered, still works as before.
+      credentials: 'include',
       headers: {
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
         ...(settings.apiKey ? { 'X-API-Key': settings.apiKey } : {}),
+        ...(csrfToken && method !== 'GET' && method !== 'HEAD' ? { 'X-CSRF-Token': csrfToken } : {}),
       },
     })
   } catch (err) {

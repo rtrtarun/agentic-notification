@@ -17,6 +17,7 @@ export type NavIconName =
   | 'integrations'
   | 'analytics'
   | 'preferences'
+  | 'users'
   | 'settings'
   | 'help'
 
@@ -47,6 +48,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'policies', path: '/policies', group: 'manage', label: 'nav.policies', icon: 'policies' },
   { id: 'channels', path: '/channels', group: 'manage', label: 'nav.channels', icon: 'channels' },
   { id: 'integrations', path: '/integrations', group: 'manage', label: 'nav.integrations', icon: 'integrations' },
+  { id: 'users', path: '/users', group: 'manage', label: 'nav.users', icon: 'users' },
   { id: 'analytics', path: '/analytics', group: 'manage', label: 'nav.analytics', icon: 'analytics' },
   { id: 'preferences', path: '/preferences', group: 'personal', label: 'nav.preferences', icon: 'preferences' },
   { id: 'settings', path: '/settings', group: 'personal', label: 'nav.settings', icon: 'settings', primary: true },

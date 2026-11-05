@@ -185,7 +185,6 @@ export const fr: Partial<Messages> = {
   'shell.workspaceNote': 'Le changement d’espace de travail arrivera avec la connexion. C’est votre seul espace pour l’instant.',
   'top.palette': 'Rechercher ou lancer une commande',
   'top.account': 'Menu du compte',
-  'top.accountNote': 'La connexion et les profils utilisateur ne sont pas encore développés.',
   'palette.title': 'Palette de commandes',
   'palette.placeholder': 'Saisissez une commande ou le nom d’un écran',
   'palette.empty': 'Aucune commande ne correspond.',

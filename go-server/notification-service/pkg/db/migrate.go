@@ -150,6 +150,40 @@ func Migrate(ctx context.Context, db Execer) error {
 		)`,
 		`CREATE INDEX IF NOT EXISTS delivery_jobs_due_idx ON delivery_jobs (status, next_attempt_at)`,
 		`CREATE INDEX IF NOT EXISTS delivery_jobs_created_idx ON delivery_jobs (created_at DESC)`,
+		// Accounts, sign-in sessions and the security audit trail. See pkg/auth.
+		// Sessions hold the SHA-256 of the cookie token, never the token.
+		`CREATE TABLE IF NOT EXISTS users (
+			id            TEXT PRIMARY KEY,
+			email         TEXT NOT NULL UNIQUE,
+			name          TEXT NOT NULL DEFAULT '',
+			role          TEXT NOT NULL CHECK (role IN ('admin','member')),
+			password_hash TEXT NOT NULL DEFAULT '',
+			disabled      BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS user_identities (
+			issuer  TEXT NOT NULL,
+			subject TEXT NOT NULL,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			PRIMARY KEY (issuer, subject)
+		)`,
+		`CREATE TABLE IF NOT EXISTS sessions (
+			hash       TEXT PRIMARY KEY,
+			user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			csrf       TEXT NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id)`,
+		`CREATE TABLE IF NOT EXISTS audit_log (
+			id     BIGSERIAL PRIMARY KEY,
+			at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			actor  TEXT NOT NULL DEFAULT '',
+			action TEXT NOT NULL,
+			target TEXT NOT NULL DEFAULT '',
+			ip     TEXT NOT NULL DEFAULT '',
+			detail TEXT NOT NULL DEFAULT ''
+		)`,
 	}
 	for _, stmt := range statements {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {

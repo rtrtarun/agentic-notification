@@ -205,7 +205,6 @@ export const hi: Partial<Messages> = {
   'shell.workspaceNote': 'कार्यक्षेत्र बदलना साइन-इन के साथ आएगा। अभी यही आपका एकमात्र कार्यक्षेत्र है।',
   'top.palette': 'खोजें या कमांड चलाएँ',
   'top.account': 'खाता मेनू',
-  'top.accountNote': 'साइन-इन और उपयोगकर्ता प्रोफ़ाइल अभी बने नहीं हैं।',
   'palette.title': 'कमांड पैलेट',
   'palette.placeholder': 'कमांड या स्क्रीन का नाम लिखें',
   'palette.empty': 'कोई कमांड मेल नहीं खाता।',

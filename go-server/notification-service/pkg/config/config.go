@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -56,8 +57,29 @@ type Config struct {
 	AWSSessionToken    string
 	// StandardChannels and BackgroundChannels list the channels that receive
 	// those attention classes. Empty (the default) means the class is only recorded.
-	StandardChannels      []string
-	BackgroundChannels    []string
+	StandardChannels   []string
+	BackgroundChannels []string
+	// Accounts and sign-in (all optional). The API key keeps working for services.
+	AuthBootstrapEmail    string
+	AuthBootstrapPassword string
+	AuthSessionTTL        time.Duration
+	// AuthCookieSecure is "auto" (secure when the request arrived over HTTPS), "true" or "false".
+	AuthCookieSecure string
+	// AuthCookieSameSite is "lax" (default), "strict" or "none" (needed when the console is on another site; forces Secure).
+	AuthCookieSameSite string
+	// AuthSecret signs the short-lived sign-in state. Set it when running several replicas.
+	AuthSecret string
+	// PublicURL is this service's own public address, used to build the identity provider callback.
+	PublicURL string
+	// ConsoleURL is where the browser is sent after single sign-on.
+	ConsoleURL string
+	// Single sign-on through any OpenID Connect provider. EntraTenantID is a shortcut for Microsoft Entra ID.
+	EntraTenantID         string
+	OIDCIssuer            string
+	OIDCName              string
+	OIDCClientID          string
+	OIDCClientSecret      string
+	OIDCAllowedDomains    []string
 	GitHubWebhookSecret   string
 	AllowUnsignedWebhooks bool
 	MaxBodyBytes          int64
@@ -140,6 +162,34 @@ func LoadConfig() (*Config, error) {
 	cfg.SlackWebhookURL = os.Getenv("SLACK_WEBHOOK_URL")
 	cfg.TeamsWebhookURL = os.Getenv("TEAMS_WEBHOOK_URL")
 	cfg.GitHubWebhookSecret = os.Getenv("GITHUB_WEBHOOK_SECRET")
+
+	cfg.AuthBootstrapEmail = strings.TrimSpace(os.Getenv("AUTH_BOOTSTRAP_EMAIL"))
+	cfg.AuthBootstrapPassword = os.Getenv("AUTH_BOOTSTRAP_PASSWORD")
+	if (cfg.AuthBootstrapEmail == "") != (cfg.AuthBootstrapPassword == "") {
+		return nil, errors.New("AUTH_BOOTSTRAP_EMAIL and AUTH_BOOTSTRAP_PASSWORD must be set together")
+	}
+	if cfg.AuthSessionTTL, err = envDuration("AUTH_SESSION_TTL", 12*time.Hour, false); err != nil {
+		return nil, err
+	}
+	cfg.AuthCookieSecure = strings.ToLower(strings.TrimSpace(envDefault("AUTH_COOKIE_SECURE", "auto")))
+	if cfg.AuthCookieSecure != "auto" && cfg.AuthCookieSecure != "true" && cfg.AuthCookieSecure != "false" {
+		return nil, fmt.Errorf("invalid AUTH_COOKIE_SECURE: %q (use auto, true or false)", cfg.AuthCookieSecure)
+	}
+	cfg.AuthCookieSameSite = strings.ToLower(strings.TrimSpace(envDefault("AUTH_COOKIE_SAMESITE", "lax")))
+	switch cfg.AuthCookieSameSite {
+	case "lax", "strict", "none":
+	default:
+		return nil, fmt.Errorf("invalid AUTH_COOKIE_SAMESITE: %q (use lax, strict or none)", cfg.AuthCookieSameSite)
+	}
+	cfg.AuthSecret = os.Getenv("AUTH_SECRET")
+	cfg.PublicURL = strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_URL")), "/")
+	cfg.ConsoleURL = strings.TrimSpace(os.Getenv("CONSOLE_URL"))
+	cfg.EntraTenantID = strings.TrimSpace(os.Getenv("ENTRA_TENANT_ID"))
+	cfg.OIDCIssuer = strings.TrimSpace(os.Getenv("OIDC_ISSUER"))
+	cfg.OIDCName = strings.TrimSpace(os.Getenv("OIDC_NAME"))
+	cfg.OIDCClientID = strings.TrimSpace(os.Getenv("OIDC_CLIENT_ID"))
+	cfg.OIDCClientSecret = os.Getenv("OIDC_CLIENT_SECRET")
+	cfg.OIDCAllowedDomains = envList("OIDC_ALLOWED_DOMAINS", "")
 
 	cfg.SMSGateway = strings.ToLower(strings.TrimSpace(os.Getenv("SMS_GATEWAY")))
 	switch cfg.SMSGateway {
@@ -255,6 +305,13 @@ func parseHeaders(s string) (map[string]string, error) {
 		out[name] = strings.TrimSpace(value)
 	}
 	return out, nil
+}
+
+func envDefault(name, def string) string {
+	if v, ok := os.LookupEnv(name); ok && v != "" {
+		return v
+	}
+	return def
 }
 
 func envList(name, def string) []string {

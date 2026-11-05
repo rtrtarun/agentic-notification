@@ -12,6 +12,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/example/notification-service/pkg/auth"
 	"github.com/example/notification-service/pkg/channels"
 	"github.com/example/notification-service/pkg/config"
 	"github.com/example/notification-service/pkg/db"
@@ -60,6 +61,9 @@ type Server struct {
 	deliveryStore   delivery.Store
 	dispatcher      *delivery.Dispatcher
 	smsGateway      sms.Gateway
+	auth            *auth.Service
+	oidc            *auth.OIDC
+	authSecret      []byte
 	eventRepo       event.Repository
 	sqlDB           *sql.DB
 	inbox           *inbox.Service
@@ -136,6 +140,10 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 	s.eventRepo = eventRepo
 	s.rules = ruleService
 	s.smsGateway = smsGateway
+	if err := s.initAuth(ctx); err != nil {
+		s.releaseOnStartupFailure()
+		return nil, err
+	}
 	s.deliveryStore = s.initDeliveryStore()
 	outbox := delivery.NewOutbox(s.deliveryStore, targets, routes)
 	s.dispatcher = delivery.NewDispatcher(s.deliveryStore, targets, channelProviders(cfg, smsGateway), logger).

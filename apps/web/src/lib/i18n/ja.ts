@@ -185,7 +185,6 @@ export const ja: Partial<Messages> = {
   'shell.workspaceNote': 'ワークスペースの切り替えはサインインとともに提供されます。現在はこれが唯一のワークスペースです。',
   'top.palette': '検索またはコマンドを実行',
   'top.account': 'アカウントメニュー',
-  'top.accountNote': 'サインインとユーザープロフィールはまだ実装されていません。',
   'palette.title': 'コマンドパレット',
   'palette.placeholder': 'コマンドまたは画面名を入力',
   'palette.empty': '一致するコマンドがありません。',

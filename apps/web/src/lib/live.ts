@@ -92,6 +92,7 @@ export function connectLive(settings: Settings, opts: Options): LiveHandle {
       try {
         const res = await doFetch(url, {
           headers: settings.apiKey ? { 'X-API-Key': settings.apiKey, Accept: 'text/event-stream' } : { Accept: 'text/event-stream' },
+          credentials: 'include',
           signal: controller.signal,
         })
         if (!res.ok || !res.body) {

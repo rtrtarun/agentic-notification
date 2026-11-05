@@ -85,6 +85,12 @@ Check `NOTIFY_STANDARD_CHANNELS` (empty means standard events are only recorded)
 ### SMS
 `SMS_GATEWAY=mock` only logs (the Channels screen shows "Mock"). For production set `SMS_GATEWAY=sns` with `AWS_REGION`, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (SNS must be out of the SMS sandbox for the account), or `http` with `SMS_HTTP_URL`, `SMS_HTTP_HEADERS` and `SMS_HTTP_BODY`. Numbers are E.164 and come only from `SMS_RECIPIENTS`. `SMS_DAILY_LIMIT` (default 50) caps queued texts per UTC day; critical events are never capped.
 
+### Signing in and accounts
+Set `AUTH_BOOTSTRAP_EMAIL` and `AUTH_BOOTSTRAP_PASSWORD` once to create the first admin (nothing happens if an account already exists). People then sign in at the console; admins add others under Users & Access. A person who is locked out waits fifteen minutes; an admin can reset their password. If the only admin is lost, add a new database row or start a fresh service with the bootstrap settings and an empty `users` table. For a browser on another site than the service set `AUTH_COOKIE_SAMESITE=none` (this forces `Secure`, so HTTPS is required) and list the console's origin in `CORS_ALLOWED_ORIGINS`.
+
+### Single sign-on (Microsoft Entra ID)
+Register an app in Entra ID, add `PUBLIC_URL/api/auth/oidc/callback` as a web redirect URI, create a client secret, then set `ENTRA_TENANT_ID` (a tenant ID or domain, not `common`), `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `PUBLIC_URL`, `CONSOLE_URL` and `OIDC_ALLOWED_DOMAINS` (comma list of email domains whose people may be created as members; empty means only existing accounts can sign in). With several replicas set the same `AUTH_SECRET` on each. A refused sign-in returns to the console with `?signin=denied` or `failed`; the reason is in the service log, never in the address.
+
 ## Deploying
 
 1. Create the Secret (`k8s/secret.example.yaml` shows the keys). Never commit real values.
