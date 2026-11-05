@@ -368,6 +368,28 @@ export const en = {
   'recent.empty': 'Nothing has happened yet.',
   'theme.toLight': 'Switch to the light theme',
   'theme.toDark': 'Switch to the dark theme',
+  // All Notifications (milestone 16)
+  'manage.loading': 'Loading',
+  'all.lede': 'Every notification the service has recorded, with the decision made for each. Sort by a column, narrow with filters, and open a row for the full story.',
+  'all.search': 'Search',
+  'all.searchHint': 'Event, repository, reason',
+  'all.source': 'Source',
+  'all.repository': 'Repository',
+  'all.from': 'From',
+  'all.to': 'To',
+  'all.rangeError': 'The end date is before the start date, so nothing can match.',
+  'all.priority': 'Priority',
+  'all.outcome': 'Outcome',
+  'all.archived': 'Include archived',
+  'all.event': 'Event',
+  'all.reason': 'Why',
+  'all.received': 'Received',
+  'all.repeats': '+{n} repeats',
+  'all.caption': 'Notifications, {total} in total',
+  'all.total': '{total} notifications match.',
+  'all.none': 'Nothing has been recorded yet.',
+  'all.pageSize': 'Rows per page',
+  'all.export': 'Export this page (CSV)',
 } as const
 
 export type MessageKey = keyof typeof en

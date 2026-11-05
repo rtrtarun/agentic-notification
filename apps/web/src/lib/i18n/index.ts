@@ -36,7 +36,7 @@ export const LOCALES: LocaleInfo[] = [
   { code: 'zh', name: '简体中文', tag: 'zh-CN', dir: 'ltr' },
 ]
 
-const CATALOGS: Record<Locale, Messages> = { en, es, fr, de, pt, hi, ar, ja, zh }
+const CATALOGS: Record<Locale, Partial<Messages>> = { en, es, fr, de, pt, hi, ar, ja, zh }
 const STORAGE_KEY = 'attention.locale'
 
 export type Params = Record<string, string | number>

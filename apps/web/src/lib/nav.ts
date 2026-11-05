@@ -41,7 +41,7 @@ export const NAV_GROUPS: { id: NavGroup; label: MessageKey }[] = [
 export const NAV_ITEMS: NavItem[] = [
   { id: 'overview', path: '/overview', group: 'workspace', label: 'nav.overview', icon: 'overview', plannedIn: 17, primary: true },
   { id: 'inbox', path: '/inbox', group: 'workspace', label: 'nav.inbox', icon: 'inbox', primary: true },
-  { id: 'all', path: '/all', group: 'workspace', label: 'nav.all', icon: 'list', plannedIn: 16 },
+  { id: 'all', path: '/all', group: 'workspace', label: 'nav.all', icon: 'list' },
   { id: 'activity', path: '/activity', group: 'workspace', label: 'nav.activity', icon: 'activity', plannedIn: 17, primary: true },
   { id: 'rules', path: '/rules', group: 'manage', label: 'nav.rules', icon: 'rules', plannedIn: 18 },
   { id: 'policies', path: '/policies', group: 'manage', label: 'nav.policies', icon: 'policies', plannedIn: 18 },

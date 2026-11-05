@@ -77,6 +77,9 @@ function matches(it: InboxItem, q: InboxQuery): boolean {
   if (q.outcomes.length && !q.outcomes.includes(it.outcome)) return false
   if (q.unread && it.read) return false
   if (q.from && it.createdAt < q.from) return false
+  if (q.to && it.createdAt >= q.to) return false
+  if (q.source && it.source !== q.source) return false
+  if (q.repository && it.repository !== q.repository) return false
   const terms = q.text.toLowerCase().split(/\s+/).filter(Boolean)
   if (terms.length === 0) return true
   const text = [

@@ -38,17 +38,25 @@ const catalogs = [
   ['zh', zh],
 ] as const
 
-describe('catalogs', () => {
-  const keys = Object.keys(en).sort()
+// Screens added from milestone 16 on are written in English first. Translators can add
+// these namespaces to a language at any time; until then English is shown. Everything
+// older must stay fully translated.
+const ENGLISH_ONLY_PREFIXES = ['manage.', 'all.', 'ov.', 'act.page.', 'ana.', 'rules.', 'pol.', 'ch.', 'int.', 'pref.', 'help.', 'live.']
+const isEnglishOnly = (key: string) => ENGLISH_ONLY_PREFIXES.some((p) => key.startsWith(p))
 
-  it.each(catalogs)('%s defines exactly the English keys', (_name, catalog) => {
-    expect(Object.keys(catalog).sort()).toEqual(keys)
+describe('catalogs', () => {
+  const keys = Object.keys(en).filter((k) => !isEnglishOnly(k)).sort()
+
+  it.each(catalogs)('%s defines every translated English key and nothing unknown', (_name, catalog) => {
+    const own = Object.keys(catalog).filter((k) => !isEnglishOnly(k)).sort()
+    expect(own).toEqual(keys)
+    for (const key of Object.keys(catalog)) expect(key in en, key).toBe(true)
   })
 
   it.each(catalogs)('%s keeps every {placeholder} the English text has', (_name, catalog) => {
     const holders = (text: string) => (text.match(/\{\w+\}/g) ?? []).sort()
-    for (const key of Object.keys(en) as (keyof typeof en)[]) {
-      expect(holders(catalog[key]), key).toEqual(holders(en[key]))
+    for (const key of Object.keys(catalog) as (keyof typeof en)[]) {
+      expect(holders(catalog[key] ?? ''), key).toEqual(holders(en[key]))
     }
   })
 
@@ -123,7 +131,7 @@ describe('translated helpers', () => {
     expect(eventTitle({ eventType: 'security_advisory', repository: 'acme/api' }, tEs)).toBe(
       'Aviso de seguridad en acme/api',
     )
-    expect(eventTitle({ eventType: 'push', repository: 'acme/api' }, tHi)).toBe(`acme/api ${hi['ev.titleIn'].split(' ')[1]} ${hi['ev.push']}`)
+    expect(eventTitle({ eventType: 'push', repository: 'acme/api' }, tHi)).toBe(`acme/api ${hi['ev.titleIn']!.split(' ')[1]} ${hi['ev.push']}`)
     expect(statusLabel('queued', tEs)).toBe('Retenido')
     expect(statusLabel(undefined, tHi)).toBe(hi['status.none'])
   })
