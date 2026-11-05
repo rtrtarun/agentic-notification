@@ -1,5 +1,6 @@
 rules:
   - name: github-security-advisory
+    locked: true
     when:
       source: github
       eventType: security_advisory
@@ -8,6 +9,7 @@ rules:
       reason: security vulnerability detected
 
   - name: github-dependabot-alert
+    locked: true
     when:
       source: github
       eventType: dependabot_alert

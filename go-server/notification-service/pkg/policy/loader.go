@@ -42,6 +42,11 @@ func ParseRules(data []byte) ([]Rule, error) {
 		default:
 			return nil, fmt.Errorf("rule %q has unknown attentionClass %q", rule.Name, rule.Then.AttentionClass)
 		}
+		for _, pattern := range []string{rule.When.Source, rule.When.EventType, rule.When.Repository} {
+			if err := ValidatePattern(pattern); err != nil {
+				return nil, fmt.Errorf("rule %q has an invalid pattern %q: %w", rule.Name, pattern, err)
+			}
+		}
 	}
 	return file.Rules, nil
 }
@@ -49,11 +54,14 @@ func ParseRules(data []byte) ([]Rule, error) {
 func DefaultRules() []Rule {
 	return []Rule{
 		{
-			Name: "github-security-advisory",
-			When: RuleCondition{Source: "github", EventType: "security_advisory"},
-			Then: RuleOutcome{AttentionClass: "critical", Reason: "security vulnerability detected"},
+			ID:     "builtin-security-advisory",
+			Name:   "github-security-advisory",
+			When:   RuleCondition{Source: "github", EventType: "security_advisory"},
+			Then:   RuleOutcome{AttentionClass: "critical", Reason: "security vulnerability detected"},
+			Locked: true,
 		},
 		{
+			ID:   "builtin-default-github",
 			Name: "default-github",
 			When: RuleCondition{Source: "github"},
 			Then: RuleOutcome{AttentionClass: "standard", Reason: "default routing"},

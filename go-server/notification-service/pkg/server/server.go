@@ -25,6 +25,7 @@ import (
 	"github.com/example/notification-service/pkg/notification/impl"
 	"github.com/example/notification-service/pkg/pipeline"
 	"github.com/example/notification-service/pkg/policy"
+	"github.com/example/notification-service/pkg/rules"
 )
 
 const (
@@ -55,6 +56,7 @@ type Server struct {
 	sqlDB            *sql.DB
 	inbox            *inbox.Service
 	insights         *insights.Service
+	rules            *rules.Service
 	feedbackRecorder feedback.Recorder
 	learningService  *learning.Service
 	policyEngine     *policy.Engine
@@ -86,17 +88,24 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 		s.releaseOnStartupFailure()
 		return nil, fmt.Errorf("init deduper: %w", err)
 	}
-	rules, err := loadPolicyRules(cfg, logger)
+	seedRules, err := loadPolicyRules(cfg, logger)
 	if err != nil {
 		s.releaseOnStartupFailure()
 		return nil, fmt.Errorf("load policy rules: %w", err)
 	}
 
 	provider := newProvider(cfg, logger)
-	policyEngine := policy.NewEngine(rules)
+	policyEngine := policy.NewEngine(seedRules)
 	deliverySvc := delivery.NewService(provider)
 
+	ruleService, err := rules.NewService(ctx, s.initRulesStore(), policyEngine, seedRules)
+	if err != nil {
+		s.releaseOnStartupFailure()
+		return nil, fmt.Errorf("init rules: %w", err)
+	}
+
 	s.eventRepo = eventRepo
+	s.rules = ruleService
 	s.inbox = inbox.NewService(eventRepo, s.initInboxRepository())
 	s.insights = insights.NewService(s.inbox)
 	s.deliveryService = deliverySvc
@@ -167,6 +176,14 @@ func (s *Server) initInboxRepository() inbox.Repository {
 		return inbox.NewMemoryRepository()
 	}
 	return inbox.NewPostgresRepository(s.sqlDB)
+}
+
+// initRulesStore keeps editable rules in PostgreSQL when there is a database, otherwise in memory.
+func (s *Server) initRulesStore() rules.Store {
+	if s.sqlDB == nil {
+		return rules.NewMemoryStore()
+	}
+	return rules.NewPostgresStore(s.sqlDB)
 }
 
 func migrate(ctx context.Context, sqlDB *sql.DB) error {
