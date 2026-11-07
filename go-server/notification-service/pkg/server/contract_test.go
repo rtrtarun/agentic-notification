@@ -85,6 +85,9 @@ func newContractServer(t *testing.T) http.Handler {
 	t.Setenv("ATTENTION_BUDGET_PER_HOUR", "0")
 	t.Setenv("DATABASE_URL", "")
 	t.Setenv("REDIS_URL", "")
+	t.Setenv("AUTH_BOOTSTRAP_EMAIL", "admin@contract.test")
+	t.Setenv("AUTH_BOOTSTRAP_PASSWORD", "a long contract admin password")
+	t.Setenv("AUTH_SIGNUP", "approval")
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		t.Fatal(err)

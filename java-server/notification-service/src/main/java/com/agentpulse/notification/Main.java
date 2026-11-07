@@ -1,5 +1,6 @@
 package com.agentpulse.notification;
 
+import com.agentpulse.notification.application.Accounts;
 import com.agentpulse.notification.application.Dedup;
 import com.agentpulse.notification.application.Dispatcher;
 import com.agentpulse.notification.application.MemoryDeduper;
@@ -19,7 +20,9 @@ import com.agentpulse.notification.infrastructure.Config;
 import com.agentpulse.notification.infrastructure.Database;
 import com.agentpulse.notification.infrastructure.InMemoryEventRepository;
 import com.agentpulse.notification.infrastructure.JedisKeyStore;
+import com.agentpulse.notification.infrastructure.MemoryAccountStore;
 import com.agentpulse.notification.infrastructure.MemoryStores;
+import com.agentpulse.notification.infrastructure.PostgresAccountStore;
 import com.agentpulse.notification.infrastructure.PostgresDeliveryStore;
 import com.agentpulse.notification.infrastructure.PostgresEventRepository;
 import com.agentpulse.notification.infrastructure.PostgresRuleStore;
@@ -57,17 +60,27 @@ public final class Main {
         EventRepository repository;
         RuleStore ruleStore;
         DeliveryStore deliveryStore;
+        Accounts.Store accountStore;
         if (config.databaseUrl().isEmpty()) {
             LOG.warn("DATABASE_URL unset; events, rules and deliveries are kept in memory and lost on restart");
             repository = new InMemoryEventRepository(clock);
             ruleStore = new MemoryStores.Rules();
             deliveryStore = new MemoryStores.Deliveries();
+            accountStore = new MemoryAccountStore();
         } else {
             database = Database.connect(config.databaseUrl());
             Database.waitForSchema(database, SCHEMA_WAIT);
             repository = new PostgresEventRepository(database);
             ruleStore = new PostgresRuleStore(database);
             deliveryStore = new PostgresDeliveryStore(database);
+            accountStore = new PostgresAccountStore(database);
+        }
+        Accounts.Service accounts = new Accounts.Service(accountStore, config.authSessionTtl(), clock)
+                .withSignup("approval".equals(config.authSignup()));
+        if (config.bootstrapConfigured()) {
+            if (accounts.bootstrap(config.authBootstrapEmail(), config.authBootstrapPassword())) {
+                LOG.info("created the first admin account from AUTH_BOOTSTRAP_EMAIL");
+            }
         }
 
         PolicyEngine engine = new PolicyEngine(List.of());
@@ -117,7 +130,7 @@ public final class Main {
         }
 
         Notify.Service notify = new Notify.Service(config.notifyLimits(), provider);
-        HttpServer server = new HttpApi(config, pipeline, repository, notify, rules, deliveryStore, clock)
+        HttpServer server = new HttpApi(config, pipeline, repository, notify, rules, deliveryStore, clock, accounts)
                 .start(config.port());
         dispatcher.start();
         LOG.info("notification service listening port={} rules={}", config.port(), rules.list().size());

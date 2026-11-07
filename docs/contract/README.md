@@ -2,7 +2,7 @@
 
 The files in this folder are the shared contract for the Go service and the Java service. Each service has a test that reads these files, starts itself, replays the requests and checks the answers. If a service disagrees with a file, that service's build fails, so "the two services behave the same" is checked by tests rather than by reading code.
 
-The contract covers milestones 34 and 35: `/health`, `/webhooks/github`, `/events`, `/notify`, `/api/rules`, `/api/policies` and `/api/deliveries`. It grows with each parity milestone. Not covered because the Java service does not have them yet: rule `payloadMatch` and `channels`.
+The contract covers milestones 34 and 35 and the sign-up work: `/health`, `/webhooks/github`, `/events`, `/notify`, `/api/rules`, `/api/policies`, `/api/deliveries`, and accounts (`/api/auth/status`, `/api/auth/signup`, `/api/auth/login`, `/api/users`). It grows with each parity milestone. Not covered because the Java service does not have them yet: rule `payloadMatch` and `channels`.
 
 ## Environment both services run with
 
@@ -13,6 +13,8 @@ The contract covers milestones 34 and 35: `/health`, `/webhooks/github`, `/event
 | `RULES_PATH` | `go-server/notification-service/config/rules.yaml` (shared, one copy) |
 | `ATTENTION_CLASSIFY` | `false` (no model; the contract is the deterministic layer) |
 | `ATTENTION_BUDGET_PER_HOUR` | `0` |
+| `AUTH_BOOTSTRAP_EMAIL` / `AUTH_BOOTSTRAP_PASSWORD` | `admin@contract.test` / `a long contract admin password` |
+| `AUTH_SIGNUP` | `approval` (people may ask for an account; an admin approves) |
 | Database | none: events are kept in memory |
 | Channels | none: critical events are delivered to a logging provider |
 

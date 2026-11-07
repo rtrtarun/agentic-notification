@@ -1,5 +1,6 @@
 package com.agentpulse.notification.interfaces;
 
+import com.agentpulse.notification.application.Accounts;
 import com.agentpulse.notification.infrastructure.Config;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -20,18 +21,125 @@ import java.util.Optional;
 final class ApiSupport {
     static final ObjectMapper JSON = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
+    static final String SESSION_COOKIE = "attn_session";
+    static final String CSRF_HEADER = "X-CSRF-Token";
+
+    /** Who made a request: a service holding the API key, or a signed-in person with a session. */
+    record Principal(boolean service, Accounts.User user, Accounts.Session session) {
+        boolean admin() {
+            return service || (user != null && Accounts.ROLE_ADMIN.equals(user.role()));
+        }
+
+        String actor() {
+            return service ? "api-key" : user.email();
+        }
+    }
+
     private final Config config;
+    private volatile Accounts.Service accounts;
 
     ApiSupport(Config config) {
         this.config = config;
+    }
+
+    /** Lets signed-in people use the protected endpoints. Without it only the API key works. */
+    ApiSupport withAccounts(Accounts.Service accounts) {
+        this.accounts = accounts;
+        return this;
+    }
+
+    /** SameSite for the session cookie, as written in the header. */
+    String sameSite() {
+        return switch (config.authCookieSameSite()) {
+            case "strict" -> "Strict";
+            case "none" -> "None";
+            default -> "Lax";
+        };
+    }
+
+    /** Whether the session cookie is marked Secure. SameSite=None always needs it. */
+    boolean secureCookie(HttpExchange x) {
+        if ("none".equals(config.authCookieSameSite())) {
+            return true;
+        }
+        return switch (config.authCookieSecure()) {
+            case "true" -> true;
+            case "false" -> false;
+            default -> "https".equalsIgnoreCase(x.getRequestHeaders().getFirst("X-Forwarded-Proto"));
+        };
+    }
+
+    /** The session cookie's value, or empty. */
+    String sessionToken(HttpExchange x) {
+        java.util.List<String> headers = x.getRequestHeaders().get("Cookie");
+        if (headers != null) {
+            for (String header : headers) {
+                for (String part : header.split(";")) {
+                    String p = part.trim();
+                    if (p.startsWith(SESSION_COOKIE + "=")) {
+                        return p.substring(SESSION_COOKIE.length() + 1);
+                    }
+                }
+            }
+        }
+        return "";
+    }
+
+    private static boolean unsafeMethod(String method) {
+        return !method.equals("GET") && !method.equals("HEAD") && !method.equals("OPTIONS");
+    }
+
+    /**
+     * Works out who is calling. The API key works as before; otherwise a valid session cookie works, and a
+     * cookie that changes anything must also carry the session's CSRF token. Answers 401, 403 or 503 itself and
+     * returns null when the request may not continue.
+     */
+    Principal authenticate(HttpExchange x) throws IOException {
+        String key = x.getRequestHeaders().getFirst("X-API-Key");
+        boolean hasKey = key != null && !key.isEmpty();
+        if (!hasKey && accounts != null) {
+            String token = sessionToken(x);
+            if (!token.isEmpty()) {
+                Optional<Accounts.Authenticated> who = accounts.authenticate(token);
+                if (who.isEmpty()) {
+                    error(x, 401, "missing or invalid api key");
+                    return null;
+                }
+                String csrf = x.getRequestHeaders().getFirst(CSRF_HEADER);
+                if (unsafeMethod(x.getRequestMethod()) && (csrf == null || !sameSecret(who.get().session().csrf(), csrf))) {
+                    error(x, 403, "missing or invalid csrf token");
+                    return null;
+                }
+                return new Principal(false, who.get().user(), who.get().session());
+            }
+        }
+        return authorisedByKey(x) ? new Principal(true, null, null) : null;
+    }
+
+    /** Like {@link #authorised} but also requires an admin: the API key, or a signed-in admin. */
+    boolean authorisedAdmin(HttpExchange x) throws IOException {
+        Principal p = authenticate(x);
+        if (p == null) {
+            return false;
+        }
+        if (!p.admin()) {
+            error(x, 403, "admin access required");
+            return false;
+        }
+        return true;
     }
 
     Config config() {
         return config;
     }
 
-    /** The API key check. Answers 401 or 503 itself and returns false when the request may not continue. */
+    /** Whether the caller may use a protected endpoint: the API key or a signed-in person. Answers itself when not. */
     boolean authorised(HttpExchange x) throws IOException {
+        return authenticate(x) != null;
+    }
+
+    /** The API key check. Answers 401 or 503 itself and returns false when the request may not continue. */
+    private boolean authorisedByKey(HttpExchange x) throws IOException {
         String key = x.getRequestHeaders().getFirst("X-API-Key");
         String want = config.apiKey();
         if (key != null && !key.isEmpty() && !want.isEmpty()) {

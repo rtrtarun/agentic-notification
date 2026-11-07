@@ -35,7 +35,9 @@ final class DeliveriesApi {
     }
 
     void handle(HttpExchange x) throws IOException {
-        if (!api.authorised(x)) {
+        // Anyone signed in may read the queue; a manual retry needs an admin.
+        boolean retry = "POST".equals(x.getRequestMethod());
+        if (!(retry ? api.authorisedAdmin(x) : api.authorised(x))) {
             return;
         }
         String rest = x.getRequestURI().getPath().substring(PREFIX.length()).replaceAll("^/+|/+$", "");

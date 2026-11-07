@@ -41,7 +41,13 @@ public record Config(
         List<String> allowedWebhookHosts,
         List<String> allowedEmailDomains,
         List<String> standardChannels,
-        List<String> backgroundChannels) {
+        List<String> backgroundChannels,
+        String authBootstrapEmail,
+        String authBootstrapPassword,
+        Duration authSessionTtl,
+        String authCookieSecure,
+        String authCookieSameSite,
+        String authSignup) {
 
     public static final int DEFAULT_PORT = 8080;
     public static final long DEFAULT_MAX_BODY_BYTES = 1L << 20;
@@ -85,7 +91,13 @@ public record Config(
                 list(env, "NOTIFY_ALLOWED_WEBHOOK_HOSTS", DEFAULT_WEBHOOK_HOSTS),
                 list(env, "NOTIFY_ALLOWED_EMAIL_DOMAINS", ""),
                 standard,
-                background);
+                background,
+                text(env, "AUTH_BOOTSTRAP_EMAIL"),
+                env.getOrDefault("AUTH_BOOTSTRAP_PASSWORD", ""),
+                duration(env, "AUTH_SESSION_TTL", Duration.ofHours(12), false),
+                choice(env, "AUTH_COOKIE_SECURE", "auto", "auto", "true", "false"),
+                choice(env, "AUTH_COOKIE_SAMESITE", "lax", "lax", "strict", "none"),
+                choice(env, "AUTH_SIGNUP", "off", "off", "approval"));
     }
 
     /** Recipients of critical email: DEFAULT_NOTIFY_EMAIL may hold several addresses separated by commas. */
@@ -126,6 +138,25 @@ public record Config(
     /** The limits applied to what a /notify caller may ask the service to contact. */
     public Notify.Limits notifyLimits() {
         return new Notify.Limits(webhookHostAllowList(), allowedEmailDomains);
+    }
+
+    /** The first of the given words, lower-cased; a setting must be one of them. */
+    private static String choice(Map<String, String> env, String name, String fallback, String... allowed) {
+        String v = text(env, name).toLowerCase(java.util.Locale.ROOT);
+        if (v.isEmpty()) {
+            return fallback;
+        }
+        for (String a : allowed) {
+            if (a.equals(v)) {
+                return v;
+            }
+        }
+        throw new InvalidConfigException(name + " must be one of " + String.join(", ", allowed));
+    }
+
+    /** Whether the bootstrap pair is usable: both set or both empty. */
+    public boolean bootstrapConfigured() {
+        return !authBootstrapEmail.isEmpty();
     }
 
     private static String text(Map<String, String> env, String name) {
