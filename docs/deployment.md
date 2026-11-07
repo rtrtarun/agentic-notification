@@ -38,7 +38,8 @@ Names only; values are never written in this repository. Where each one lives, s
 | `CORS_ALLOWED_ORIGINS` | yes (`https://rtrtarun.github.io`, a public value) | no | yes | Letting the console call the service |
 | `AUTH_BOOTSTRAP_EMAIL`, `AUTH_BOOTSTRAP_PASSWORD` | yes | no | yes | Creating the first admin once, when no account exists |
 | `SLACK_WEBHOOK_URL`, `NOTIFY_STANDARD_CHANNELS` | **not yet** | no | yes | Delivering alerts to Slack |
-| `AUTH_SIGNUP`, `AUTH_COOKIE_SAMESITE` | **not yet** (needed for milestone 36 features) | no | no | Sign-up with admin approval; sessions across sites |
+| `AUTH_COOKIE_SAMESITE` | yes, `none` (checked 2026-11-07: the sign-in cookie is `SameSite=None; Secure`) | no | yes | Letting a session cookie work between the console (`github.io`) and the service (`onrender.com`) |
+| `AUTH_SIGNUP` | **not yet** (needs the milestone 36 release) | no | no | Sign-up with admin approval |
 | `BACKEND_URL` | no | **variable** `BACKEND_URL` (the service address, public) | no | Building the console with the service address |
 
 - **A GitHub secret can be used by a workflow**, for example a post-deploy smoke check (`/health` for the version, then an authenticated call). Nothing does that yet.
@@ -50,6 +51,7 @@ Names only; values are never written in this repository. Where each one lives, s
 ## Deployment log
 What was done to get here, newest first. Dates are 2026-11-07 unless stated.
 
+1. **`AUTH_COOKIE_SAMESITE=none` set on Render** (confirmed from outside: the sign-in cookie changed from `SameSite=Lax` to `SameSite=None; Secure`). Not yet verified in a browser; Safari and some privacy settings block third-party cookies even with `none`.
 1. **Milestone 36 built, not deployed.** Sign-in first, sign-up with admin approval, Java accounts, two versioned images, `VERSION` `0.36.0`, CI on `master`. On branch `feature/signup-and-sign-in`; merging it will run the publish workflow and redeploy the console.
 2. **Repository secret `API_KEY` added** (from the local `env.txt`) with the GitHub CLI after signing in as the repository owner.
 3. **Test events sent to the live service** (a push, a star, a security advisory, a repeat delivery and an agent step) through the signed webhook endpoint and `POST /api/events`: all decided correctly, the repeat answered `duplicate`. They are stored in the Neon database under the repository `acme/billing` and show in the Inbox and Traces.
@@ -60,7 +62,7 @@ What was done to get here, newest first. Dates are 2026-11-07 unless stated.
 8. **Pull requests #9 and #10 merged to `master`:** the Pages workflow and the image workflow ran green; the Go image was published and made public.
 9. **Earlier, in the same project:** the console on GitHub Pages in demo mode; CI green for the Go, Java, web and SDK jobs on the feature branch.
 
-Not done yet: webhooks from a real repository, Slack on the live service, `AUTH_SIGNUP` and `AUTH_COOKIE_SAMESITE` on Render, deploying a versioned tag, a post-deploy smoke check, and running the Java service anywhere.
+Not done yet: webhooks from a real repository, Slack on the live service, `AUTH_SIGNUP` on Render (after the milestone 36 release), deploying a versioned tag, a post-deploy smoke check, and running the Java service anywhere.
 
 ## Releases and images
 Every release publishes **two images** to GitHub Container Registry, built by [publish-image.yml](../.github/workflows/publish-image.yml):
