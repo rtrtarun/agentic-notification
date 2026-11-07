@@ -19,6 +19,7 @@ Java parity part 3 (Attention Intelligence, feedback, learning) moves to milesto
 - **Throttling.** Sign-up allows 20 requests per address per hour; sign-in keeps its lock-out (5 failures per account, 25 per address, 15 minutes).
 - **API key is for services.** It still works everywhere; the console hides it under "Advanced".
 - **Java hashes passwords exactly as Go does** (`argon2id$m=19456,t=2,p=1$salt$hash`, raw standard base64) through BouncyCastle, so an account made by one service signs in on the other. A hash made by Go verifies in Java (tested with a real Go hash).
+- **GitHub Releases.** After both images are pushed, the workflow creates a Release `v<VERSION>` on the default branch (pre-release while `0.x`; an existing one is never changed). Added on the follow-up branch `feature/github-release`.
 - **Versioning.** A `VERSION` file at the repository root is the single source. Pre-1.0 the minor number follows the milestone, so this release is `0.36.0`. The images carry it as tags (`0.36.0`, `0.36`, `latest`, `sha-<commit>`), as the OCI label and as `APP_VERSION`, which `/health` returns.
 
 ## 3. Database changes
@@ -56,7 +57,7 @@ Java, new endpoints (same shapes as Go): `/api/auth/status`, `login`, `signup`, 
 | Contract passes on both services (10 files) | **Yes** (Go and Java) |
 | Web: `tsc -b`, `npm test`, `npm run build` | **Yes**: 238 tests |
 | Both images build, start and report the version | **Yes**: locally, `/health` returned `0.36.0` and the image label matched, for Go and Java |
-| The publish workflow ran on GitHub | **Not yet**: it runs when this branch is merged to the default branch |
+| The publish workflow ran on GitHub (images, then the GitHub Release) | **Not yet**: it runs when this work is merged to the default branch; the release step was dry-run locally with a stub `gh` |
 | Sign-up, approval and sign-in clicked through in a browser against the live service | **Not verified**; the live service still runs the previous release |
 | Cross-site cookie behaviour with `AUTH_COOKIE_SAMESITE=none` | **Not verified** in a browser |
 

@@ -47,6 +47,7 @@ Milestones 1 to 33 (Go, console, SDK) are recorded in [archived/milestones/](arc
 | Sign-up is off by default; when on, an account starts **pending** and an admin must approve it | One workspace: everyone signed in sees every event, so sign-up cannot grant access by itself | M36 |
 | The API key is for services; the console hides it under "Advanced", and signing out forgets it | People use accounts; a key left in the tab is access | M36 |
 | Java hashes passwords as Go does (argon2id, same format, BouncyCastle) | An account made by one service signs in on the other | M36 |
+| Each release also gets a GitHub Release `v<VERSION>`, created by the publish workflow on the default branch (pre-release while `0.x`, never changed once made) | A readable, linkable record of what shipped, with the images and notes, instead of a bare commit hash | after M36 |
 | Images are published for both services (`notification-service`, `notification-service-java`) tagged with the `VERSION` file (`0.36.0`, `0.36`, `latest`, `sha-<commit>`); `/health` returns the version | A running service can be identified without a commit hash. Pre-1.0 the minor number follows the milestone | M36 |
 | Placeholder `example` identity renamed to `agentpulse` (Java package, Go module) | Owner decision after the M34 review | M34 |
 | `PROMPT_SPEC.md` stays untracked | It is an input prompt, not product documentation | M27 |

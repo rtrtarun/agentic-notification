@@ -44,7 +44,7 @@ CI (`.github/workflows/ci.yml`) additionally runs golangci-lint, govulncheck and
 ## Document the change in the same commit
 
 - Add an entry at the top of [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
-- Releasing a service change? Edit the `VERSION` file (pre-1.0 the minor number follows the milestone); the publish workflow builds both images and tags them with it, and `/health` reports it. See [`docs/deployment.md`](docs/deployment.md#releases-and-images).
+- Releasing a service change? Edit the `VERSION` file (pre-1.0 the minor number follows the milestone) and write `docs/releases/<VERSION>.md` (it becomes the "Changes included" part of the GitHub Release); the publish workflow builds both images and tags them with it, `/health` reports it, and a GitHub Release `v<VERSION>` is created on the default branch (once per version, so bump it for each release). See [`docs/deployment.md`](docs/deployment.md#releases-and-images).
 - For a milestone-sized change, add or update `docs/milestones/milestone-N.md` (goals, decisions, database and API changes, risks, tests, acceptance, known limits). For a package, update its `README.md`.
 - If you decided something the design did not say, or could not verify something, record it in [`docs/implementation-sync.md`](docs/implementation-sync.md).
 - New settings go in the service README; new routes in `docs/architecture.md` section 19.
