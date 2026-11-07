@@ -346,7 +346,7 @@ cd sdk/python && python -m unittest
 
 What to expect (counts from the last local run): about 680 Go test functions across 33 packages and two commands, 230 Vitest tests, 21 SDK tests. Integration tests skip themselves when `TEST_DATABASE_URL` or `TEST_REDIS_URL` is unset.
 
-Honest status: locally (Windows, no C compiler, no Docker) everything above except `-race` and the integration tests passes. Those two run in [CI](.github/workflows/ci.yml), which also runs golangci-lint, govulncheck and an 80 percent coverage gate. Some packages are below 80 percent when integration tests do not run (their PostgreSQL code is covered only in CI); the table is in [implementation-sync.md](docs/implementation-sync.md). The first CI runs on this branch found real bugs that in-memory tests could not, which is why the integration tests exist. Check the CI badge above for the current result.
+Status: locally (Windows, no C compiler, no Docker) everything above except `-race` and the integration tests passes. Those two run in [CI](.github/workflows/ci.yml), together with golangci-lint, govulncheck and an 80 percent coverage gate. **On commit `367d735` (run 42356002884) the Go, web and Python SDK jobs all passed**, including the PostgreSQL 16 and Redis 7 integration tests and `-race`; the `java-service` job fails and is unrelated to this work. The first CI runs found about 25 lint findings and two real defects that in-memory tests could not see (overrides could not be saved in PostgreSQL), which is why the integration tests exist. Some packages are below 80 percent when run without integration tests (their PostgreSQL code is covered only in CI); the table is in [implementation-sync.md](docs/implementation-sync.md). The CI badge above shows the current result.
 
 ---
 

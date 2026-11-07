@@ -48,7 +48,7 @@ New `pkg/learning` (model, memory and PostgreSQL repositories, service, tests, R
 - [x] Apply is admin only, changes the rule or creates the override, and is audited.
 - [x] Learning Suggestions panel on the Rules screen with Apply and Dismiss, working in demo mode.
 - [x] `gofmt`, `go vet` (also with `-tags integration`), `go test -cover ./...`, `npm test`, `npm run build` pass locally.
-- [ ] The PostgreSQL repository contract passes against a real database. Not run locally; CI runs it.
+- [x] The PostgreSQL repository contract passes against a real database, confirmed in CI run 42356002884 on commit 367d735.
 
 ## Known limits
 - Suggestions are workspace-wide; per-person learning needs Milestone 30.

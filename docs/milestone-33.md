@@ -26,14 +26,14 @@ Corrections found while reconciling, so the record is honest: NATS is described 
 ## Tests and verification
 - **21 unit tests** against a local fake service (`python -m unittest` in `sdk/python`): chaining and ids, the key header, step-kind validation, lifecycle and exceptions, timed tool calls, error shortening, unreachable and refusing services with safe messages, the chain continuing after a failure, a non-JSON answer, read helpers. CI runs them in a new `python-sdk` job.
 - **Run against the real service.** I built the real service binary, ran it locally, and ran `example.py` against it: 10 steps, 3 retries, status `complete`, cost `$0.0128` (the sum of the reported costs). I also drove the real `cmd/mcp-server` binary against it over stdio: `initialize`, `publish_event`, `get_recent_events` and `explain_decision` all worked, and an agent publishing `severity: "critical"` was classed `standard` by the rules, confirming in a real run that an agent cannot make its own event critical.
-- Go (`gofmt`, `go vet`, `go test -cover ./...`) and web (`npm test`, `npm run build`) gates were re-run after the documentation changes and still pass; this milestone changed no Go or web code.
+- Go (`gofmt`, `go vet`, `go test -cover ./...`) and web (`npm test`, `npm run build`) gates were re-run after the documentation changes and still pass; this milestone changed no Go or web code. In CI (run 42356002884, commit 367d735) the Go job, the web job and the new Python SDK job all pass; the Java job fails and is unrelated.
 
 ## Acceptance criteria
 - [x] `architecture.md`, `orchestration-platform.md`, `frontend.md`, `ui-architecture.md`, `deployment.md` and the root `README.md` updated so tables, milestone counts and endpoints match milestones 1 to 33.
 - [x] `sdk/python/agentpulse.py` and `example.py` emit chained `trace_id` and `parent_event_id` runs against the Go server (verified against the real binary).
 - [x] The SDK has unit tests, and CI runs them.
 - [ ] Every statement in the older sections (6 to 11, 15 to 18 of `architecture.md`) re-checked line by line: **not done.** They are marked as describing the original pipeline.
-- [ ] The final CI result is green end to end: see the sync document. At the time of writing the Go job's lint and vulnerability steps had passed on earlier commits and the later test step had failed on two defects that were then fixed; the result after the fix was not yet read.
+- [x] The Go CI job is green end to end (CI run 42356002884 on commit 367d735): format, vet, lint, vulnerability scan, `-race` with PostgreSQL and Redis integration tests, and the coverage gate; the web and Python SDK jobs pass too. The `java-service` job fails and is unrelated to this work.
 
 ## Known limits
 - The SDK was written for Python 3.8 and later but tested on 3.13 (locally) and 3.12 (CI), not on 3.8.

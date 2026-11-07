@@ -57,7 +57,7 @@ Build the stdio server: `go build -o bin/mcp-server ./cmd/mcp-server`. Configure
 - [x] MCP server over stdio and over HTTP from one shared dispatcher, with the four tools.
 - [x] A critical event can never be created by an agent's own severity (tests over REST and MCP).
 - [x] `gofmt`, `go vet` (also `-tags integration`), `go test -cover ./...`, `npm test`, `npm run build` pass locally.
-- [ ] The PostgreSQL trace-field round trip passes against a real database (CI).
+- [x] The PostgreSQL trace-field round trip passes against a real database, confirmed in CI run 42356002884 on commit 367d735.
 - [ ] Verified against Claude Desktop or Cursor: **not done.** The protocol was exercised by tests and by piping messages into the real binary, not by a real client.
 
 ## Known limits

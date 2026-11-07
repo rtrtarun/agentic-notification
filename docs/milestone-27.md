@@ -45,7 +45,7 @@ See the table above. All of it also runs without a database except the `integrat
 - [x] Contract tests pass against the in-memory stores (`go test ./...`).
 - [x] Replay tests pass for both adapters.
 - [x] Integration files compile (`go vet -tags integration ./...`).
-- [ ] **Integration tests pass against PostgreSQL.** Not run on the development machine (no Docker daemon, no local PostgreSQL). They run in CI; the result of that run is recorded below once seen.
+- [x] **Integration tests pass against PostgreSQL**, confirmed in CI run 42356002884 on commit 367d735 (PostgreSQL 16 service), after two defects the in-memory runs could not see were fixed: overrides could not be saved in PostgreSQL, and an event integration test used `TRUNCATE` across a foreign key. They were not run on the development machine.
 
 ## Known limits
 - The real Ollama and real Claude services were not contacted; the replay server follows their documented request shapes. A one-off run against each, with the status endpoint checked, is still recommended before depending on them.
@@ -53,4 +53,4 @@ See the table above. All of it also runs without a database except the `integrat
 - Coverage of 80 percent is not measured by CI and was not measured here.
 
 ## CI result
-_To be filled in from the first CI run of this branch._
+The first CI run on this branch failed at lint, then at the integration tests (the two defects above); after the fixes the whole Go job passed: format, vet, golangci-lint, govulncheck, `go test -race -tags integration` against PostgreSQL 16 and Redis 7, and the 80 percent coverage gate (run 42356002884, commit 367d735). The Java job fails and is unrelated.

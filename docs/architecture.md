@@ -150,7 +150,7 @@ The product is **four layers around one invariant**.
 
 ### What is not as complete as it looks
 
-1. **Several parts have only run against fakes.** The PostgreSQL stores added in milestones 22 to 32, the Redis budget script, the Ollama and Claude adapters, Novu, SNS, OpenID Connect and the MCP server were tested against in-memory stores, local fake servers or recorded shapes. The PostgreSQL and Redis parts are exercised by integration tests that run only in CI. See section 12.2 for what CI has and has not confirmed.
+1. **Several parts have only run against fakes.** The PostgreSQL stores added in milestones 22 to 32, the Redis budget script, the Ollama and Claude adapters, Novu, SNS, OpenID Connect and the MCP server were tested against in-memory stores, local fake servers or recorded shapes. The PostgreSQL and Redis parts are exercised by integration tests that run only in CI, where they passed (section 12.2). What remains unproven is everything that needs a real third-party service: Ollama, Claude, Novu, SNS, an OpenID provider and a real MCP client.
 2. **NATS is not used.** It is named in the intended stack (`AGENTS.md`) but is not in the Compose file and nothing publishes or consumes. The asynchronous worker polls a PostgreSQL queue; delivery polls too.
 3. **A second implementation exists.** `java-server/` is a parallel notification service that this work did not review, and its CI job currently fails.
 4. **Delivery targets are workspace-wide.** Personal digests are stored and readable in the app but not delivered to a person, because jobs deliberately hold no address.
@@ -759,8 +759,8 @@ What was **verified locally** (Windows, after each milestone) and what was **con
 |---|---|---|
 | `gofmt`, `go vet`, `go vet -tags integration` | Pass | Format and vet steps passed |
 | `go test -cover ./...` | Pass | |
-| `golangci-lint` v2.15 | Not available locally | Found about 20 issues on its first run, all fixed; the lint step and the vulnerability scan passed on later commits |
-| `-race`, PostgreSQL and Redis integration tests, 80 percent coverage gate | Not runnable locally (no C compiler, no Docker) | The first real run failed on two bugs the in-memory tests could not see (overrides could not be saved in PostgreSQL; an integration test used `TRUNCATE` across a foreign key). Both are fixed; **the result of the run after the fix was not confirmed at the time of writing** |
+| `golangci-lint` v2.15 | Not available locally | Found about 25 issues over four rounds, all fixed; **lint and the vulnerability scan pass** |
+| `-race`, PostgreSQL and Redis integration tests, 80 percent coverage gate | Not runnable locally (no C compiler, no Docker) | **Pass** (run 42356002884, commit 367d735, PostgreSQL 16 and Redis 7). The first real run had failed on two bugs the in-memory tests could not see (overrides could not be saved in PostgreSQL; an integration test used `TRUNCATE` across a foreign key); both were fixed |
 | Web: `npm test`, `npm run build` | 230 tests pass, build succeeds | The web job passes |
 | Java service | Not touched | The `java-service` job fails; unrelated to this work |
 
@@ -768,7 +768,7 @@ Local statement coverage by package is in [implementation-sync.md](implementatio
 
 ### 12.3 Verdict
 
-**Sound and broad, with its least-proven parts clearly marked.** The deterministic core, the delivery path, the intelligence layer and the console are built and tested. The first CI run on this branch found real defects in code that had only been run in memory, which is exactly why the integration tests exist. Treat anything in section 3's list of "not as complete as it looks" as unproven until it has run against the real service.
+**Sound and broad, with its least-proven parts clearly marked.** The deterministic core, the delivery path, the intelligence layer and the console are built and tested. The first CI run on this branch found real defects in code that had only been run in memory, which is exactly why the integration tests exist. The Go, web and Python SDK CI jobs pass on commit 367d735; the Java job fails and is unrelated. What is still unproven is anything that needs a real third-party service (Ollama, Claude, Novu, SNS, an OpenID provider, a real MCP client).
 
 ### 12.4 Known limits and deferred items
 

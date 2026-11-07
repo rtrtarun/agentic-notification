@@ -47,8 +47,8 @@ New `pkg/budget`, `pkg/attention/worker.go`, `pkg/event/workqueue*.go`; the pipe
 - [x] Quiet-hours events are `delayed` and released when quiet hours end.
 - [x] Explicit invariant tests prove a critical event cannot be picked up by the worker or throttled by the budget.
 - [x] `gofmt`, `go vet` (also `-tags integration`), `go test -cover ./...` pass locally.
-- [ ] The PostgreSQL work queue and the Redis Lua script pass against real servers. **Not run locally** (no Docker). CI now provides both and runs them; the first CI result for this branch has not been seen.
-- [ ] `go test -race` and `golangci-lint`: not run locally (no C compiler, no linter). CI enforces them.
+- [x] The PostgreSQL work queue (including competing workers) and the Redis Lua script pass against real servers, confirmed in CI run 42356002884 on commit 367d735. Not run locally.
+- [x] `go test -race` and `golangci-lint` pass, confirmed in CI run 42356002884 on commit 367d735; neither can run on the development machine.
 
 ## Known limits
 - The window is rolling and exact in Redis, and per process in memory. A fixed per-recipient budget needs Milestone 30.
