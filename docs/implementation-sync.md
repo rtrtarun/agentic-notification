@@ -68,6 +68,7 @@ Coverage is below 80 percent locally in `db`, `event`, `feedback`, `inbox`, `mai
 7. **Double send of a critical event (F2, high).** Reserve the event id before delivering (insert as pending, deliver, mark sent) so concurrent redeliveries cannot both send? This changes the critical path, so it needs your approval and a test that proves the invariant still holds.
 8. **Critical delivery inside the request (F3).** Keep it (a failure makes GitHub retry) or accept a bounded wait? Today the slowest channel sets webhook latency (10 s provider timeout, 40 s server write timeout).
 9. **Java accounts (F8).** Java has only the API key; is that acceptable until milestone 36?
+10. **Read-path window (F10).** Is a 1000-event window acceptable for now, or should inbox, digests and learning query PostgreSQL with keyset pagination and indexes (a change to Go read paths, no schema change expected)?
 
 ## 6. Audit findings (2026-11-07)
 From the reverse-engineering report in [feature-flows.md](feature-flows.md) section 6. They were read from the code, not reproduced; nothing is fixed yet. "Tracked in" says where the work is recorded; an item is closed only when a milestone changes the code and a test proves it.
@@ -83,6 +84,7 @@ From the reverse-engineering report in [feature-flows.md](feature-flows.md) sect
 | F7 | Medium | Dedup, budget and classifier fail open by design: no alert is hidden, duplicates or extra interruptions are possible | Accepted behaviour; documented in [architecture.md](architecture.md) |
 | F8 | Medium | Java has no accounts; the API key is its only gate | Open question 9; milestone 36 in roadmap |
 | F9 | Medium | Ollama, Claude, Novu, SNS, OpenID Connect, a real MCP client and the Java SMTP success path have only run against fakes | Section 4; roadmap "Verify against real services" |
+| F10 | Medium | Inbox, digests and learning read the newest 1000 events (`event.List`, `DefaultListLimit`) and all notification states into memory (`pkg/inbox/service.go load`, `pkg/attention/digest.go`, `pkg/learning/service.go`): older events are invisible to them and cost grows per request | Open question 10; [roadmap.md](roadmap.md) "Hardening backlog" |
 | L1 | Low | Local secrets are hardcoded in `docker-compose.yml` (`local-dev-key`, webhook secret, SMTP password), local use only | Roadmap "Hardening backlog" (secret management) |
 | L2 | Low | Not audited: every list query for an unbounded `SELECT` (list endpoints take `limit` 1 to 500 and cursors) | Roadmap "Hardening backlog" |
 | L3 | Low | Not profiled: inbox and analytics queries for N+1 patterns; none seen in the pipeline path | Roadmap "Hardening backlog" |

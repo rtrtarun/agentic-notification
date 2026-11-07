@@ -26,6 +26,7 @@ Not scheduled; each item needs a plan and your approval, and any change to the c
 | F1 inbound rate limiting | Per-key limits on `/webhooks/github`, `/api/events`, `/notify` (middleware or edge), 429 when exceeded, same behaviour in Go and Java, new contract file | A flood is limited; critical events from a key within its limit are unaffected; limits documented |
 | F2 double send of a critical event | Reserve the event id before delivering (pending, deliver, mark sent), keeping delivery inline and dedup never merging critical events | Concurrent redelivery of one critical event sends once; a failed send still lets the sender retry; the invariant tests still pass |
 | F6 Java SSRF | Check the address at connect time, or pin the resolved address, as Go does | A host whose DNS changes between check and connect is refused |
+| F10 read-path window | Replace `inbox.Service.load` and the digest and learning reads of `event.List` with SQL filtering, sorting and keyset paging; counters for analytics | Inbox shows events older than the newest 1000; results match the current behaviour for small data; response time stays flat as events grow |
 | L1 secrets | Secret management for deployments; keep local defaults clearly local | Deployment guide names where each secret lives |
 | L2 to L5 audit gaps | Audit list queries for unbounded selects, profile inbox and analytics queries, inspect heavy query plans, search discarded errors | A written results table; fixes as small changes |
 
