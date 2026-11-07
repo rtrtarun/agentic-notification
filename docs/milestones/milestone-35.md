@@ -56,7 +56,7 @@ New on Java, identical to Go: `POST /notify`, `GET`/`POST /api/rules`, `POST /ap
 | Real stack: cross-service dedup | **Yes**: the same pull request sent to Go, then to Java, was merged by Java into Go's event (`duplicate of ...`). |
 | Real stack: shared rules | **Yes**: a rule created through Java appeared in Go's `GET /api/rules`. |
 | Real stack: durable queue | **Yes**: Java queued a standard event to an unreachable Slack host; its dispatcher left it pending after attempt 1 with a 30 s backoff; the webhook path was in no stored error and no API answer. |
-| GitHub CI green | See the changelog entry for the run. |
+| GitHub CI green | **Yes**: run 42370422148 on commit acc8b8c; `java-service` (with PostgreSQL and Redis), `go-service`, `web` and `python-sdk` all passed. |
 
 ## 9. Review checklist
 - [ ] Are two services on one database acceptable with the "configure alike" rule, or should only one dispatch (a setting to turn the dispatcher off)?
