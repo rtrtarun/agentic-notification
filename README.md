@@ -153,7 +153,7 @@ Dependencies are deliberately few: the Go module uses `lib/pq`, `go-redis`, `gol
 ├── docs/                             All documentation (start at docs/README.md)
 ├── deploy/  k8s/                     Local and Kubernetes deployment files
 ├── .github/workflows/                CI, GitHub Pages, GHCR image
-├── java-server/                      A parallel Java implementation; to be brought to parity with the Go service (planned, not started)
+├── java-server/                      The Java implementation; core parity with the Go service built in milestone 34 (the rest is planned)
 ├── docker-compose.yml
 └── AGENTS.md                         The design brief this project is built from
 ```
@@ -232,7 +232,7 @@ curl http://localhost:8080/health
 docker compose up --build postgres redis go-notification-service
 ```
 
-> **Known issue:** the Compose file also defines a `java-notification-service` whose build folder (`./java-server/production`) does not exist, so a bare `docker compose up --build` fails. Name the three services as above.
+The Java service runs on the same database (the Go service creates the schema, so it starts first): `docker compose up --build postgres redis go-notification-service java-notification-service`, then `curl localhost:8081/health`.
 
 The API is then on `http://localhost:8080` with the key `local-dev-key` (set in the Compose file; change it for anything but local use).
 
@@ -371,7 +371,7 @@ Everything lives in [`docs/`](docs/), grouped by what you want to do. **[docs/RE
 **Next** (details in [architecture.md section 13](docs/architecture.md#13-forward-roadmap)):
 
 1. **Prove it against real services**: PostgreSQL, Redis, Ollama, Claude, Novu, SNS, an OpenID provider and a real MCP client; get CI green end to end.
-2. **Java parity**: implement the Java service the same way the Go service was built, milestone by milestone, and make its CI job green. Decided by the project owner; not started.
+2. **Java parity, continued**: milestone 34 built the core (rules, dedup, critical delivery, persistence) and a shared contract in `docs/contract`; the rest of the Go service (accounts, Attention Intelligence, feedback, learning, traces, MCP) follows milestone by milestone.
 3. **Per-person delivery**: resolve a person's address at send time and deliver personal digests, schedules and budgets.
 4. **Console completeness**: screens for rule predicates, per-rule channels and personal preferences; translations for the newer screens.
 5. **Scale**: a real queue instead of polling if needed; a shared circuit breaker; an OpenTelemetry exporter.
@@ -379,8 +379,7 @@ Everything lives in [`docs/`](docs/), grouped by what you want to do. **[docs/RE
 
 **Known issues**
 
-- `docker compose up --build` fails on the Java service (missing build folder); name the services as shown in [Running the service](#running-the-service).
-- The `java-service` CI job fails. The Java implementation is **to be brought to parity with the Go service** (everything built in milestones 1 to 33); that work is planned but not started, and the job will stay red until it is.
+- The Java service covers the core only (webhook, rules, dedup, critical delivery, persistence, `/events`); its CI job passes locally but the first GitHub run has not been seen. See [milestone 34](docs/milestones/milestone-34.md).
 - NATS is part of the intended stack but is not used; the worker and delivery poll PostgreSQL.
 - Personal digests are stored and readable but not delivered.
 - Parts that have run only against fakes: PostgreSQL stores (CI only), the Redis budget script (CI only), Ollama, Claude, Novu, SNS, OpenID Connect, the MCP server.

@@ -1,0 +1,75 @@
+{
+  "name": "the event list needs the API key, is newest first and pages with cursors",
+  "steps": [
+    {
+      "name": "first event",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "create", "X-GitHub-Delivery": "ev-1" }, "body": { "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "second event",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "delete", "X-GitHub-Delivery": "ev-2" }, "body": { "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "third event",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "fork", "X-GitHub-Delivery": "ev-3" }, "body": { "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "no key is refused",
+      "request": { "method": "GET", "path": "/events" },
+      "expect": { "status": 401, "json": { "error": "missing or invalid api key" } }
+    },
+    {
+      "name": "a wrong key is refused",
+      "request": { "method": "GET", "path": "/events", "headers": { "X-API-Key": "wrong" } },
+      "expect": { "status": 401, "json": { "error": "missing or invalid api key" } }
+    },
+    {
+      "name": "POST is not allowed",
+      "request": { "method": "POST", "path": "/events", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 405, "json": { "error": "method not allowed" } }
+    },
+    {
+      "name": "all events, newest first, without the payload",
+      "request": { "method": "GET", "path": "/events", "headers": { "X-API-Key": "contract-key" } },
+      "expect": {
+        "status": 200,
+        "json": { "events": [
+          { "id": "github-fork-ev-3", "source": "github", "eventType": "fork", "repository": "acme/api", "attentionClass": "standard", "decisionState": { "status": "queued", "matchedRule": "default-github" } },
+          { "id": "github-delete-ev-2" },
+          { "id": "github-create-ev-1" }
+        ] },
+        "absent": ["nextCursor"],
+        "absentInEach": { "events": ["payload"] }
+      }
+    },
+    {
+      "name": "a page of two has a cursor",
+      "request": { "method": "GET", "path": "/events?limit=2", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "events": [ { "id": "github-fork-ev-3" }, { "id": "github-delete-ev-2" } ] }, "present": ["nextCursor"] },
+      "save": { "cursor": "nextCursor" }
+    },
+    {
+      "name": "the cursor gives the rest",
+      "request": { "method": "GET", "path": "/events?limit=2&cursor={{cursor}}", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "events": [ { "id": "github-create-ev-1" } ] }, "absent": ["nextCursor"] }
+    },
+    {
+      "name": "limit 0 is refused",
+      "request": { "method": "GET", "path": "/events?limit=0", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 400, "json": { "error": "limit must be a whole number from 1 to 500" } }
+    },
+    {
+      "name": "a limit that is not a number is refused",
+      "request": { "method": "GET", "path": "/events?limit=abc", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 400, "json": { "error": "limit must be a whole number from 1 to 500" } }
+    },
+    {
+      "name": "a bad cursor is refused",
+      "request": { "method": "GET", "path": "/events?cursor=%21%21%21", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 400, "json": { "error": "cursor is not valid; use the nextCursor from a previous page" } }
+    }
+  ]
+}

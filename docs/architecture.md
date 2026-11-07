@@ -152,7 +152,7 @@ The product is **four layers around one invariant**.
 
 1. **Several parts have only run against fakes.** The PostgreSQL stores added in milestones 22 to 32, the Redis budget script, the Ollama and Claude adapters, Novu, SNS, OpenID Connect and the MCP server were tested against in-memory stores, local fake servers or recorded shapes. The PostgreSQL and Redis parts are exercised by integration tests that run only in CI, where they passed (section 12.2). What remains unproven is everything that needs a real third-party service: Ollama, Claude, Novu, SNS, an OpenID provider and a real MCP client.
 2. **NATS is not used.** It is named in the intended stack (`AGENTS.md`) but is not in the Compose file and nothing publishes or consumes. The asynchronous worker polls a PostgreSQL queue; delivery polls too.
-3. **A second implementation exists.** `java-server/` is a parallel notification service that this work did not review, and its CI job currently fails. **Decision (project owner): it will be implemented to the same standard as the Go service**, milestone by milestone; that work is planned and not started.
+3. **A second implementation exists.** `java-server/` is a parallel notification service that this work did not review, and its CI job failed. **Decision (project owner): it is being implemented to the same standard as the Go service**, milestone by milestone. Milestone 34 built the core (rules, dedup, critical delivery, PostgreSQL persistence in the Go schema) and a shared HTTP contract (`docs/contract`); the rest follows.
 4. **Delivery targets are workspace-wide.** Personal digests are stored and readable in the app but not delivered to a person, because jobs deliberately hold no address.
 5. **Tracing is context propagation and span logs**, not an OpenTelemetry exporter.
 6. **Learning is advisory.** It proposes rule and override changes; an admin applies them. Nothing changes silently.
@@ -762,7 +762,7 @@ What was **verified locally** (Windows, after each milestone) and what was **con
 | `golangci-lint` v2.15 | Not available locally | Found about 25 issues over four rounds, all fixed; **lint and the vulnerability scan pass** |
 | `-race`, PostgreSQL and Redis integration tests, 80 percent coverage gate | Not runnable locally (no C compiler, no Docker) | **Pass** (run 42356002884, commit 367d735, PostgreSQL 16 and Redis 7). The first real run had failed on two bugs the in-memory tests could not see (overrides could not be saved in PostgreSQL; an integration test used `TRUNCATE` across a foreign key); both were fixed |
 | Web: `npm test`, `npm run build` | 230 tests pass, build succeeds | The web job passes |
-| Java service | Not touched | The `java-service` job fails; unrelated to this work |
+| Java service | Rewritten in milestone 34 (core) | Passes locally in the Maven container; first GitHub run not yet seen |
 
 Local statement coverage by package is in [implementation-sync.md](implementation-sync.md); several packages are below the 80 percent target when integration tests do not run.
 
@@ -780,7 +780,7 @@ Local statement coverage by package is in [implementation-sync.md](implementatio
 | Tracing | `traceparent` and span logs only; no collector export |
 | Event window | Digests, traces and learning read the newest 1000 events |
 | Console | Newer screens English only; no screens yet for rule predicates, per-rule channels or personal preferences |
-| Java service | Not reviewed; its CI job fails; **to be brought to parity with the Go service** (planned, not started) |
+| Java service | Core parity built (milestone 34, 69 tests, shared contract); **the rest to be brought to parity** (planned) |
 | NATS | In the intended stack only; not in Compose and not used |
 | At-least-once critical delivery | If an alert is delivered but saving fails, the redelivery notifies again. Deliberate: a duplicate beats a lost critical alert |
 
@@ -796,8 +796,8 @@ Local statement coverage by package is in [implementation-sync.md](implementatio
 | **Queue and scale** | Move the worker and delivery from polling to NATS (or another queue) if polling stops being enough; share the circuit breaker across replicas |
 | **Observability** | An OpenTelemetry exporter for the spans already recorded |
 | **Product** | Event replay, an agent registry, multi-tenancy and billing for the hosted offering |
-| **Java parity** | Implement the Java service the same way the Go service was built (milestones 1 to 33), starting with what its CI job needs to pass; decided by the project owner, not started. Prefer one shared API contract test suite that both services must pass, so parity is checked rather than assumed |
-| **Housekeeping** | Reconcile the two `k8s/` directories; fix the Compose build context for the Java service; raise packages below 80 percent coverage |
+| **Java parity** | Milestone 34 built the core and the shared contract suite (`docs/contract`, replayed by both services). Next: bring the remaining Go features to Java in an order the project owner chooses, extending the contract each time |
+| **Housekeeping** | Reconcile the two `k8s/` directories; raise packages below 80 percent coverage |
 
 ---
 
@@ -1164,7 +1164,7 @@ Unit tests use in-memory fakes behind the same interfaces as production. Real-in
 | Docker, compose, Kubernetes, CI | **Done** | The Go and web CI jobs pass the steps that have run; see section 12.2 |
 | Per-person delivery | Not built | Personal digests are stored, not delivered |
 | NATS | Not used | Named in the intended stack only |
-| Java service | Unreviewed; parity with Go planned | Its CI job fails |
+| Java service | Core parity built; the rest planned | First GitHub CI run of the rewritten job not yet seen |
 | Event replay, agent registry | Not planned | Vision documents only |
 
 **One-line summary:** the four layers are built end to end and the critical invariant is tested at every layer; the remaining work is proving the parts that have only run against fakes, per-person delivery, and the console screens that are still API-only.

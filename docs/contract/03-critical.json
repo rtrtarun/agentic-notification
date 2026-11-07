@@ -1,0 +1,20 @@
+{
+  "name": "critical events are matched by locked rules, sent, and never merged",
+  "steps": [
+    {
+      "name": "a security advisory is critical and sent",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "security_advisory", "X-GitHub-Delivery": "crit-1" }, "body": { "action": "published", "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "status": "accepted", "eventId": "github-security_advisory-crit-1", "attentionClass": "critical", "decisionState": { "status": "sent", "reason": "security vulnerability detected", "matchedRule": "github-security-advisory" } } }
+    },
+    {
+      "name": "the identical advisory again is still critical and sent, never merged",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "security_advisory", "X-GitHub-Delivery": "crit-2" }, "body": { "action": "published", "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "critical", "decisionState": { "status": "sent", "matchedRule": "github-security-advisory" } } }
+    },
+    {
+      "name": "a dependabot alert is critical and sent",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "dependabot_alert", "X-GitHub-Delivery": "crit-3" }, "body": { "action": "created", "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "critical", "decisionState": { "status": "sent", "matchedRule": "github-dependabot-alert" } } }
+    }
+  ]
+}

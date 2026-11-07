@@ -73,15 +73,42 @@ jobs:
 
   java-service:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: attention
+          POSTGRES_PASSWORD: attention
+          POSTGRES_DB: attention
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U attention"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://attention:attention@localhost:5432/attention?sslmode=disable
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go-server/notification-service/go.mod
+          cache-dependency-path: go-server/notification-service/go.sum
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
           cache: maven
-      - name: Build and test
+          cache-dependency-path: java-server/notification-service/pom.xml
+      # The Go service owns the schema; the Java tests run against the tables it creates.
+      - name: Create the schema with the Go migrations
+        working-directory: go-server/notification-service
+        run: go run ./cmd/migrate
+      - name: Build and test (unit, contract, PostgreSQL, 80 percent line coverage)
         working-directory: java-server/notification-service
+        env:
+          TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
         run: mvn -B verify
 
   web:

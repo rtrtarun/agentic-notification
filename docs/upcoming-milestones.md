@@ -33,5 +33,8 @@ Planned work after milestone 26, taken from the "known limits" of milestones 22 
 - Deployment on AWS, backups and restore drills, secret management, rate limiting at the edge, an SLO dashboard and alerts, a security review, load tests.
 - Acceptance: a documented deploy from scratch, a restore test, and a load test result.
 
+## Milestone 34: Java foundation (built)
+The Java service now has the deterministic core and a shared contract with the Go service; see [milestones/milestone-34.md](milestones/milestone-34.md). Milestones 35 and later bring the rest of the Go service to Java in the order the project owner chooses (suggested: `/notify`, rules and policies API, durable delivery, Redis dedup, accounts, Attention Intelligence, feedback, learning, traces and MCP).
+
 ## Provider abstraction follow-ups
 Courier, Knock and custom delivery providers behind `NotificationProvider` stay on the list; they are scheduled by demand rather than numbered.

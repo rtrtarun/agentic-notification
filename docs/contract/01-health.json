@@ -1,0 +1,10 @@
+{
+  "name": "health is open and identifies the service",
+  "steps": [
+    {
+      "name": "GET /health needs no key",
+      "request": { "method": "GET", "path": "/health" },
+      "expect": { "status": 200, "json": { "status": "ok", "service": "attention-orchestration" } }
+    }
+  ]
+}
