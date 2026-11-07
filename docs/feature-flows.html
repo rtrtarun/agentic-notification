@@ -426,6 +426,8 @@ flowchart LR
 
 ## 6. Latency bottlenecks and critical findings
 
+Every finding below has an ID (F1 to F9, L1 to L5) and is logged in [implementation-sync.md](implementation-sync.md) section 6, with the open questions and the work in [roadmap.md](roadmap.md) ("Hardening backlog").
+
 Method: I read the routing, middleware, pipeline, delivery, migration and configuration code and searched for timeouts, limiters, loops with queries, and secrets. I did **not** read every line or run load tests; each item says what I saw and what I did not verify. No finding rises to CRITICAL in what I inspected.
 
 ### HIGH

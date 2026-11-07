@@ -64,13 +64,37 @@ Coverage is below 80 percent locally in `db`, `event`, `feedback`, `inbox`, `mai
 3. **Java retention.** Port event purging (Go has it), or leave it Go-only?
 4. **Milestone 36 scope** (accounts, Attention Intelligence, feedback in Java) needs its AGENTS.md plan and approval. See [roadmap.md](roadmap.md).
 5. **Per-person delivery.** Personal digests are stored and readable but not delivered, because jobs hold no address. Resolve recipients at send time as its own milestone?
+6. **Inbound rate limiting (F1, high).** Add per-key limits on `/webhooks/github`, `/api/events` and `/notify` in middleware, at the edge, or both? Which limits?
+7. **Double send of a critical event (F2, high).** Reserve the event id before delivering (insert as pending, deliver, mark sent) so concurrent redeliveries cannot both send? This changes the critical path, so it needs your approval and a test that proves the invariant still holds.
+8. **Critical delivery inside the request (F3).** Keep it (a failure makes GitHub retry) or accept a bounded wait? Today the slowest channel sets webhook latency (10 s provider timeout, 40 s server write timeout).
+9. **Java accounts (F8).** Java has only the API key; is that acceptable until milestone 36?
 
-## 6. Owner decisions (dated)
+## 6. Audit findings (2026-11-07)
+From the reverse-engineering report in [feature-flows.md](feature-flows.md) section 6. They were read from the code, not reproduced; nothing is fixed yet. "Tracked in" says where the work is recorded; an item is closed only when a milestone changes the code and a test proves it.
+
+| ID | Severity | Finding | Tracked in |
+|---|---|---|---|
+| F1 | High | No inbound rate limiting on ingestion endpoints (limiters exist only for sign-in, channel tests, model calls, SMS) | Open question 6; [roadmap.md](roadmap.md) "Hardening backlog" |
+| F2 | High | Check-then-act on duplicate deliveries: two concurrent deliveries of one critical event can both send (`pkg/pipeline/pipeline.go`, `Exists` then `Save`) | Open question 7; roadmap "Hardening backlog" |
+| F3 | Medium | Critical delivery runs inside the webhook request; latency equals the slowest channel | Open question 8 |
+| F4 | Medium | Workers poll PostgreSQL, so deferred and retried work waits up to one interval; NATS unused | roadmap "Queue and scale" |
+| F5 | Medium | Two dispatchers on one database can dead-letter a job for a missing channel | Open question 1; section 3 |
+| F6 | Medium | Java SSRF check is pre-flight, not dial-time, so a changing DNS answer is not covered | Section 3 (decision in force); roadmap "Hardening backlog" |
+| F7 | Medium | Dedup, budget and classifier fail open by design: no alert is hidden, duplicates or extra interruptions are possible | Accepted behaviour; documented in [architecture.md](architecture.md) |
+| F8 | Medium | Java has no accounts; the API key is its only gate | Open question 9; milestone 36 in roadmap |
+| F9 | Medium | Ollama, Claude, Novu, SNS, OpenID Connect, a real MCP client and the Java SMTP success path have only run against fakes | Section 4; roadmap "Verify against real services" |
+| L1 | Low | Local secrets are hardcoded in `docker-compose.yml` (`local-dev-key`, webhook secret, SMTP password), local use only | Roadmap "Hardening backlog" (secret management) |
+| L2 | Low | Not audited: every list query for an unbounded `SELECT` (list endpoints take `limit` 1 to 500 and cursors) | Roadmap "Hardening backlog" |
+| L3 | Low | Not profiled: inbox and analytics queries for N+1 patterns; none seen in the pipeline path | Roadmap "Hardening backlog" |
+| L4 | Low | Not inspected: query plans of heavy queries (14 indexes exist, lookup indexes are test-guarded) | Roadmap "Hardening backlog" |
+| L5 | Low | Not searched: every discarded error; known non-critical queue and publish failures are logged and ignored on purpose | Roadmap "Hardening backlog" |
+
+## 7. Owner decisions (dated)
 - **2026-11-07, SDKs for other languages:** document only, do not build. Proposal and open questions in [roadmap.md](roadmap.md).
 - **2026-11-07, milestone 35:** approved and built (`/notify`, rules API, durable queue, Redis dedup, contract files 07 to 09). Milestone 36 is next and still needs a plan.
 - **2026-11-07, after milestone 34:** push and read the Java CI job before milestone 35 (done, green); rename `example` to `agentpulse` (done); milestone 35 scope approved.
 - **2026-11-07, Java parity:** implement the Java service like the Go service, milestone by milestone, with the same guarantees, API, tests and documentation, and a shared contract extended each time. Branch `feature/java-parity`, Maven built through Docker.
 - **2026-11-07, documentation cleanup:** keep a few focused, detailed current documents; move superseded ones to [archived/](archived/README.md).
 
-## 7. Keeping this honest
-Update sections 2 to 4 with the work. Add questions to section 5 and move them to section 3 or 6 when answered. Superseded notes go to the archive, never deleted.
+## 8. Keeping this honest
+Update sections 2 to 4 with the work. Add questions to section 5 and move them to section 3 or 7 when answered. Log every new finding in section 6 with an ID and where it is tracked. Superseded notes go to the archive, never deleted.
