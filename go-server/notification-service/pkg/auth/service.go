@@ -28,6 +28,22 @@ var (
 	ErrLastAdmin          = errors.New("there must be at least one enabled admin")
 	ErrNotAllowed         = errors.New("this account is not allowed to sign in")
 	ErrUnauthenticated    = errors.New("not signed in")
+	// ErrPendingApproval is returned after a correct password for an account an
+	// admin has not approved yet. It is only reachable with the right password, so
+	// it does not reveal which emails exist.
+	ErrPendingApproval = errors.New("your account is waiting for approval")
+	// ErrAccountRejected is returned after a correct password for a rejected sign-up.
+	ErrAccountRejected = errors.New("your sign-up was not approved")
+	// ErrSignupDisabled is returned when self sign-up is switched off.
+	ErrSignupDisabled = errors.New("sign-up is not available")
+	// ErrTooManySignups is returned when one address asks for too many accounts.
+	ErrTooManySignups = errors.New("too many sign-up requests; try again later")
+)
+
+// Sign-up throttle: one address may ask for this many accounts per window.
+const (
+	signupMaxPerWindow = 20
+	signupWindow       = time.Hour
 )
 
 // Service is the use-case layer: sign-in, sessions and user management.
@@ -36,6 +52,9 @@ type Service struct {
 	ttl     time.Duration
 	now     func() time.Time
 	limiter *Limiter
+	// signup is true when people may ask for an account (approved by an admin).
+	signup        bool
+	signupLimiter *Limiter
 }
 
 // NewService builds a service. A zero ttl uses DefaultSessionTTL.
@@ -43,15 +62,30 @@ func NewService(store Store, ttl time.Duration) *Service {
 	if ttl <= 0 {
 		ttl = DefaultSessionTTL
 	}
-	return &Service{store: store, ttl: ttl, now: time.Now, limiter: NewLimiter(DefaultMaxFailures, DefaultLockout)}
+	return &Service{
+		store: store, ttl: ttl, now: time.Now,
+		limiter:       NewLimiter(DefaultMaxFailures, DefaultLockout),
+		signupLimiter: NewLimiter(signupMaxPerWindow, signupWindow),
+	}
 }
 
 // WithClock replaces the clock; for tests.
 func (s *Service) WithClock(now func() time.Time) *Service {
 	s.now = now
 	s.limiter.now = now
+	s.signupLimiter.now = now
 	return s
 }
+
+// WithSignup switches self sign-up on or off. When on, a new account is created
+// pending and an admin must approve it before it can sign in or see anything.
+func (s *Service) WithSignup(enabled bool) *Service {
+	s.signup = enabled
+	return s
+}
+
+// SignupEnabled reports whether people may ask for an account.
+func (s *Service) SignupEnabled() bool { return s.signup }
 
 // WithLimiter replaces the login throttle.
 func (s *Service) WithLimiter(l *Limiter) *Service {
@@ -102,6 +136,14 @@ func (s *Service) Login(ctx context.Context, email, password, ip string) (string
 		return "", Session{}, User{}, ErrInvalidCredentials
 	}
 	s.limiter.Reset("email:" + email)
+	switch u.Status {
+	case StatusPending:
+		s.audit(ctx, u.Email, "login.denied", "", ip, "pending approval")
+		return "", Session{}, User{}, ErrPendingApproval
+	case StatusRejected:
+		s.audit(ctx, u.Email, "login.denied", "", ip, "sign-up rejected")
+		return "", Session{}, User{}, ErrAccountRejected
+	}
 	token, sess, err := s.startSession(ctx, u)
 	if err != nil {
 		return "", Session{}, User{}, err
@@ -145,8 +187,8 @@ func (s *Service) LoginFederated(ctx context.Context, issuer, subject, email, na
 	} else if err != nil {
 		return "", Session{}, User{}, err
 	}
-	if u.Disabled {
-		s.audit(ctx, u.Email, "login.denied", "", ip, "disabled")
+	if !u.Active() {
+		s.audit(ctx, u.Email, "login.denied", "", ip, "disabled or not approved")
 		return "", Session{}, User{}, ErrNotAllowed
 	}
 	token, sess, err := s.startSession(ctx, u)
@@ -200,7 +242,7 @@ func (s *Service) Authenticate(ctx context.Context, token string) (User, Session
 		return User{}, Session{}, ErrUnauthenticated
 	}
 	u, err := s.store.UserByID(ctx, sess.UserID)
-	if err != nil || u.Disabled {
+	if err != nil || !u.Active() {
 		return User{}, Session{}, ErrUnauthenticated
 	}
 	return u, sess, nil
@@ -232,7 +274,7 @@ func (s *Service) createUser(ctx context.Context, actor, email, name, role, pass
 	if role != RoleAdmin && role != RoleMember {
 		return User{}, fmt.Errorf("%w: role must be admin or member", ErrInvalidInput)
 	}
-	u := User{ID: newID(), Email: email, Name: strings.TrimSpace(name), Role: role, CreatedAt: s.now()}
+	u := User{ID: newID(), Email: email, Name: strings.TrimSpace(name), Role: role, Status: StatusActive, CreatedAt: s.now()}
 	if password != "" {
 		if err := CheckPassword(password); err != nil {
 			return User{}, err
@@ -250,12 +292,52 @@ func (s *Service) createUser(ctx context.Context, actor, email, name, role, pass
 	return u, nil
 }
 
+// SignUp records a request for an account. The account is created as a pending
+// member with its password already hashed; it cannot sign in or see anything
+// until an admin approves it. The caller learns nothing about whether the email
+// already had an account: a repeat request succeeds silently and changes nothing.
+// A bad email or password is reported, because that leaks nothing about others.
+func (s *Service) SignUp(ctx context.Context, email, name, password, ip string) error {
+	if !s.signup {
+		return ErrSignupDisabled
+	}
+	key := "signup:" + ip
+	if s.signupLimiter.Locked(key) {
+		s.audit(ctx, NormalizeEmail(email), "signup.throttled", "", ip, "")
+		return ErrTooManySignups
+	}
+	s.signupLimiter.Fail(key) // every attempt counts, successful or not
+	email = NormalizeEmail(email)
+	if addr, err := mail.ParseAddress(email); err != nil || addr.Address != email {
+		return fmt.Errorf("%w: a valid email is required", ErrInvalidInput)
+	}
+	if err := CheckPassword(password); err != nil {
+		return err
+	}
+	hash, err := HashPassword(password)
+	if err != nil {
+		return err
+	}
+	u := User{ID: newID(), Email: email, Name: strings.TrimSpace(name), Role: RoleMember, PasswordHash: hash, Status: StatusPending, CreatedAt: s.now()}
+	if err := s.store.CreateUser(ctx, u); err != nil {
+		if errors.Is(err, ErrEmailTaken) {
+			s.audit(ctx, email, "signup.duplicate", "", ip, "")
+			return nil
+		}
+		return err
+	}
+	s.audit(ctx, email, "signup.requested", u.ID, ip, "pending approval")
+	return nil
+}
+
 // UserPatch is a partial update; nil fields are left alone.
 type UserPatch struct {
 	Name     *string
 	Role     *string
 	Disabled *bool
 	Password *string
+	// Status approves (active) or rejects (rejected) an account. Changing it ends the person's sessions.
+	Status *string
 }
 
 // UpdateUser changes an account. Demoting or disabling the last enabled admin
@@ -265,7 +347,7 @@ func (s *Service) UpdateUser(ctx context.Context, actor, id string, p UserPatch)
 	if err != nil {
 		return User{}, err
 	}
-	wasActiveAdmin := u.Role == RoleAdmin && !u.Disabled
+	wasActiveAdmin := u.Role == RoleAdmin && u.Active()
 	endSessions := false
 	if p.Name != nil {
 		u.Name = strings.TrimSpace(*p.Name)
@@ -280,6 +362,15 @@ func (s *Service) UpdateUser(ctx context.Context, actor, id string, p UserPatch)
 		endSessions = endSessions || (*p.Disabled && !u.Disabled)
 		u.Disabled = *p.Disabled
 	}
+	if p.Status != nil {
+		if *p.Status != StatusActive && *p.Status != StatusRejected {
+			return User{}, fmt.Errorf("%w: status must be active or rejected", ErrInvalidInput)
+		}
+		if *p.Status != u.Status && !(u.Status == "" && *p.Status == StatusActive) {
+			endSessions = true
+		}
+		u.Status = *p.Status
+	}
 	if p.Password != nil {
 		if err := CheckPassword(*p.Password); err != nil {
 			return User{}, err
@@ -289,7 +380,7 @@ func (s *Service) UpdateUser(ctx context.Context, actor, id string, p UserPatch)
 		}
 		endSessions = true
 	}
-	if wasActiveAdmin && (u.Role != RoleAdmin || u.Disabled) {
+	if wasActiveAdmin && (u.Role != RoleAdmin || !u.Active()) {
 		if n, err := s.store.CountActiveAdmins(ctx); err != nil {
 			return User{}, err
 		} else if n <= 1 {
@@ -318,6 +409,9 @@ func describePatch(p UserPatch) string {
 	}
 	if p.Disabled != nil {
 		parts = append(parts, fmt.Sprintf("disabled=%t", *p.Disabled))
+	}
+	if p.Status != nil {
+		parts = append(parts, "status "+*p.Status)
 	}
 	if p.Password != nil {
 		parts = append(parts, "password") // never the value

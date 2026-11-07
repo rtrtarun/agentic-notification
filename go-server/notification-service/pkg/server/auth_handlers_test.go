@@ -596,3 +596,134 @@ func TestStartupRejectsIncompleteSingleSignOn(t *testing.T) {
 		}
 	}
 }
+
+func TestSignUpIsOffUnlessConfigured(t *testing.T) {
+	s := newAuthServer(t, nil)
+	if body := call(s, http.MethodGet, "/api/auth/status", "", nil).Body.String(); !strings.Contains(body, `"signup":false`) {
+		t.Fatalf("status must say sign-up is off: %s", body)
+	}
+	rr := call(s, http.MethodPost, "/api/auth/signup", `{"email":"x@corp.com","password":"`+memberPass+`"}`, nil)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("sign-up while off = %d %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestSignUpThenAdminApprovalThenSignIn(t *testing.T) {
+	s := newAuthServer(t, func(c *config.Config) { c.AuthSignup = "approval" })
+	if body := call(s, http.MethodGet, "/api/auth/status", "", nil).Body.String(); !strings.Contains(body, `"signup":true`) {
+		t.Fatalf("status must say sign-up is on: %s", body)
+	}
+	rr := call(s, http.MethodPost, "/api/auth/signup", `{"email":"New@Corp.com","name":"Newbie","password":"`+memberPass+`"}`, nil)
+	if rr.Code != http.StatusAccepted || !strings.Contains(rr.Body.String(), `"status":"pending"`) {
+		t.Fatalf("sign-up = %d %s", rr.Code, rr.Body.String())
+	}
+	if cookieNamed(rr, sessionCookie) != nil {
+		t.Fatal("sign-up must never start a session")
+	}
+	if strings.Contains(rr.Body.String(), memberPass) || strings.Contains(rr.Body.String(), "argon2") {
+		t.Fatal("sign-up must not echo a password or hash")
+	}
+
+	// A pending person who signs in gets a clear refusal, no cookie.
+	rr = call(s, http.MethodPost, "/api/auth/login", `{"email":"new@corp.com","password":"`+memberPass+`"}`, nil)
+	if rr.Code != http.StatusForbidden || !strings.Contains(rr.Body.String(), `"code":"pending"`) || cookieNamed(rr, sessionCookie) != nil {
+		t.Fatalf("pending login = %d %s", rr.Code, rr.Body.String())
+	}
+
+	// The admin sees the request and approves it.
+	list := call(s, http.MethodGet, "/api/users", "", withKey).Body.String()
+	if !strings.Contains(list, `"status":"pending"`) {
+		t.Fatalf("the admin must see the pending request: %s", list)
+	}
+	var users struct {
+		Users []struct{ ID, Email string } `json:"users"`
+	}
+	_ = json.Unmarshal([]byte(list), &users)
+	var id string
+	for _, u := range users.Users {
+		if u.Email == "new@corp.com" {
+			id = u.ID
+		}
+	}
+	if id == "" {
+		t.Fatalf("pending user missing from %s", list)
+	}
+	if rr := call(s, http.MethodPatch, "/api/users/"+id, `{"status":"active"}`, withKey); rr.Code != http.StatusOK || !strings.Contains(rr.Body.String(), `"status":"active"`) {
+		t.Fatalf("approve = %d %s", rr.Code, rr.Body.String())
+	}
+	se := signIn(t, s, "new@corp.com", memberPass)
+	if rr := call(s, http.MethodGet, "/events", "", se.apply(false)); rr.Code != http.StatusOK {
+		t.Fatalf("an approved member must be able to read events, got %d", rr.Code)
+	}
+}
+
+func TestARejectedOrBadSignUpIsRefused(t *testing.T) {
+	s := newAuthServer(t, func(c *config.Config) { c.AuthSignup = "approval" })
+	for name, c := range map[string]struct {
+		body string
+		want int
+	}{
+		"bad email":     {`{"email":"nope","password":"` + memberPass + `"}`, http.StatusBadRequest},
+		"weak password": {`{"email":"w@corp.com","password":"short"}`, http.StatusBadRequest},
+		"empty":         {`{}`, http.StatusBadRequest},
+	} {
+		if rr := call(s, http.MethodPost, "/api/auth/signup", c.body, nil); rr.Code != c.want {
+			t.Errorf("%s = %d, want %d: %s", name, rr.Code, c.want, rr.Body.String())
+		}
+	}
+	if rr := call(s, http.MethodGet, "/api/auth/signup", "", nil); rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET signup = %d", rr.Code)
+	}
+	// An existing email gives the same answer as a new one: nothing is revealed.
+	first := call(s, http.MethodPost, "/api/auth/signup", `{"email":"dup@corp.com","password":"`+memberPass+`"}`, nil)
+	second := call(s, http.MethodPost, "/api/auth/signup", `{"email":"dup@corp.com","password":"`+memberPass+`"}`, nil)
+	admin := call(s, http.MethodPost, "/api/auth/signup", `{"email":"`+adminEmail+`","password":"`+memberPass+`"}`, nil)
+	if first.Code != second.Code || first.Code != admin.Code || first.Body.String() != admin.Body.String() {
+		t.Fatalf("answers differ: %d %d %d", first.Code, second.Code, admin.Code)
+	}
+	// The admin account was not touched by that attempt.
+	if rr := call(s, http.MethodPost, "/api/auth/login", `{"email":"`+adminEmail+`","password":"`+adminPass+`"}`, nil); rr.Code != http.StatusOK {
+		t.Fatalf("the admin must still sign in, got %d", rr.Code)
+	}
+}
+
+func TestAPendingAccountSeesNothingEvenWithAStaleSession(t *testing.T) {
+	s := newAuthServer(t, nil)
+	se := addMember(t, s, "member@corp.com")
+	var id string
+	var users struct {
+		Users []struct{ ID, Email string } `json:"users"`
+	}
+	_ = json.Unmarshal(call(s, http.MethodGet, "/api/users", "", withKey).Body.Bytes(), &users)
+	for _, u := range users.Users {
+		if u.Email == "member@corp.com" {
+			id = u.ID
+		}
+	}
+	if rr := call(s, http.MethodGet, "/events", "", se.apply(false)); rr.Code != http.StatusOK {
+		t.Fatalf("before = %d", rr.Code)
+	}
+	if rr := call(s, http.MethodPatch, "/api/users/"+id, `{"status":"rejected"}`, withKey); rr.Code != http.StatusOK {
+		t.Fatalf("reject = %d", rr.Code)
+	}
+	if rr := call(s, http.MethodGet, "/events", "", se.apply(false)); rr.Code != http.StatusUnauthorized {
+		t.Fatalf("a rejected account's session must stop working, got %d", rr.Code)
+	}
+	if rr := call(s, http.MethodPatch, "/api/users/"+id, `{"status":"owner"}`, withKey); rr.Code != http.StatusBadRequest {
+		t.Fatalf("bad status = %d", rr.Code)
+	}
+}
+
+func TestStartupRejectsABadSignUpSetting(t *testing.T) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AuthSignup != "off" {
+		t.Fatalf("default AUTH_SIGNUP = %q, want off", cfg.AuthSignup)
+	}
+	t.Setenv("AUTH_SIGNUP", "open")
+	if _, err := config.LoadConfig(); err == nil {
+		t.Fatal("AUTH_SIGNUP=open must be refused: only off and approval exist")
+	}
+}

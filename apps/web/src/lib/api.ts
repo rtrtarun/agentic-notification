@@ -44,6 +44,8 @@ export class ApiError extends Error {
   constructor(
     readonly kind: ApiErrorKind,
     message: string,
+    /** The service's short code for a refusal, such as "pending". */
+    readonly code?: string,
   ) {
     super(message)
     this.name = 'ApiError'
@@ -84,8 +86,8 @@ export async function request(settings: Settings, path: string, init: RequestIni
   if (res.status === 401) throw new ApiError('unauthorized', 'The API key was rejected.')
   if (res.status === 503) throw new ApiError('unconfigured', 'The service has no API key configured.')
   if (res.status >= 400 && res.status < 500) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string }
-    throw new ApiError('rejected', body.error ?? 'The service rejected the request.')
+    const body = (await res.json().catch(() => ({}))) as { error?: string; code?: string }
+    throw new ApiError('rejected', body.error ?? 'The service rejected the request.', body.code)
   }
   throw new ApiError('server', 'The service hit an error.')
 }

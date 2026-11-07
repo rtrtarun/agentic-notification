@@ -60,7 +60,7 @@ function Accounts() {
     }
   }
 
-  const update = async (u: AuthUser, patch: { role?: Role; disabled?: boolean }) => {
+  const update = async (u: AuthUser, patch: { role?: Role; disabled?: boolean; status?: 'active' | 'rejected' }) => {
     try {
       await client.updateUser(u.id, patch)
       reload()
@@ -76,6 +76,29 @@ function Accounts() {
         <h2 className="panel-title">{t('users.accounts')}</h2>
         <LoadGate state={state} onRetry={reload}>
           {(users) => (
+            <>
+            {users.some((u) => u.status === 'pending') && (
+              <div className="panel-note" role="region" aria-label={t('users.pending')}>
+                <h3 className="panel-title">{t('users.pending')}</h3>
+                <p className="form-help">{t('users.pendingNote')}</p>
+                <ul className="plain-list">
+                  {users
+                    .filter((u) => u.status === 'pending')
+                    .map((u) => (
+                      <li key={u.id}>
+                        <strong>{u.name || u.email}</strong>
+                        {u.name && <span className="form-help"> {u.email}</span>}{' '}
+                        <button type="button" className="button button-primary" onClick={() => void update(u, { status: 'active' })}>
+                          {t('users.approve')}
+                        </button>{' '}
+                        <button type="button" className="button" onClick={() => void update(u, { status: 'rejected' })}>
+                          {t('users.reject')}
+                        </button>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )}
             <div className="table-wrap">
               <table className="data-table">
                 <caption className="sr-only">{t('users.accounts')}</caption>
@@ -111,6 +134,8 @@ function Accounts() {
                             {u.disabled ? t('users.enable') : t('users.disable')}
                           </button>
                           {u.disabled && <span className="status" data-state="warn"> {t('users.disabled')}</span>}
+                          {u.status === 'rejected' && <span className="status" data-state="warn"> {t('users.rejected')}</span>}
+                          {u.status === 'pending' && <span className="status" data-state="warn"> {t('users.waiting')}</span>}
                         </td>
                       </tr>
                     )
@@ -118,6 +143,7 @@ function Accounts() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </LoadGate>
         <p className="form-help">{t('users.lastAdmin')}</p>

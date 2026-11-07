@@ -15,7 +15,7 @@ func (s *Server) initAuth(ctx context.Context) error {
 	if s.sqlDB != nil {
 		store = auth.NewPostgresStore(s.sqlDB)
 	}
-	s.auth = auth.NewService(store, s.cfg.AuthSessionTTL)
+	s.auth = auth.NewService(store, s.cfg.AuthSessionTTL).WithSignup(s.cfg.AuthSignup == "approval")
 
 	if s.cfg.AuthBootstrapEmail != "" {
 		made, err := s.auth.Bootstrap(ctx, s.cfg.AuthBootstrapEmail, s.cfg.AuthBootstrapPassword)

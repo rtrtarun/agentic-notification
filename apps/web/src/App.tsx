@@ -7,6 +7,7 @@ import { SettingsDialog } from './components/SettingsDialog'
 import { Welcome } from './components/Welcome'
 import { ToastProvider } from './design/Toast'
 import { HOME_PATH, NAV_ITEMS } from './lib/nav'
+import { connectSettings } from './lib/settings'
 
 const InboxPage = lazy(() => import('./pages/InboxPage'))
 const OverviewPage = lazy(() => import('./pages/OverviewPage'))
@@ -45,14 +46,14 @@ const BUILT: Record<string, React.ReactElement> = {
 }
 
 function Screens() {
-  const { welcome, tryDemo, openSettings, settingsOpen, closeSettings, saveConnection, settings } = useApp()
+  const { welcome, tryDemo, settingsOpen, closeSettings, saveConnection, settings } = useApp()
 
   const dialog = <SettingsDialog open={settingsOpen} settings={settings} onClose={closeSettings} onSave={saveConnection} />
 
   if (welcome) {
     return (
       <>
-        <Welcome onTryDemo={tryDemo} onConnect={openSettings} />
+        <Welcome onTryDemo={tryDemo} onConnect={() => saveConnection(connectSettings(settings))} />
         {dialog}
       </>
     )

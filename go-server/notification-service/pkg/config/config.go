@@ -74,6 +74,9 @@ type Config struct {
 	AuthCookieSecure string
 	// AuthCookieSameSite is "lax" (default), "strict" or "none" (needed when the console is on another site; forces Secure).
 	AuthCookieSameSite string
+	// AuthSignup is "off" (default) or "approval": people may ask for an account and
+	// an admin must approve it before it can sign in.
+	AuthSignup string
 	// AuthSecret signs the short-lived sign-in state. Set it when running several replicas.
 	AuthSecret string
 	// PublicURL is this service's own public address, used to build the identity provider callback.
@@ -233,6 +236,12 @@ func LoadConfig() (*Config, error) {
 	case "lax", "strict", "none":
 	default:
 		return nil, fmt.Errorf("invalid AUTH_COOKIE_SAMESITE: %q (use lax, strict or none)", cfg.AuthCookieSameSite)
+	}
+	cfg.AuthSignup = strings.ToLower(strings.TrimSpace(envDefault("AUTH_SIGNUP", "off")))
+	switch cfg.AuthSignup {
+	case "off", "approval":
+	default:
+		return nil, fmt.Errorf("invalid AUTH_SIGNUP: %q (use off or approval)", cfg.AuthSignup)
 	}
 	cfg.AuthSecret = os.Getenv("AUTH_SECRET")
 	if cfg.OverridesAdminOnly, err = envBool("OVERRIDES_ADMIN_ONLY"); err != nil {

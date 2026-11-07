@@ -1285,3 +1285,15 @@ button {
   color: var(--fog);
   white-space: nowrap;
 }
+
+/* A button that reads as a text link, for secondary choices such as "Advanced". */
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}

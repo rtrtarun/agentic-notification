@@ -368,3 +368,121 @@ func TestMemoryStoreDetails(t *testing.T) {
 		t.Fatalf("audit kept %d", len(got))
 	}
 }
+
+func TestSignUpIsOffByDefault(t *testing.T) {
+	svc, _, _ := newSvc()
+	if err := svc.SignUp(ctx, "new@corp.com", "New", goodPassword, "1.2.3.4"); !errors.Is(err, ErrSignupDisabled) {
+		t.Fatalf("got %v, want ErrSignupDisabled", err)
+	}
+	if svc.SignupEnabled() {
+		t.Fatal("sign-up must be off unless switched on")
+	}
+}
+
+func TestSignUpCreatesAPendingMemberWhoCannotSignInUntilApproved(t *testing.T) {
+	svc, store, _ := newSvc()
+	svc.WithSignup(true)
+	if err := svc.SignUp(ctx, " New@Corp.com ", " Newbie ", goodPassword, "1.2.3.4"); err != nil {
+		t.Fatal(err)
+	}
+	u, err := store.UserByEmail(ctx, "new@corp.com")
+	if err != nil || u.Role != RoleMember || u.Status != StatusPending || u.Active() {
+		t.Fatalf("a sign-up must be a pending member: %+v, %v", u, err)
+	}
+	if u.PasswordHash == "" || strings.Contains(u.PasswordHash, goodPassword) {
+		t.Fatal("the password must be stored hashed")
+	}
+	if _, _, _, err := svc.Login(ctx, "new@corp.com", goodPassword, "1.2.3.4"); !errors.Is(err, ErrPendingApproval) {
+		t.Fatalf("login before approval = %v, want ErrPendingApproval", err)
+	}
+	if _, _, _, err := svc.Login(ctx, "new@corp.com", "wrong password here", "1.2.3.4"); !errors.Is(err, ErrInvalidCredentials) {
+		t.Fatalf("a wrong password must stay generic, got %v", err)
+	}
+	active := StatusActive
+	if _, err := svc.UpdateUser(ctx, "admin@corp.com", u.ID, UserPatch{Status: &active}); err != nil {
+		t.Fatal(err)
+	}
+	token, _, who, err := svc.Login(ctx, "new@corp.com", goodPassword, "1.2.3.4")
+	if err != nil || token == "" || who.Email != "new@corp.com" {
+		t.Fatalf("login after approval = %v, %v", who, err)
+	}
+}
+
+func TestARejectedSignUpCannotSignIn(t *testing.T) {
+	svc, store, _ := newSvc()
+	svc.WithSignup(true)
+	if err := svc.SignUp(ctx, "no@corp.com", "", goodPassword, "9.9.9.9"); err != nil {
+		t.Fatal(err)
+	}
+	u, _ := store.UserByEmail(ctx, "no@corp.com")
+	rejected := StatusRejected
+	if _, err := svc.UpdateUser(ctx, "admin@corp.com", u.ID, UserPatch{Status: &rejected}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := svc.Login(ctx, "no@corp.com", goodPassword, "9.9.9.9"); !errors.Is(err, ErrAccountRejected) {
+		t.Fatalf("got %v, want ErrAccountRejected", err)
+	}
+	bad := "owner"
+	if _, err := svc.UpdateUser(ctx, "admin@corp.com", u.ID, UserPatch{Status: &bad}); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("a bad status must be refused, got %v", err)
+	}
+}
+
+func TestSignUpDoesNotRevealExistingAccountsAndChangesNothing(t *testing.T) {
+	svc, store, _ := newSvc()
+	svc.WithSignup(true)
+	if _, err := svc.CreateUser(ctx, "admin", "taken@corp.com", "", RoleAdmin, goodPassword); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.SignUp(ctx, "taken@corp.com", "Intruder", "a different long password", "5.5.5.5"); err != nil {
+		t.Fatalf("a repeat sign-up must look like success, got %v", err)
+	}
+	u, _ := store.UserByEmail(ctx, "taken@corp.com")
+	if u.Role != RoleAdmin || !u.Active() || !VerifyPassword(u.PasswordHash, goodPassword) {
+		t.Fatalf("an existing account must be untouched: %+v", u)
+	}
+}
+
+func TestSignUpValidatesInputAndIsThrottledPerAddress(t *testing.T) {
+	svc, _, _ := newSvc()
+	svc.WithSignup(true)
+	if err := svc.SignUp(ctx, "nope", "", goodPassword, "7.7.7.7"); !errors.Is(err, ErrInvalidInput) {
+		t.Fatalf("bad email: %v", err)
+	}
+	if err := svc.SignUp(ctx, "ok@corp.com", "", "short", "7.7.7.7"); !errors.Is(err, ErrWeakPassword) {
+		t.Fatalf("weak password: %v", err)
+	}
+	var last error
+	for i := 0; i < signupMaxPerWindow+2; i++ {
+		last = svc.SignUp(ctx, fmt.Sprintf("u%d@corp.com", i), "", goodPassword, "8.8.8.8")
+	}
+	if !errors.Is(last, ErrTooManySignups) {
+		t.Fatalf("one address must be throttled, got %v", last)
+	}
+	if err := svc.SignUp(ctx, "other@corp.com", "", goodPassword, "6.6.6.6"); err != nil {
+		t.Fatalf("another address must not be affected: %v", err)
+	}
+}
+
+func TestAPendingOrRejectedAccountNeverAuthenticatesASession(t *testing.T) {
+	svc, store, _ := newSvc()
+	if _, err := svc.CreateUser(ctx, "admin", "a@corp.com", "", RoleAdmin, goodPassword); err != nil {
+		t.Fatal(err)
+	}
+	token, _, _, err := svc.Login(ctx, "a@corp.com", goodPassword, "1.1.1.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, _ := store.UserByEmail(ctx, "a@corp.com")
+	u.Status = StatusPending
+	_ = store.UpdateUser(ctx, u)
+	if _, _, err := svc.Authenticate(ctx, token); !errors.Is(err, ErrUnauthenticated) {
+		t.Fatalf("a session of a non-approved account must stop working, got %v", err)
+	}
+}
+
+func TestAnAccountWithNoStatusCountsAsActive(t *testing.T) {
+	if !(User{}).Active() || (User{Disabled: true}).Active() || (User{Status: StatusPending}).Active() || (User{Status: StatusRejected}).Active() {
+		t.Fatal("empty status is active; disabled, pending and rejected are not")
+	}
+}

@@ -6,12 +6,16 @@ import { ApiError, request, setCsrfToken, type Settings } from './api'
 
 export type Role = 'admin' | 'member'
 
+/** An account is pending until an admin approves it; a rejected sign-up never gets in. */
+export type AccountStatus = 'active' | 'pending' | 'rejected'
+
 export interface AuthUser {
   id: string
   email: string
   name: string
   role: Role
   disabled?: boolean
+  status?: AccountStatus
 }
 
 export interface Identity {
@@ -22,6 +26,8 @@ export interface Identity {
 
 export interface AuthStatus {
   needsSetup: boolean
+  /** True when people may ask for an account (an admin approves it). */
+  signup?: boolean
   sso: { enabled: boolean; name?: string; startPath?: string }
 }
 
@@ -46,6 +52,8 @@ export interface UserPatch {
   role?: Role
   disabled?: boolean
   password?: string
+  /** "active" approves a pending sign-up; "rejected" refuses it. */
+  status?: 'active' | 'rejected'
 }
 
 export interface AuthClient {
@@ -53,6 +61,8 @@ export interface AuthClient {
   /** The signed-in identity, or null when nobody is signed in. Other failures throw. */
   me(signal?: AbortSignal): Promise<Identity | null>
   login(email: string, password: string): Promise<Identity>
+  /** Ask for an account. It starts pending; an admin must approve it before it can sign in. */
+  signup(email: string, name: string, password: string): Promise<void>
   logout(): Promise<void>
   changePassword(current: string, next: string): Promise<void>
   users(signal?: AbortSignal): Promise<AuthUser[]>
@@ -67,15 +77,38 @@ const DEMO_USERS: AuthUser[] = [
   DEMO_USER,
   { id: 'u2', email: 'sam@example.com', name: 'Sam Lee', role: 'member' },
   { id: 'u3', email: 'former@example.com', name: 'Former Teammate', role: 'member', disabled: true },
+  { id: 'u4', email: 'newhire@example.com', name: 'New Hire', role: 'member', status: 'pending' },
 ]
 
-/** Plain-language reason a sign-in failed. The same wording for a wrong email and a wrong password. */
-export function loginFailureKey(err: unknown): 'locked' | 'invalid' | 'unreachable' {
+export type LoginFailure = 'locked' | 'invalid' | 'unreachable' | 'pending' | 'rejected' | 'cookie'
+
+/**
+ * Plain-language reason a sign-in failed. The same wording for a wrong email and a
+ * wrong password. "pending" and "rejected" only follow a correct password, and
+ * "cookie" means the sign-in worked but the browser did not keep the session.
+ */
+export function loginFailureKey(err: unknown): LoginFailure {
   if (err instanceof ApiError) {
+    if (err.code === 'pending') return 'pending'
+    if (err.code === 'rejected') return 'rejected'
+    if (err.code === 'cookie') return 'cookie'
     if (/too many failed/i.test(err.message)) return 'locked'
     if (err.kind === 'unreachable') return 'unreachable'
   }
   return 'invalid'
+}
+
+export type SignupFailure = { key: 'disabled' | 'tooMany' | 'unreachable' | 'failed' } | { key: 'invalid'; detail: string }
+
+/** Why a sign-up request failed, in terms the sign-up form can word. */
+export function signupFailure(err: unknown): SignupFailure {
+  if (err instanceof ApiError) {
+    if (err.kind === 'unreachable') return { key: 'unreachable' }
+    if (/too many/i.test(err.message)) return { key: 'tooMany' }
+    if (/not available/i.test(err.message)) return { key: 'disabled' }
+    if (err.kind === 'rejected') return { key: 'invalid', detail: err.message }
+  }
+  return { key: 'failed' }
 }
 
 /** What the redirect back from single sign-on says, from the address query. */
@@ -94,7 +127,7 @@ export function demoAuthClient(): AuthClient {
   let users = DEMO_USERS.map((u) => ({ ...u }))
   return {
     async status() {
-      return { needsSetup: false, sso: { enabled: false } }
+      return { needsSetup: false, signup: true, sso: { enabled: false } }
     },
     async me() {
       return { via: 'demo', user: DEMO_USER }
@@ -102,6 +135,7 @@ export function demoAuthClient(): AuthClient {
     async login() {
       return { via: 'demo', user: DEMO_USER }
     },
+    async signup() {},
     async logout() {},
     async changePassword() {},
     async users() {
@@ -119,6 +153,7 @@ export function demoAuthClient(): AuthClient {
         if (patch.name !== undefined) next.name = patch.name
         if (patch.role) next.role = patch.role
         if (patch.disabled !== undefined) next.disabled = patch.disabled
+        if (patch.status) next.status = patch.status
         return next
       })
       return users.find((u) => u.id === id) as AuthUser
@@ -136,30 +171,38 @@ export function demoAuthClient(): AuthClient {
 
 export function httpAuth(settings: Settings): AuthClient {
   const json = async (res: Response) => res.json()
+  const me = async (signal?: AbortSignal): Promise<Identity | null> => {
+    try {
+      const body = (await json(await request(settings, '/api/auth/me', { signal }))) as { via: Identity['via']; user: AuthUser; csrfToken?: string }
+      setCsrfToken(body.csrfToken ?? '')
+      return { via: body.via, user: body.user }
+    } catch (err) {
+      if (err instanceof ApiError && err.kind === 'unauthorized') {
+        setCsrfToken('')
+        return null
+      }
+      throw err
+    }
+  }
   return {
     async status(signal) {
       return (await json(await request(settings, '/api/auth/status', { signal }))) as AuthStatus
     },
-    async me(signal) {
-      try {
-        const body = (await json(await request(settings, '/api/auth/me', { signal }))) as { via: Identity['via']; user: AuthUser; csrfToken?: string }
-        setCsrfToken(body.csrfToken ?? '')
-        return { via: body.via, user: body.user }
-      } catch (err) {
-        if (err instanceof ApiError && err.kind === 'unauthorized') {
-          setCsrfToken('')
-          return null
-        }
-        throw err
-      }
-    },
+    me,
     async login(email, password) {
       const body = (await json(await request(settings, '/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }))) as {
         user: AuthUser
         csrfToken: string
       }
       setCsrfToken(body.csrfToken)
-      return { via: 'session', user: body.user }
+      // A sign-in the browser does not keep (a cookie from another site, blocked) would
+      // silently return to the sign-in page. Check once, and say so.
+      const who = await me()
+      if (!who) throw new ApiError('unauthorized', 'The browser did not keep the session cookie.', 'cookie')
+      return who
+    },
+    async signup(email, name, password) {
+      await request(settings, '/api/auth/signup', { method: 'POST', body: JSON.stringify({ email, name, password }) })
     },
     async logout() {
       try {

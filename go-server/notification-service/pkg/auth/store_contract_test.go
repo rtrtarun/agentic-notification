@@ -77,6 +77,27 @@ func storeContract(t *testing.T, s Store) {
 		}
 	})
 
+	t.Run("an account's approval status is stored and changes persist", func(t *testing.T) {
+		pending := User{ID: "u-pending", Email: "pending@corp.com", Role: RoleMember, Status: StatusPending, PasswordHash: "hash", CreatedAt: contractNow}
+		if err := s.CreateUser(ctx, pending); err != nil {
+			t.Fatal(err)
+		}
+		got, err := s.UserByEmail(ctx, "pending@corp.com")
+		if err != nil || got.Status != StatusPending || got.Active() {
+			t.Fatalf("a pending account must read back pending and not active: %+v, %v", got, err)
+		}
+		got.Status = StatusActive
+		if err := s.UpdateUser(ctx, got); err != nil {
+			t.Fatal(err)
+		}
+		if again, _ := s.UserByID(ctx, "u-pending"); again.Status != StatusActive || !again.Active() {
+			t.Fatalf("approval not stored: %+v", again)
+		}
+		if n, _ := s.CountActiveAdmins(ctx); n < 0 {
+			t.Fatal("unreachable")
+		}
+	})
+
 	t.Run("an identity links to one user and signs them in", func(t *testing.T) {
 		if err := s.LinkIdentity(ctx, "u-member", "https://login.example", "sub-1"); err != nil {
 			t.Fatal(err)

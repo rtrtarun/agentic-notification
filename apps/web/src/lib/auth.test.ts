@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { ApiError, request, setCsrfToken } from './api'
-import { demoAuthClient, httpAuth, loginFailureKey, passwordProblem, ssoOutcome } from './auth'
+import { demoAuthClient, httpAuth, loginFailureKey, passwordProblem, signupFailure, ssoOutcome } from './auth'
 
 const settings = { backendUrl: 'http://svc', apiKey: '' }
 
@@ -65,7 +65,8 @@ describe('http auth client', () => {
   })
 
   it('sign-in stores the CSRF token and later writes carry it, but reads do not', async () => {
-    const calls = stubFetch((c) => (c.url.endsWith('/login') ? json({ user: { id: '1', email: 'a@b.c', name: '', role: 'admin' }, csrfToken: 'tok-1' }) : json({})))
+    const me = { via: 'session', user: { id: '1', email: 'a@b.c', name: '', role: 'admin' }, csrfToken: 'tok-1' }
+    const calls = stubFetch((c) => (c.url.endsWith('/login') ? json({ user: me.user, csrfToken: 'tok-1' }) : c.url.endsWith('/api/auth/me') ? json(me) : json({})))
     const who = await httpAuth(settings).login('a@b.c', 'pw')
     expect(who).toEqual({ via: 'session', user: { id: '1', email: 'a@b.c', name: '', role: 'admin' } })
 
@@ -78,7 +79,8 @@ describe('http auth client', () => {
   })
 
   it('never sends the CSRF token on the sign-in call itself or before signing in', async () => {
-    const calls = stubFetch(() => json({ user: { id: '1', email: 'a@b.c', name: '', role: 'member' }, csrfToken: 't' }))
+    const user = { id: '1', email: 'a@b.c', name: '', role: 'member' }
+    const calls = stubFetch((c) => (c.url.endsWith('/api/auth/me') ? json({ via: 'session', user, csrfToken: 't' }) : json({ user, csrfToken: 't' })))
     await httpAuth(settings).login('a@b.c', 'pw')
     expect(calls[0].headers['X-CSRF-Token']).toBeUndefined()
     expect(JSON.stringify(calls[0])).not.toContain('"t"')
@@ -144,5 +146,62 @@ describe('demo auth client', () => {
     expect(off).toMatchObject({ disabled: true, role: 'admin' })
     expect((await c.audit(10)).length).toBeGreaterThan(0)
     expect((await c.status()).sso.enabled).toBe(false)
+  })
+})
+
+describe('sign-up and the new sign-in outcomes', () => {
+  it('words a pending, a rejected and a blocked-cookie sign-in each in its own way', () => {
+    expect(loginFailureKey(new ApiError('rejected', 'your account is waiting for approval', 'pending'))).toBe('pending')
+    expect(loginFailureKey(new ApiError('rejected', 'your sign-up was not approved', 'rejected'))).toBe('rejected')
+    expect(loginFailureKey(new ApiError('unauthorized', 'cookie', 'cookie'))).toBe('cookie')
+    // A wrong password stays generic, so a pending state is never revealed without the right password.
+    expect(loginFailureKey(new ApiError('unauthorized', 'incorrect email or password'))).toBe('invalid')
+  })
+
+  it('a sign-in the browser does not keep is reported, not looped back to the sign-in page', async () => {
+    const user = { id: '1', email: 'a@b.c', name: '', role: 'member' }
+    stubFetch((c) => (c.url.endsWith('/login') ? json({ user, csrfToken: 't' }) : json({ error: 'missing or invalid api key' }, 401)))
+    await expect(httpAuth(settings).login('a@b.c', 'pw')).rejects.toMatchObject({ code: 'cookie' })
+    // No token is kept for a session that does not exist.
+    const after = stubFetch(() => json({}))
+    await request(settings, '/x', { method: 'POST', body: '{}' })
+    expect(after[0].headers['X-CSRF-Token']).toBeUndefined()
+  })
+
+  it('a pending account is refused with the service code, with no session', async () => {
+    stubFetch(() => json({ error: 'your account is waiting for approval', code: 'pending' }, 403))
+    const err = await httpAuth(settings)
+      .login('new@b.c', 'pw')
+      .catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(loginFailureKey(err)).toBe('pending')
+  })
+
+  it('sign-up posts the three fields without the API key or a CSRF token and returns nothing', async () => {
+    const calls = stubFetch(() => json({ status: 'pending' }, 202))
+    await expect(httpAuth(settings).signup('new@b.c', 'New', 'a long enough password')).resolves.toBeUndefined()
+    expect(calls[0].url).toBe('http://svc/api/auth/signup')
+    expect(calls[0].method).toBe('POST')
+    expect(JSON.parse(String((calls[0] as unknown as { body?: string }).body ?? '{}') || '{}')).toBeTypeOf('object')
+    expect(calls[0].headers['X-CSRF-Token']).toBeUndefined()
+    expect(calls[0].headers['X-API-Key']).toBeUndefined()
+  })
+
+  it('explains why a sign-up failed', () => {
+    expect(signupFailure(new ApiError('unreachable', 'down'))).toEqual({ key: 'unreachable' })
+    expect(signupFailure(new ApiError('rejected', 'too many sign-up requests; try again later'))).toEqual({ key: 'tooMany' })
+    expect(signupFailure(new ApiError('rejected', 'sign-up is not available'))).toEqual({ key: 'disabled' })
+    expect(signupFailure(new ApiError('rejected', 'invalid input: a valid email is required'))).toEqual({ key: 'invalid', detail: 'invalid input: a valid email is required' })
+    expect(signupFailure(new Error('x'))).toEqual({ key: 'failed' })
+  })
+
+  it('the demo lets you try sign-up and approve a pending request', async () => {
+    const demo = demoAuthClient()
+    expect((await demo.status()).signup).toBe(true)
+    await expect(demo.signup('x@y.z', 'X', 'a long enough password')).resolves.toBeUndefined()
+    const pending = (await demo.users()).find((u) => u.status === 'pending')!
+    expect(pending).toBeDefined()
+    expect((await demo.updateUser(pending.id, { status: 'active' })).status).toBe('active')
+    expect((await demo.users()).some((u) => u.status === 'pending')).toBe(false)
   })
 })

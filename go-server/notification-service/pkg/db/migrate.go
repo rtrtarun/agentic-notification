@@ -178,6 +178,8 @@ func Migrate(ctx context.Context, db Execer) error {
 			disabled      BOOLEAN NOT NULL DEFAULT FALSE,
 			created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
+		// Sign-up approval: older rows become active.
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`,
 		`CREATE TABLE IF NOT EXISTS user_identities (
 			issuer  TEXT NOT NULL,
 			subject TEXT NOT NULL,
