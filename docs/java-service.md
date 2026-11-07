@@ -7,10 +7,11 @@ The Java implementation of the Attention Orchestration core (`java-server/notifi
 - **Layer 1, deterministic, no AI:** normalization; rules from the shared `rules.yaml` (strict decoding, locked critical rules first) and from the shared `policy_rules` table (run-time reload); deduplication (memory, or Redis shared across replicas and with the Go service, failing open at run time); threading.
 - **Critical events** are decided by rules alone, delivered inline before they are stored, and never reach AI, merging, muting, delay, budget or the queue. Delivery fails if any channel fails, so GitHub retries.
 - **Delivery:** email (SMTP), Slack and Teams webhooks. Standard and background events go through a durable PostgreSQL queue: retry with doubling backoff, dead letters, manual retry, leases that survive a crashed worker, `FOR UPDATE SKIP LOCKED`.
-- **API:** `GET /health`, `GET /events` (cursor-compatible with Go), `GET` and `POST /api/rules`, `PUT` and `DELETE /api/rules/{id}`, `POST /api/rules/reorder`, `POST /api/rules/test`, `GET /api/policies`, `GET /api/deliveries`, `POST /api/deliveries/{id}/retry`.
+- **Accounts (milestone 36):** `POST /api/auth/signup` (off unless `AUTH_SIGNUP=approval`; the account is pending until an admin approves it), `POST /api/auth/login` (`403` with `code` `pending` or `rejected` after a correct password), `POST /api/auth/logout`, `GET /api/auth/me`, `GET /api/auth/status`, and `GET`/`POST /api/users`, `PATCH /api/users/{id}` (admin; `status` approves or rejects). Sessions use an `HttpOnly` cookie and a CSRF token, work on every protected endpoint, and the API key still works. Rule changes and manual delivery retries need an admin. Passwords are argon2id in the same format as Go (BouncyCastle), so an account made by one service signs in on the other. There is no CORS, so a console on another site cannot use these endpoints in a browser.
+- **API:** `GET /health` (returns `version`), `GET /events` (cursor-compatible with Go), `GET` and `POST /api/rules`, `PUT` and `DELETE /api/rules/{id}`, `POST /api/rules/reorder`, `POST /api/rules/test`, `GET /api/policies`, `GET /api/deliveries`, `POST /api/deliveries/{id}/retry`.
 
 ## What it does not do yet (Go only)
-SMS, Novu, metrics, inbox, channels API, accounts and roles (the API key is the only gate), Attention Intelligence, feedback, learning, traces, MCP, CORS, streaming, and event retention (shown by `/api/policies`, not enforced). Rules with `payloadMatch` or per-rule `channels` are **refused** at the API and at start-up, never ignored.
+SMS, Novu, metrics, inbox, channels API, single sign-on, Attention Intelligence, feedback, learning, traces, MCP, CORS, streaming, and event retention (shown by `/api/policies`, not enforced). Rules with `payloadMatch` or per-rule `channels` are **refused** at the API and at start-up, never ignored.
 
 ## Architecture
 ```text
@@ -29,7 +30,7 @@ com.agentpulse.notification
 - Redis keys are `dedup:` plus the dedup key, the same as Go, so an event seen by one service is a duplicate for the other.
 
 ## Configuration
-Same names as Go: `PORT`, `API_KEY`, `ALLOW_UNAUTHENTICATED_API`, `GITHUB_WEBHOOK_SECRET`, `ALLOW_UNSIGNED_WEBHOOKS`, `DATABASE_URL`, `REDIS_URL`, `RULES_PATH`, `DEDUP_WINDOW`, `MAX_BODY_BYTES`, `DEFAULT_NOTIFY_EMAIL`, `SMTP_*`, `SMTP_REQUIRE_STARTTLS`, `SLACK_WEBHOOK_URL`, `TEAMS_WEBHOOK_URL`, `NOTIFY_ALLOWED_WEBHOOK_HOSTS`, `NOTIFY_ALLOWED_EMAIL_DOMAINS`, `NOTIFY_STANDARD_CHANNELS`, `NOTIFY_BACKGROUND_CHANNELS`, `EVENT_RETENTION`, `LOG_LEVEL`.
+Same names as Go: `PORT`, `API_KEY`, `ALLOW_UNAUTHENTICATED_API`, `GITHUB_WEBHOOK_SECRET`, `ALLOW_UNSIGNED_WEBHOOKS`, `DATABASE_URL`, `REDIS_URL`, `RULES_PATH`, `DEDUP_WINDOW`, `MAX_BODY_BYTES`, `DEFAULT_NOTIFY_EMAIL`, `SMTP_*`, `SMTP_REQUIRE_STARTTLS`, `SLACK_WEBHOOK_URL`, `TEAMS_WEBHOOK_URL`, `NOTIFY_ALLOWED_WEBHOOK_HOSTS`, `NOTIFY_ALLOWED_EMAIL_DOMAINS`, `NOTIFY_STANDARD_CHANNELS`, `NOTIFY_BACKGROUND_CHANNELS`, `EVENT_RETENTION`, `LOG_LEVEL`, and for accounts `AUTH_BOOTSTRAP_EMAIL`, `AUTH_BOOTSTRAP_PASSWORD`, `AUTH_SESSION_TTL`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`, `AUTH_SIGNUP`; `APP_VERSION` is set by the image build.
 
 No `API_KEY` means the API refuses requests. No `GITHUB_WEBHOOK_SECRET` means the webhook refuses, unless the matching `ALLOW_*` flag is set. No `DATABASE_URL` keeps events in memory.
 
@@ -45,7 +46,7 @@ docker run --rm -v "$(pwd):/app" -v m2cache:/root/.m2 -w /app/java-server/notifi
 `mvn verify` passes with no database: the PostgreSQL classes and the Redis adapter are outside the 80 percent gate and their tests skip. Set `TEST_DATABASE_URL` (migrated by the Go `cmd/migrate`) and `TEST_REDIS_URL` to run them; CI always does.
 
 ## Tests
-132 with PostgreSQL and Redis (121 without), 95.8 percent line coverage in gate scope. Nine `SacredInvariantTest` cases prove that critical events skip the classifier, dedup (memory and Redis), preferences, budget and queue, are delivered inline, and fail loudly when delivery fails. The shared HTTP contract ([contract/](contract/README.md), nine files) is replayed by `ContractTest` here and `TestContract` in Go.
+170 with PostgreSQL (156 without), 95.2 percent line coverage in gate scope. Nine `SacredInvariantTest` cases prove that critical events skip the classifier, dedup (memory and Redis), preferences, budget and queue, are delivered inline, and fail loudly when delivery fails. The shared HTTP contract ([contract/](contract/README.md), ten files) is replayed by `ContractTest` here and `TestContract` in Go.
 
 ## Known behaviours
 - **Two services on one database must be configured alike**: both dispatch from `delivery_jobs`, and a job goes to whichever claims it first.

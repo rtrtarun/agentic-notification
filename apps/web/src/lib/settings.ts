@@ -55,3 +55,20 @@ export function validateBackendUrl(value: string): 'settings.urlScheme' | 'setti
     return 'settings.urlInvalid'
   }
 }
+
+/**
+ * What "Connect your service" saves from the welcome screen: the service address
+ * as it stands, no API key and no demo mode, so the sign-in page comes next.
+ * The API key stays available under "Advanced" for services.
+ */
+export function connectSettings(s: Settings): Settings {
+  return { backendUrl: s.backendUrl, apiKey: '' }
+}
+
+/**
+ * The settings after signing out. The address stays; an API key does not, so
+ * signing out really ends access and a reload does not walk straight back in.
+ */
+export function signedOutSettings(s: Settings): Settings {
+  return { backendUrl: s.backendUrl, apiKey: '' }
+}

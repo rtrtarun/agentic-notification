@@ -1,14 +1,23 @@
-name: Publish service image
+name: Publish service images
 
-# Builds the Go service image and stores it in GitHub Container Registry
-# (ghcr.io/<owner>/<repository>/notification-service). Any container host can
-# then run it. Uses the built-in GITHUB_TOKEN; no secrets to create.
+# Builds BOTH service images and stores them in GitHub Container Registry:
+#   ghcr.io/<owner>/<repository>/notification-service        the Go service (the one the console talks to)
+#   ghcr.io/<owner>/<repository>/notification-service-java   the Java service
+# Each image is tagged with the release in the VERSION file (1.2.3 and 1.2), with "latest", and with
+# sha-<short commit>. The release is also baked in (APP_VERSION) and shown by GET /health, so a running
+# service can be identified without a commit hash. Any container host can then run an image.
+# Uses the built-in GITHUB_TOKEN; no secrets to create.
+#
+# To release: edit VERSION, merge to the default branch. Publishing the same version again moves that
+# tag to the new build (the workflow warns); the sha tag always stays unique.
 
 on:
   push:
     branches: [ main, master ]
     paths:
       - 'go-server/notification-service/**'
+      - 'java-server/notification-service/**'
+      - 'VERSION'
       - '.github/workflows/publish-image.yml'
   workflow_dispatch:
 
@@ -17,8 +26,35 @@ permissions:
   packages: write
 
 jobs:
-  image:
+  version:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.read.outputs.version }}
+      minor: ${{ steps.read.outputs.minor }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read and check VERSION
+        id: read
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::VERSION must look like 1.2.3 (found '$version')"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "minor=${version%.*}" >> "$GITHUB_OUTPUT"
+
+  image:
+    needs: version
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: notification-service
+            context: go-server/notification-service
+          - name: notification-service-java
+            context: java-server/notification-service
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -30,11 +66,24 @@ jobs:
       - name: Image name
         id: name
         # Registry names must be lower case.
-        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}/notification-service" >> "$GITHUB_OUTPUT"
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY,,}/${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+      - name: Warn when this version is already published
+        run: |
+          if docker manifest inspect "${{ steps.name.outputs.image }}:${{ needs.version.outputs.version }}" >/dev/null 2>&1; then
+            echo "::warning::${{ matrix.name }} ${{ needs.version.outputs.version }} is already published and will move to this build. Bump VERSION for a new release."
+          fi
       - uses: docker/build-push-action@v6
         with:
-          context: go-server/notification-service
+          context: ${{ matrix.context }}
           push: true
+          build-args: |
+            VERSION=${{ needs.version.outputs.version }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.version.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
           tags: |
+            ${{ steps.name.outputs.image }}:${{ needs.version.outputs.version }}
+            ${{ steps.name.outputs.image }}:${{ needs.version.outputs.minor }}
             ${{ steps.name.outputs.image }}:latest
-            ${{ steps.name.outputs.image }}:${{ github.sha }}
+            ${{ steps.name.outputs.image }}:sha-${{ github.sha }}

@@ -1,0 +1,70 @@
+{
+  "name": "people can ask for an account, an admin approves it, and only then can they sign in",
+  "steps": [
+    {
+      "name": "the status says sign-up is on and an admin exists",
+      "request": { "method": "GET", "path": "/api/auth/status" },
+      "expect": { "status": 200, "json": { "signup": true, "needsSetup": false } }
+    },
+    {
+      "name": "a weak password is refused",
+      "request": { "method": "POST", "path": "/api/auth/signup", "body": { "email": "weak@contract.test", "name": "Weak", "password": "short" } },
+      "expect": { "status": 400 }
+    },
+    {
+      "name": "a bad email is refused",
+      "request": { "method": "POST", "path": "/api/auth/signup", "body": { "email": "nope", "name": "Nope", "password": "a long contract password" } },
+      "expect": { "status": 400 }
+    },
+    {
+      "name": "a sign-up is accepted as pending and never starts a session",
+      "request": { "method": "POST", "path": "/api/auth/signup", "body": { "email": "New@Contract.test", "name": "New", "password": "a long contract password" } },
+      "expect": { "status": 202, "json": { "status": "pending" }, "absent": ["csrfToken", "user"] }
+    },
+    {
+      "name": "asking again for an existing email gets the same answer",
+      "request": { "method": "POST", "path": "/api/auth/signup", "body": { "email": "new@contract.test", "name": "Again", "password": "another long contract password" } },
+      "expect": { "status": 202, "json": { "status": "pending" } }
+    },
+    {
+      "name": "the right password of a pending account is refused with a clear code",
+      "request": { "method": "POST", "path": "/api/auth/login", "body": { "email": "new@contract.test", "password": "a long contract password" } },
+      "expect": { "status": 403, "json": { "code": "pending" }, "absent": ["csrfToken"] }
+    },
+    {
+      "name": "a wrong password stays generic",
+      "request": { "method": "POST", "path": "/api/auth/login", "body": { "email": "new@contract.test", "password": "a wrong contract password" } },
+      "expect": { "status": 401, "json": { "error": "incorrect email or password" } }
+    },
+    {
+      "name": "the admin sees the pending request and never a password",
+      "request": { "method": "GET", "path": "/api/users", "headers": { "X-API-Key": "contract-key" } },
+      "expect": {
+        "status": 200,
+        "json": { "users": [ { "email": "admin@contract.test", "status": "active", "role": "admin" }, { "email": "new@contract.test", "status": "pending", "role": "member" } ] },
+        "absentInEach": { "users": ["passwordHash", "password"] }
+      },
+      "save": { "newId": "users.1.id" }
+    },
+    {
+      "name": "approving needs the admin key",
+      "request": { "method": "PATCH", "path": "/api/users/{{newId}}", "body": { "status": "active" } },
+      "expect": { "status": 401 }
+    },
+    {
+      "name": "a bad status is refused",
+      "request": { "method": "PATCH", "path": "/api/users/{{newId}}", "headers": { "X-API-Key": "contract-key" }, "body": { "status": "owner" } },
+      "expect": { "status": 400 }
+    },
+    {
+      "name": "the admin approves the request",
+      "request": { "method": "PATCH", "path": "/api/users/{{newId}}", "headers": { "X-API-Key": "contract-key" }, "body": { "status": "active" } },
+      "expect": { "status": 200, "json": { "status": "active", "role": "member", "email": "new@contract.test" } }
+    },
+    {
+      "name": "now the person can sign in",
+      "request": { "method": "POST", "path": "/api/auth/login", "body": { "email": "new@contract.test", "password": "a long contract password" } },
+      "expect": { "status": 200, "json": { "user": { "email": "new@contract.test", "status": "active" } }, "present": ["csrfToken", "expiresAt"] }
+    }
+  ]
+}

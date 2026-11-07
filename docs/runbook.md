@@ -7,6 +7,7 @@ For whoever is on call. Each section is a symptom, what it means, and what to do
 - Logs are JSON on stdout; every request has a `request_id` (also the `X-Request-ID` response header).
 - `GET /health` needs no key. `GET /metrics` (Prometheus text) needs `X-API-Key`.
 - State: PostgreSQL (events), optional Redis (dedup window). Everything else is stateless.
+- `GET /health` also returns `version`, the release the image was built from (`dev` for a build outside the publish workflow). Compare it with `VERSION` and the image tag to see what is running.
 - Kill switch: scale the Deployment to 0, or unset `GITHUB_WEBHOOK_SECRET` (webhooks return 503 and GitHub retries later).
 
 ## Alerts to set up
@@ -32,6 +33,16 @@ The web console (`apps/web`) reads `GET /events` and posts to `/feedback`. Its o
 The API key is entered in the browser and kept per tab. Rotate it by changing `API_KEY` on the service and entering the new value; no console deploy is needed.
 
 ## Symptoms
+
+### People cannot sign in
+- **Wrong password:** the answer is the same for every cause (`incorrect email or password`). After five failures an account is locked for fifteen minutes (`429`); the sign-in log shows `login.locked`.
+- **"Waiting for approval" / "not approved":** a sign-up is pending until an admin approves it on the Users screen (or `PATCH /api/users/{id}` with `{"status":"active"}`). Only the right password shows this message.
+- **Signs in and returns to the sign-in page:** the browser did not keep the session cookie. The console says so. With the console and the service on different sites, set `AUTH_COOKIE_SAMESITE=none` on the service (it forces `Secure`) or host both on one site. Safari and some privacy settings block third-party cookies even then.
+- **Sign-up answers 404:** `AUTH_SIGNUP` is unset (off). Set `AUTH_SIGNUP=approval`. **429:** too many sign-up requests from one address in an hour; behind a proxy everyone shares one address (finding F11).
+- **Locked out of every admin:** the bootstrap admin is only created when there are no accounts. Use the API key to `PATCH /api/users/{id}` (a new password, or re-enable the account).
+
+### Logs show `bind message has N result formats but query has M columns` or `prepared statement "" requires N`
+The database connection goes through a pooler (for Neon, a host with `-pooler`), which mixes up the Go driver's prepared statements between the background workers. Use the direct host and add `binary_parameters=yes` to `DATABASE_URL`, then redeploy.
 
 ### Webhooks return 401
 Signature mismatch. Check `GITHUB_WEBHOOK_SECRET` matches the secret in the GitHub webhook settings. Logs show `rejected webhook with invalid signature`.
@@ -99,6 +110,7 @@ A digest covers events whose outcome is `digest` or `delayed` since the last one
 
 ## Deploying
 
+0. Pick the release: images are tagged with the version from the `VERSION` file (`0.36.0`, `0.36`, `latest`, `sha-<commit>`); deploy a version tag, not `latest`. After the rollout `GET /health` must return that `version`. See [deployment.md](deployment.md#releases-and-images).
 1. Create the Secret (`k8s/secret.example.yaml` shows the keys). Never commit real values.
 2. Apply the ConfigMap and Deployment. Rolling updates are safe: migrations are idempotent and run under an advisory lock.
 3. Verify: `/health` is 200, then send a signed test webhook.

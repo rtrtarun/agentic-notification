@@ -32,6 +32,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	mux.Handle(authPrefix+"/status", public(s.authStatusHandler))
 	mux.Handle(authPrefix+"/login", public(s.loginHandler))
+	mux.Handle(authPrefix+"/signup", public(s.signupHandler))
 	mux.Handle(authPrefix+"/oidc/start", public(s.oidcStartHandler))
 	mux.Handle(authPrefix+"/oidc/callback", public(s.oidcCallbackHandler))
 	mux.Handle(authPrefix+"/logout", protected(s.logoutHandler))
@@ -180,6 +181,7 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	util.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "ok",
 		"service": "attention-orchestration",
+		"version": s.cfg.AppVersion,
 	})
 }
 

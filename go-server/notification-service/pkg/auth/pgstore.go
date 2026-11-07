@@ -20,15 +20,23 @@ type PostgresStore struct{ db DB }
 // NewPostgresStore wraps a database handle.
 func NewPostgresStore(db DB) *PostgresStore { return &PostgresStore{db: db} }
 
-const userColumns = `id, email, name, role, password_hash, disabled, created_at`
+const userColumns = `id, email, name, role, password_hash, disabled, status, created_at`
 
 func scanUser(row interface{ Scan(...any) error }) (User, error) {
 	var u User
-	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.PasswordHash, &u.Disabled, &u.CreatedAt)
+	err := row.Scan(&u.ID, &u.Email, &u.Name, &u.Role, &u.PasswordHash, &u.Disabled, &u.Status, &u.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
 	return u, err
+}
+
+// statusOrActive stores an empty status as active.
+func statusOrActive(s string) string {
+	if s == "" {
+		return StatusActive
+	}
+	return s
 }
 
 // isUniqueViolation reports a PostgreSQL unique_violation (SQLSTATE 23505) without importing the driver.
@@ -39,8 +47,8 @@ func isUniqueViolation(err error) bool {
 
 // CreateUser implements Store.
 func (p *PostgresStore) CreateUser(ctx context.Context, u User) error {
-	_, err := p.db.ExecContext(ctx, `INSERT INTO users (`+userColumns+`) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-		u.ID, u.Email, u.Name, u.Role, u.PasswordHash, u.Disabled, u.CreatedAt)
+	_, err := p.db.ExecContext(ctx, `INSERT INTO users (`+userColumns+`) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+		u.ID, u.Email, u.Name, u.Role, u.PasswordHash, u.Disabled, statusOrActive(u.Status), u.CreatedAt)
 	if isUniqueViolation(err) {
 		return ErrEmailTaken
 	}
@@ -60,7 +68,7 @@ func (p *PostgresStore) UserByEmail(ctx context.Context, email string) (User, er
 // UserByIdentity implements Store.
 func (p *PostgresStore) UserByIdentity(ctx context.Context, issuer, subject string) (User, error) {
 	return scanUser(p.db.QueryRowContext(ctx, `
-		SELECT u.id, u.email, u.name, u.role, u.password_hash, u.disabled, u.created_at
+		SELECT u.id, u.email, u.name, u.role, u.password_hash, u.disabled, u.status, u.created_at
 		FROM users u JOIN user_identities i ON i.user_id = u.id WHERE i.issuer = $1 AND i.subject = $2`, issuer, subject))
 }
 
@@ -92,8 +100,8 @@ func (p *PostgresStore) ListUsers(ctx context.Context) ([]User, error) {
 
 // UpdateUser implements Store.
 func (p *PostgresStore) UpdateUser(ctx context.Context, u User) error {
-	res, err := p.db.ExecContext(ctx, `UPDATE users SET name=$2, role=$3, password_hash=$4, disabled=$5 WHERE id=$1`,
-		u.ID, u.Name, u.Role, u.PasswordHash, u.Disabled)
+	res, err := p.db.ExecContext(ctx, `UPDATE users SET name=$2, role=$3, password_hash=$4, disabled=$5, status=$6 WHERE id=$1`,
+		u.ID, u.Name, u.Role, u.PasswordHash, u.Disabled, statusOrActive(u.Status))
 	if err != nil {
 		return err
 	}

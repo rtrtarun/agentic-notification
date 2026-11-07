@@ -1,5 +1,6 @@
 package com.agentpulse.notification.interfaces;
 
+import com.agentpulse.notification.application.Accounts;
 import com.agentpulse.notification.application.GitHubNormalizer;
 import com.agentpulse.notification.application.Notify;
 import com.agentpulse.notification.application.Pipeline;
@@ -46,13 +47,21 @@ public final class HttpApi {
     private final NotifyApi notify;
     private final RulesApi rules;
     private final DeliveriesApi deliveries;
+    private final AuthApi auth;
 
     public HttpApi(Config config, Pipeline pipeline, EventRepository events, Notify.Service notifyService,
                    RulesService rulesService, DeliveryStore deliveryStore, Clock clock) {
+        this(config, pipeline, events, notifyService, rulesService, deliveryStore, clock, null);
+    }
+
+    /** With an accounts service, people can sign up, sign in and use the API with a session as well as the API key. */
+    public HttpApi(Config config, Pipeline pipeline, EventRepository events, Notify.Service notifyService,
+                   RulesService rulesService, DeliveryStore deliveryStore, Clock clock, Accounts.Service accounts) {
         this.config = config;
         this.pipeline = pipeline;
         this.events = events;
-        this.api = new ApiSupport(config);
+        this.api = new ApiSupport(config).withAccounts(accounts);
+        this.auth = accounts == null ? null : new AuthApi(api, accounts);
         this.notify = new NotifyApi(api, notifyService);
         this.rules = new RulesApi(api, rulesService);
         this.deliveries = new DeliveriesApi(api, deliveryStore, clock);
@@ -73,9 +82,11 @@ public final class HttpApi {
             rules.rules(x);
         } else if (under(path, DeliveriesApi.PREFIX)) {
             deliveries.handle(x);
+        } else if (auth != null && (under(path, AuthApi.AUTH_PREFIX) || under(path, AuthApi.USERS_PREFIX))) {
+            auth.handle(x);
         } else {
             switch (path) {
-                case "/health" -> api.reply(x, 200, Map.of("status", "ok", "service", "attention-orchestration"));
+                case "/health" -> api.reply(x, 200, Map.of("status", "ok", "service", "attention-orchestration", "version", config.appVersion()));
                 case "/webhooks/github" -> webhook(x);
                 case "/events" -> listEvents(x);
                 case "/notify" -> notify.handle(x);

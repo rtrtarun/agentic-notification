@@ -1,6 +1,6 @@
 # Attention Orchestration Platform: Architecture
 
-*Status as of 2026-11-07, branch `feature/java-parity`, after Milestone 35 (the Go backend and console are described as of Milestone 33; the Java service is in [java-service.md](java-service.md)). Sections 3, 5, 12, 13, 14, 19 and 22 and the terminology table in section 4 are current. The flows, contracts and diagrams in sections 6 to 11 and 15 to 18 describe the original pipeline; later milestones extended them and the milestone documents are the detailed record, so check a milestone document before relying on a detail there.*
+*Status as of 2026-11-07, branch `feature/signup-and-sign-in`, after Milestone 36 (sign-in first, sign-up with admin approval, Java accounts, versioned images: [milestones/milestone-36.md](milestones/milestone-36.md); the rest of the Go backend and console are described as of Milestone 33; the Java service is in [java-service.md](java-service.md)). Sections 3, 5, 12, 13, 14, 19 and 22 and the terminology table in section 4 are current. The flows, contracts and diagrams in sections 6 to 11 and 15 to 18 describe the original pipeline; later milestones extended them and the milestone documents are the detailed record, so check a milestone document before relying on a detail there.*
 *Scope of this document: the Go backend (`go-server/notification-service`) and the web console (`apps/web`), with the Java service and the deployment files described where they touch them.*
 
 > **Notifications are cheap. Human attention is expensive.**
@@ -109,7 +109,7 @@ Current documents are indexed in [README.md](README.md). Superseded notes (the o
 | [`agentpulse.md`](agentpulse.md) | AgentPulse product framing (agent observability) | Product intent; built as milestone 31 ([record](archived/milestones/milestone-31.md)) |
 | [`frontend.md`](frontend.md) | The console: screens, design language, states, structure | Accurate (component-level audit: [archived/design-notes/ui-architecture.md](archived/design-notes/ui-architecture.md)) |
 | [`contract/`](contract/README.md) | Shared HTTP contract both services pass | Current |
-| [`milestones/`](milestones/README.md) | Records for milestones 34 and 35; milestones 1 to 33 are in [archived/milestones/](archived/milestones/) | Accurate for what each delivered |
+| [`milestones/`](milestones/README.md) | Records for milestones 34 to 36; milestones 1 to 33 are in [archived/milestones/](archived/milestones/) | Accurate for what each delivered |
 | [`rules/coding-standards.md`](rules/coding-standards.md) | Enforced and review-time standards | Accurate; items marked `[Gap]` are tracked |
 | [`deployment.md`](deployment.md), [`runbook.md`](runbook.md) | Going live; symptoms, causes, actions | Accurate |
 | [`CHANGELOG.md`](CHANGELOG.md) | Running index of every change | Accurate |
@@ -145,7 +145,7 @@ The product is **four layers around one invariant**.
 - **Reading:** an inbox with state, filters and bulk actions, all notifications, activity, analytics, traces, digests, explanations, live updates, cursor pagination.
 - **The console** (`apps/web`, React and TypeScript): 15 screens including Traces, five colour themes, nine languages (the newest screens are English only), and a complete demo mode that powers the hosted site.
 - **Operations:** Prometheus metrics, structured logs with request IDs, `traceparent` propagation and span logs, retention, graceful shutdown, Docker Compose, Kubernetes manifests, GitHub Pages and GHCR workflows.
-- **Size:** 33 Go packages and two commands, 677 Go test functions and 230 Vitest tests (counts from the last local run).
+- **Size:** 33 Go packages and two commands, about 690 Go test functions and 238 Vitest tests (counts from the last local run, milestone 36).
 
 ### What is not as complete as it looks
 
@@ -779,7 +779,7 @@ Local statement coverage by package is in [implementation-sync.md](implementatio
 | Tracing | `traceparent` and span logs only; no collector export |
 | Event window | Digests, traces and learning read the newest 1000 events |
 | Console | Newer screens English only; no screens yet for rule predicates, per-rule channels or personal preferences |
-| Java service | Core, `/notify`, rules API, durable queue and Redis dedup built (milestones 34 and 35, 132 tests, nine-file shared contract); **the rest to be brought to parity** (planned) |
+| Java service | Core, `/notify`, rules API, durable queue, Redis dedup and accounts with sign-up built (milestones 34 to 36, 170 tests with PostgreSQL, ten-file shared contract); **the rest to be brought to parity** (planned) |
 | NATS | In the intended stack only; not in Compose and not used |
 | At-least-once critical delivery | If an alert is delivered but saving fails, the redelivery notifies again. Deliberate: a duplicate beats a lost critical alert |
 
@@ -796,7 +796,7 @@ Local statement coverage by package is in [implementation-sync.md](implementatio
 | **Queue and scale** | Move the worker and delivery from polling to NATS (or another queue) if polling stops being enough; share the circuit breaker across replicas |
 | **Observability** | An OpenTelemetry exporter for the spans already recorded |
 | **Product** | Event replay, an agent registry, multi-tenancy and billing for the hosted offering |
-| **Java parity** | Milestones 34 and 35 built the core, `/notify`, the rules API, the durable queue and Redis dedup, and the shared contract suite (`docs/contract`, replayed by both services). Next: bring the remaining Go features to Java in an order the project owner chooses, extending the contract each time |
+| **Java parity** | Milestones 34 to 36 built the core, `/notify`, the rules API, the durable queue, Redis dedup and the accounts with sign-up, and the shared contract suite (`docs/contract`, replayed by both services). Next: bring the remaining Go features to Java in an order the project owner chooses, extending the contract each time |
 | **Housekeeping** | Reconcile the two `k8s/` directories; raise packages below 80 percent coverage |
 
 ---
@@ -1072,7 +1072,7 @@ Auth: **key** means the API key or a signed-in session; **admin** means an admin
 | `GET /api/traces`, `GET /api/traces/{id}` | key | Agent runs and their ordered steps with decisions |
 | `POST /api/mcp` | key | Model Context Protocol over HTTP (one JSON-RPC message per request) |
 | `GET /api/stream` | key | Server-sent events for live updates |
-| `/api/auth/*`, `/api/users`, `GET /api/audit` | public sign-in routes; admin for users and audit | Accounts, sessions, single sign-on, audit trail |
+| `/api/auth/*`, `/api/users`, `GET /api/audit` | public sign-in routes; admin for users and audit | Accounts, sessions, single sign-on (Go), audit trail; milestone 36 adds public `POST /api/auth/signup` (a pending account, off unless `AUTH_SIGNUP=approval`), `status` in the auth status answer and on users, a `403` with `code` `pending` or `rejected` at sign-in, and `PATCH /api/users/{id}` with `status` to approve or reject. `GET /health` returns `version`. The Java service has the same routes except single sign-on |
 
 Every response carries `X-Request-ID` and `traceparent`.
 
@@ -1160,7 +1160,7 @@ Unit tests use in-memory fakes behind the same interfaces as production. Real-in
 | Redis dedup and budget across replicas | **Done** | CI |
 | Security hardening | **Done** | Lint and vulnerability scan passed in CI |
 | Metrics, logs, request IDs, `traceparent` and span logs | **Done** | Locally; no collector export |
-| Console: 15 screens, demo mode, themes, languages | **Done** | 230 Vitest tests, production build; newer screens English only |
+| Console: 15 screens, demo mode, themes, languages | **Done** | 238 Vitest tests, production build; newer screens English only |
 | Docker, compose, Kubernetes, CI | **Done** | The Go and web CI jobs pass the steps that have run; see section 12.2 |
 | Per-person delivery | Not built | Personal digests are stored, not delivered |
 | NATS | Not used | Named in the intended stack only |

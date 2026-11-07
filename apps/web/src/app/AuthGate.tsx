@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { LoginPage } from '../components/LoginPage'
 import { authClientFor, DEMO_USER, type AuthClient, type Identity } from '../lib/auth'
+import { signedOutSettings } from '../lib/settings'
 import { useApp } from './AppState'
 
 interface AuthState {
@@ -27,7 +28,7 @@ type Phase = 'checking' | 'signedOut' | 'ready'
  * messages.
  */
 export function AuthGate({ children }: { children: ReactNode }) {
-  const { settings, welcome, invalidate, reload } = useApp()
+  const { settings, welcome, invalidate, reload, saveConnection } = useApp()
   const client = useMemo(() => authClientFor(settings), [settings])
   const [phase, setPhase] = useState<Phase>('checking')
   const [identity, setIdentity] = useState<Identity | null>(null)
@@ -81,10 +82,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
     try {
       await client.logout()
     } finally {
+      // An API key is access too. Forget it, or a reload would walk straight back in.
+      if (keyMode) saveConnection(signedOutSettings(settings))
       setIdentity(null)
       setPhase('signedOut')
     }
-  }, [client])
+  }, [client, keyMode, saveConnection, settings])
 
   const value = useMemo<AuthState>(
     () => ({ identity, isAdmin: identity?.user.role === 'admin', client, signOut }),

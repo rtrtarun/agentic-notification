@@ -1,11 +1,13 @@
 package com.agentpulse.notification.interfaces;
 
+import com.agentpulse.notification.application.Accounts;
 import com.agentpulse.notification.application.MemoryDeduper;
 import com.agentpulse.notification.application.Notify;
 import com.agentpulse.notification.application.PolicyEngine;
 import com.agentpulse.notification.application.QueueOutbox;
 import com.agentpulse.notification.application.RulesService;
 import com.agentpulse.notification.application.Targets;
+import com.agentpulse.notification.infrastructure.MemoryAccountStore;
 import com.agentpulse.notification.infrastructure.MemoryStores;
 import com.agentpulse.notification.application.Pipeline;
 import com.agentpulse.notification.application.Ports.Notification;
@@ -108,7 +110,10 @@ class ContractTest {
                 .withOutbox(outbox);
         Config config = Config.load(Map.of("API_KEY", KEY, "GITHUB_WEBHOOK_SECRET", SECRET));
         Notify.Service notify = new Notify.Service(config.notifyLimits(), logOnly);
-        return new HttpApi(config, pipeline, repository, notify, rules, deliveries, Clock.systemUTC())
+        // The same accounts the Go contract server has: one admin, and sign-up open with admin approval.
+        Accounts.Service accounts = new Accounts.Service(new MemoryAccountStore(), Duration.ofHours(1), Clock.systemUTC()).withSignup(true);
+        accounts.bootstrap("admin@contract.test", "a long contract admin password");
+        return new HttpApi(config, pipeline, repository, notify, rules, deliveries, Clock.systemUTC(), accounts)
                 .start(0);
     }
 

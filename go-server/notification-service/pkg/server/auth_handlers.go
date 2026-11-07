@@ -81,10 +81,15 @@ type userView struct {
 	Name     string `json:"name"`
 	Role     string `json:"role"`
 	Disabled bool   `json:"disabled"`
+	Status   string `json:"status"`
 }
 
 func viewOf(u auth.User) userView {
-	return userView{ID: u.ID, Email: u.Email, Name: u.Name, Role: u.Role, Disabled: u.Disabled}
+	status := u.Status
+	if status == "" {
+		status = auth.StatusActive
+	}
+	return userView{ID: u.ID, Email: u.Email, Name: u.Name, Role: u.Role, Disabled: u.Disabled, Status: status}
 }
 
 // secureCookie decides the Secure flag. SameSite=None always needs it.
@@ -142,7 +147,7 @@ func (s *Server) authStatusHandler(w http.ResponseWriter, r *http.Request) {
 	if s.oidc != nil {
 		sso["name"], sso["startPath"] = s.oidc.Name(), authPrefix+"/oidc/start"
 	}
-	util.WriteJSON(w, http.StatusOK, map[string]any{"sessions": true, "needsSetup": !has, "sso": sso})
+	util.WriteJSON(w, http.StatusOK, map[string]any{"sessions": true, "needsSetup": !has, "sso": sso, "signup": s.auth.SignupEnabled()})
 }
 
 // loginHandler checks a password and starts a session.
@@ -164,12 +169,47 @@ func (s *Server) loginHandler(w http.ResponseWriter, r *http.Request) {
 		util.WriteJSON(w, http.StatusTooManyRequests, util.ErrorResponse{Error: err.Error()})
 	case errors.Is(err, auth.ErrInvalidCredentials):
 		util.WriteJSON(w, http.StatusUnauthorized, util.ErrorResponse{Error: err.Error()})
+	case errors.Is(err, auth.ErrPendingApproval):
+		util.WriteJSON(w, http.StatusForbidden, map[string]string{"error": err.Error(), "code": "pending"})
+	case errors.Is(err, auth.ErrAccountRejected):
+		util.WriteJSON(w, http.StatusForbidden, map[string]string{"error": err.Error(), "code": "rejected"})
 	case err != nil:
 		s.logFor(r.Context()).Error("login failed", "error", err)
 		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: errInternal})
 	default:
 		s.setSessionCookie(w, r, token, sess.ExpiresAt)
 		util.WriteJSON(w, http.StatusOK, map[string]any{"user": viewOf(user), "csrfToken": sess.CSRF, "expiresAt": sess.ExpiresAt})
+	}
+}
+
+// signupHandler records a request for an account. The account starts pending and
+// an admin must approve it. The answer never says whether the email already had
+// an account.
+//
+//	POST /api/auth/signup {"email","name","password"}
+func (s *Server) signupHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: errMethod})
+		return
+	}
+	var in struct{ Email, Name, Password string }
+	if !s.decodeJSON(w, r, &in) {
+		return
+	}
+	err := s.auth.SignUp(r.Context(), in.Email, in.Name, in.Password, clientIP(r))
+	switch {
+	case errors.Is(err, auth.ErrSignupDisabled):
+		util.WriteJSON(w, http.StatusNotFound, util.ErrorResponse{Error: err.Error()})
+	case errors.Is(err, auth.ErrTooManySignups):
+		w.Header().Set("Retry-After", "3600")
+		util.WriteJSON(w, http.StatusTooManyRequests, util.ErrorResponse{Error: err.Error()})
+	case errors.Is(err, auth.ErrInvalidInput), errors.Is(err, auth.ErrWeakPassword):
+		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: err.Error()})
+	case err != nil:
+		s.logFor(r.Context()).Error("sign-up failed", "error", err)
+		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: errInternal})
+	default:
+		util.WriteJSON(w, http.StatusAccepted, map[string]string{"status": "pending", "message": "your request was received; an admin must approve it before you can sign in"})
 	}
 }
 
@@ -362,11 +402,12 @@ func (s *Server) usersHandler(w http.ResponseWriter, r *http.Request) {
 			Role     *string `json:"role"`
 			Disabled *bool   `json:"disabled"`
 			Password *string `json:"password"`
+			Status   *string `json:"status"`
 		}
 		if !s.decodeJSON(w, r, &in) {
 			return
 		}
-		u, err := s.auth.UpdateUser(r.Context(), p.actor(), id, auth.UserPatch{Name: in.Name, Role: in.Role, Disabled: in.Disabled, Password: in.Password})
+		u, err := s.auth.UpdateUser(r.Context(), p.actor(), id, auth.UserPatch{Name: in.Name, Role: in.Role, Disabled: in.Disabled, Password: in.Password, Status: in.Status})
 		if err != nil {
 			s.authFailure(w, r, err)
 			return

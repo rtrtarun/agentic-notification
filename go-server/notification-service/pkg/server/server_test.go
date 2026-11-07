@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/agentpulse/notification-service/pkg/config"
@@ -109,5 +110,29 @@ func TestCorsPreflightShortCircuits(t *testing.T) {
 	})).ServeHTTP(rr, req)
 	if rr.Code != http.StatusNoContent {
 		t.Fatalf("preflight status = %d", rr.Code)
+	}
+}
+
+func TestHealthReportsTheRelease(t *testing.T) {
+	s := &Server{cfg: &config.Config{Address: ":8080", AppVersion: "1.2.3"}}
+	rr := httptest.NewRecorder()
+	s.healthHandler(rr, httptest.NewRequest(http.MethodGet, "/health", nil))
+	if body := rr.Body.String(); !strings.Contains(body, `"version":"1.2.3"`) {
+		t.Fatalf("health must say which release is running, got %s", body)
+	}
+}
+
+func TestTheReleaseDefaultsToDevAndComesFromTheEnvironment(t *testing.T) {
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AppVersion != "dev" {
+		t.Fatalf("AppVersion = %q, want dev when APP_VERSION is unset", cfg.AppVersion)
+	}
+	t.Setenv("APP_VERSION", "0.36.0")
+	cfg, err = config.LoadConfig()
+	if err != nil || cfg.AppVersion != "0.36.0" {
+		t.Fatalf("AppVersion = %q, %v", cfg.AppVersion, err)
 	}
 }

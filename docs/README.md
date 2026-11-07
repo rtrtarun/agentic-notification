@@ -18,7 +18,7 @@ docs/
 ├── runbook.md               diagnosing problems
 ├── CHANGELOG.md             every change, newest first
 ├── contract/                the shared HTTP contract both services pass
-├── milestones/              records for the current work (34, 35)
+├── milestones/              records for the current work (34 to 36)
 ├── rules/                   coding standards every change follows
 └── archived/                milestones 1 to 33 and superseded design notes
 ```
@@ -37,7 +37,7 @@ docs/
 | Work on the Java service | [java-service.md](java-service.md), [contract/](contract/README.md), [milestones/](milestones/README.md) |
 | Work on the console | [frontend.md](frontend.md), [../apps/web/README.md](../apps/web/README.md) |
 | Report an agent run | [agentpulse.md](agentpulse.md), [../sdk/python/README.md](../sdk/python/README.md) |
-| Go live | [deployment.md](deployment.md), [../deploy/README.md](../deploy/README.md) |
+| Go live, and see what is deployed, where, with which secrets and release | [deployment.md](deployment.md), [../deploy/README.md](../deploy/README.md) |
 | Fix a problem | [runbook.md](runbook.md), [Go service README](../go-server/notification-service/README.md) (every environment variable) |
 | Change code | [rules/coding-standards.md](rules/coding-standards.md), [../CONTRIBUTING.md](../CONTRIBUTING.md), [../AGENTS.md](../AGENTS.md) |
 | See the history | [CHANGELOG.md](CHANGELOG.md), [archived/](archived/README.md) |

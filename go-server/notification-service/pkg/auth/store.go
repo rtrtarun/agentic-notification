@@ -16,6 +16,15 @@ const (
 	RoleMember = "member"
 )
 
+// Account states. A person who signs up starts as pending and can do nothing
+// until an admin approves the account. An empty status means active, so
+// accounts created before this field existed keep working.
+const (
+	StatusActive   = "active"
+	StatusPending  = "pending"
+	StatusRejected = "rejected"
+)
+
 // Errors the HTTP layer maps to status codes.
 var (
 	ErrNotFound   = errors.New("not found")
@@ -31,7 +40,14 @@ type User struct {
 	Role         string    `json:"role"`
 	PasswordHash string    `json:"-"`
 	Disabled     bool      `json:"disabled"`
+	Status       string    `json:"status"`
 	CreatedAt    time.Time `json:"createdAt"`
+}
+
+// Active reports whether the account may sign in: it is not disabled and has
+// been approved (an empty status counts as approved).
+func (u User) Active() bool {
+	return !u.Disabled && (u.Status == "" || u.Status == StatusActive)
 }
 
 // Session is a signed-in browser. Hash is the SHA-256 of the cookie token, so a

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadSettings, needsWelcome, saveSettings, validateBackendUrl } from './settings'
+import { connectSettings, loadSettings, needsWelcome, saveSettings, signedOutSettings, validateBackendUrl } from './settings'
 
 function fakeSessionStorage() {
   const data = new Map<string, string>()
@@ -66,5 +66,16 @@ describe('validateBackendUrl', () => {
     expect(validateBackendUrl('ftp://host')).toBe('settings.urlScheme')
     expect(validateBackendUrl('localhost:8080')).not.toBeNull()
     expect(validateBackendUrl('')).toBe('settings.urlInvalid')
+  })
+})
+
+describe('connecting and signing out', () => {
+  it('"Connect" keeps the built-in service address and asks for no API key or demo, so sign-in comes next', () => {
+    expect(connectSettings({ backendUrl: 'https://svc.example', apiKey: 'secret', demo: true })).toEqual({ backendUrl: 'https://svc.example', apiKey: '' })
+  })
+
+  it('signing out forgets an API key so a reload cannot walk straight back in', () => {
+    expect(signedOutSettings({ backendUrl: 'https://svc.example', apiKey: 'secret' })).toEqual({ backendUrl: 'https://svc.example', apiKey: '' })
+    expect(JSON.stringify(signedOutSettings({ backendUrl: 'https://svc.example', apiKey: 'secret' }))).not.toContain('secret')
   })
 })

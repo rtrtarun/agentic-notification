@@ -43,7 +43,9 @@ final class RulesApi {
     }
 
     void rules(HttpExchange x) throws IOException {
-        if (!api.authorised(x)) {
+        // Anyone signed in may read rules and dry-run one; changing them needs an admin.
+        boolean change = !"GET".equals(x.getRequestMethod()) && !x.getRequestURI().getPath().replaceAll("/+$", "").endsWith("/test");
+        if (!(change ? api.authorisedAdmin(x) : api.authorised(x))) {
             return;
         }
         String rest = x.getRequestURI().getPath().substring(PREFIX.length()).replaceAll("^/+|/+$", "");
