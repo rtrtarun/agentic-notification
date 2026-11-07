@@ -8,14 +8,18 @@ See [docs/orchestration-platform.md](docs/orchestration-platform.md) for the ful
 
 ## Current milestone
 
-**Milestone 21** — Help and Support, closing the console build-out (milestones 15 to 21: inbox, tables, analytics, rules, channels, preferences, live updates). See [docs/milestone-21.md](docs/milestone-21.md). Earlier: [milestone 13](docs/milestone-13.md), security and production hardening.
+**Milestone 33** — documentation reconciled with the code, and a Python SDK for AI agents. The platform is built through milestone 33: ingestion, rules and policy, attention intelligence (heuristic with optional Ollama or Claude), delivery (SMTP, Novu, Slack, Teams, SMS), feedback and learning, accounts, agent traces and an MCP server, and the console. See [docs/CHANGELOG.md](docs/CHANGELOG.md), [docs/architecture.md](docs/architecture.md) for the checked reference, and [docs/implementation-sync.md](docs/implementation-sync.md) for what has and has not been proven against real services.
 
 ## Included
 
 - Go API service with GitHub webhook ingestion, YAML policy rules, and critical-event delivery
 - Pipeline: ingest → policy → deliver (critical) / queue (standard) → persist
 - PostgreSQL persistence with automatic schema migration
-- React + TypeScript operator console: inbox, all notifications, overview, activity, analytics, rules and policies, channels, integrations, preferences, live updates, help
+- React + TypeScript operator console, 15 screens: overview, inbox, all notifications, activity, digests, agent traces, rules, policies, channels, integrations, users, analytics, preferences, settings, help; a demo mode; five themes; nine languages
+- Attention intelligence: heuristic classifier, digests, explanations, optional Ollama or Claude with fallback, learning suggestions, an attention budget and an asynchronous worker
+- Delivery: a durable retry queue; SMTP, Novu, Slack, Teams and SMS
+- Accounts, roles and single sign-on; stored feedback and always and never overrides
+- AI agents: `POST /api/events`, traces, an MCP server (stdio and HTTP), a Python SDK (`sdk/python`)
 - Local PostgreSQL via Docker Compose
 - CI wiring for the Go service
 

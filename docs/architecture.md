@@ -1,6 +1,6 @@
 # Attention Orchestration Platform: Architecture
 
-*Status as of 2026-11-04, branch `feature-impl`, after Milestone 14 (operator console and read API).*
+*Status as of 2026-11-07, branch `feature/attention-models`, after Milestone 33. Sections 3, 5, 12, 13, 14, 19 and 22 and the terminology table in section 4 are current. The flows, contracts and diagrams in sections 6 to 11 and 15 to 18 describe the original pipeline; later milestones extended them and the milestone documents are the detailed record, so check a milestone document before relying on a detail there.*
 *Scope of this document: the Go backend (`go-server/notification-service`) and the web console (`apps/web`), with the Java service and the deployment files described where they touch them.*
 
 > **Notifications are cheap. Human attention is expensive.**
@@ -103,7 +103,7 @@ Related: [ui-architecture.md](ui-architecture.md), [deployment.md](deployment.md
 | Document | What it is | Reliability today |
 |---|---|---|
 | [`AGENTS.md`](../AGENTS.md) | Project charter: layers, rules, tech stack, the 10-milestone plan | Authoritative for intent. Milestone *numbers* no longer match the implemented milestones (see section 3) |
-| [`docs/orchestration-platform.md`](orchestration-platform.md) | Earlier architecture overview and implementation status | **Stale.** Lists deduplication and threading as "Planned"; both shipped in Milestone 12 |
+| [`docs/orchestration-platform.md`](orchestration-platform.md) | Earlier architecture overview and implementation status | Refreshed in milestone 33; this document is the current reference |
 | [`docs/project vision.md`](<project vision.md>) | Enhanced product vision: timeline, smart rules, MCP server, SDK, dashboard, agent registry, replay | Aspirational. Almost none of it is built |
 | [`docs/agentpulse.md`](agentpulse.md) | Earlier product framing ("AgentPulse") | Historical |
 | [`docs/extrat of what we wnted to see.md`](<extrat of what we wnted to see.md>) | Working notes | Historical |
@@ -128,41 +128,41 @@ The product is **four layers around one invariant**.
 
 | Layer | Job | Technology | AI allowed |
 |---|---|---|---|
-| **1. Event and Policy** | Ingest, normalise, validate, classify by rule, deduplicate, thread | Go, YAML rules, PostgreSQL, Redis | **Never** |
-| **2. Attention Intelligence** | Classify standard events, group, digest, schedule, learn, explain | Ollama / external LLM | Only here |
-| **3. Delivery** | Send through channels behind an abstraction | SMTP and webhooks today, Novu planned | No |
-| **4. Feedback** | Capture opened, dismissed, undo, always, never, replies | Go, PostgreSQL | No |
+| **1. Event and Policy** | Ingest, normalise, validate, classify by rule and payload predicate, deduplicate, thread, apply preferences, overrides and the attention budget | Go, YAML and API-edited rules, PostgreSQL, Redis (optional) | **Never** |
+| **2. Attention Intelligence** | Classify standard events, summarise held events into digests, explain decisions, suggest rule changes from feedback | A deterministic heuristic by default; optionally Ollama or Claude behind the same interfaces, with the heuristic as the fallback | Only here |
+| **3. Delivery** | Send through channels behind an abstraction | SMTP, Novu (optional, email), Slack and Teams webhooks, SMS (mock, HTTP or SNS), a durable retry queue | No |
+| **4. Feedback** | Capture opened, dismissed, undo, always, never, replies; store them; turn "always" and "never" into visible, reversible overrides | Go, PostgreSQL | No |
 
-**The invariant, "never suppress" bucket:** security alerts, P1 incidents, payment failures and outages are `critical`. They skip Layer 2 entirely, are never merged by deduplication, and are delivered synchronously before being recorded.
+**The invariant, "never suppress" bucket:** security alerts, P1 incidents, payment failures and outages are `critical`. They skip Layer 2 entirely, are never merged by deduplication, are never muted, delayed, budgeted, deferred to a worker or changed by a suggestion, and are delivered synchronously, to every configured channel, before being recorded. An AI agent reporting its own step cannot make that step critical: only a rule decides the class. Each milestone from 25 on carries tests that pin this.
 
-### What actually exists
+### What exists (as of Milestone 33)
 
-A complete, hardened **vertical slice of Layers 1 and 3**, plus thin stubs of Layers 2 and 4:
+- **Ingestion:** GitHub webhooks (HMAC, replay-safe IDs) and agent events (`POST /api/events`), both through the same pipeline; `/notify` for direct messages; an MCP server over stdio and `POST /api/mcp`.
+- **Layer 1:** rules edited at run time (conditions on source, type, repository and payload predicates; optional per-rule channels; locked critical rules; strict YAML), deduplication and threading (in process or Redis; agent runs are one thread), quiet hours and mutes, always and never overrides, a rolling attention budget, an asynchronous worker that can take the attention step off the ingest path and release events held for quiet hours.
+- **Layer 2:** heuristic classifier, digests (workspace-wide and per person), plain-language explanations, a learning engine that turns stored feedback into reviewable suggestions, optional Ollama and Claude adapters with a circuit breaker, a rate cap, redaction and strict validation of answers.
+- **Layer 3:** a durable delivery queue with retries and dead letters, email through SMTP or Novu, Slack and Teams, SMS, strict STARTTLS option.
+- **Layer 4:** stored, attributed feedback; overrides; audit trail.
+- **Accounts:** argon2id passwords, server-side sessions, CSRF, roles, sign-in lock-out, generic OpenID Connect with an Entra ID shortcut; the API key still works for services.
+- **Reading:** an inbox with state, filters and bulk actions, all notifications, activity, analytics, traces, digests, explanations, live updates, cursor pagination.
+- **The console** (`apps/web`, React and TypeScript): 15 screens including Traces, five colour themes, nine languages (the newest screens are English only), and a complete demo mode that powers the hosted site.
+- **Operations:** Prometheus metrics, structured logs with request IDs, `traceparent` propagation and span logs, retention, graceful shutdown, Docker Compose, Kubernetes manifests, GitHub Pages and GHCR workflows.
+- **Size:** 33 Go packages and two commands, 677 Go test functions and 230 Vitest tests (counts from the last local run).
 
-- GitHub webhook ingestion with HMAC verification, replay-safe event IDs and size limits.
-- A deterministic pipeline: YAML policy rules, attention classes, deduplication and threading (in-process or Redis), persistence to PostgreSQL with retention.
-- Concurrent multi-channel delivery (email, Slack, Teams) behind a `Provider` interface, with SSRF protection.
-- A validated `/notify` API for agents, Prometheus metrics, structured logs, request IDs, graceful shutdown.
-- A read API (`GET /events`, newest first, no raw payloads).
-- The **Attention console** (React and TypeScript): the latest critical event and a last-hour sentence, a ledger of events whose row size follows importance, a detail sheet that explains each decision, feedback with Undo, and specific empty and error states ([frontend.md](frontend.md)).
-- A feedback endpoint that records to memory, and an Ollama summariser that no route calls.
-- 16 Go packages (15 libraries plus the entry point), about 2,900 lines of source and 3,600 lines of tests, 177 Go test functions and 34 web tests, 89.0% Go statement coverage; vet, lint, vulnerability scan and race detector clean (section 12).
+### What is not as complete as it looks
 
-### The architectural discrepancies that matter
+1. **Several parts have only run against fakes.** The PostgreSQL stores added in milestones 22 to 32, the Redis budget script, the Ollama and Claude adapters, Novu, SNS, OpenID Connect and the MCP server were tested against in-memory stores, local fake servers or recorded shapes. The PostgreSQL and Redis parts are exercised by integration tests that run only in CI. See section 12.2 for what CI has and has not confirmed.
+2. **NATS is not used.** It is named in the intended stack (`AGENTS.md`) but is not in the Compose file and nothing publishes or consumes. The asynchronous worker polls a PostgreSQL queue; delivery polls too.
+3. **A second implementation exists.** `java-server/` is a parallel notification service that this work did not review, and its CI job currently fails.
+4. **Delivery targets are workspace-wide.** Personal digests are stored and readable in the app but not delivered to a person, because jobs deliberately hold no address.
+5. **Tracing is context propagation and span logs**, not an OpenTelemetry exporter.
+6. **Learning is advisory.** It proposes rule and override changes; an admin applies them. Nothing changes silently.
+7. **Newer console screens are English only**, and have no fields yet for rule predicates, per-rule channels or personal preferences (API only).
+8. **Two overlapping send paths remain:** `POST /notify` and the event pipeline.
 
-1. **Standard and background events go into a queue that nothing reads.** They are stored as `queued` (or `merged`) and stay that way. Layer 2 does not exist, so for most events the platform currently *records* rather than *orchestrates*.
-2. **The AI layer is a stub.** `learning.Service` is constructed in `server.NewServer` but no route uses it. The status values `digest`, `delayed` and `budget_exceeded` are declared and never assigned.
-3. **Milestone numbering diverged.** `AGENTS.md` plans M5 Novu, M6 dedup, M7 AI, M8 feedback, M9 learning. The implemented milestones are M5 persistence, M6 delivery abstraction, M7 SMTP provider, M8 feedback, M9 Ollama stub, M10 local deployment, M11 critical pipeline, M12 dedup, M13 hardening. Novu has not been built; SMTP and webhooks stand in for it.
-4. **Two overlapping send paths.** `POST /notify` (a legacy "n8n agent" path) and the event pipeline both deliver, now through the same `Provider`, but they have different inputs, validation and semantics.
-5. **A second implementation exists.** `java-server/` is a parallel notification service that was not part of the Go review.
-6. **Feedback is disconnected.** It is in memory, unlinked to events (an unknown `eventId` is accepted), accepts any action string, and nothing consumes it.
-7. **The read API is minimal.** `GET /events` (added in Milestone 14) returns the newest events without payloads; there is no server-side filtering, search or cursor pagination, and the console filters the loaded page on the client.
-8. **The stale status table** in `orchestration-platform.md` contradicts the code.
-9. **Vision documents promise features that are not planned in any milestone**: event timeline, replay, MCP server, SDK, agent registry.
+### What comes next
 
-### The planned expansion
+Run everything against the real services it was written for (PostgreSQL, Redis, Ollama, Claude, Novu, SNS, an OpenID provider, a real MCP client), per-person delivery, NATS or another queue if polling stops being enough, and the SaaS concerns (tenancy, billing). Section 13 lists them.
 
-In dependency order: persisted, validated feedback (the read API and console now exist, so the system is observable; feedback makes it learnable), then the **Attention worker** that drains queued events (classification, grouping, digests, scheduling), then the **Novu provider**, then preference storage and the learning engine. Section 13 details each step.
 
 ---
 
@@ -176,7 +176,7 @@ The documents use several words for the same idea, and one word for several idea
 | **Attention class** | notification class, priority bucket, criticality | `critical`, `standard`, `background` | `Event.AttentionClass`, `event.Attention*` |
 | **Never-suppress bucket** | critical path, bypass | The `critical` class and the guarantees attached to it | `pipeline.Handle` critical branch |
 | **Decision state** | decision status, outcome | What the system decided for an event: status, reason, matched rule, confidence | `event.DecisionState` |
-| **Decision status** | state, lifecycle | `sent`, `queued`, `merged`, plus planned `digest`, `delayed`, `budget_exceeded` | `event.Decision*` |
+| **Decision status** | state, lifecycle | `sent`, `queued`, `merged`, `digest`, `delayed`, `budget_exceeded` (all assigned since milestone 25 to 29) | `event.Decision*` |
 | **Policy rule** | smart rule, routing rule | A YAML condition (source, type, repository) mapped to an attention class | `policy.Rule` |
 | **Policy engine** | rule engine | First-match evaluator of rules | `policy.Engine` |
 | **Dedup key** | merge key | Fingerprint of "the same thing again" | `dedup.DedupKey` |
@@ -186,10 +186,10 @@ The documents use several words for the same idea, and one word for several idea
 | **Channel** | | A medium: email, Slack, Teams, SMS | provider-specific |
 | **Delivery** | send, dispatch | Calling providers to reach a person | `delivery.Service` |
 | **Feedback** | signal, label | A user's reaction to a notification | `feedback.EventFeedback` |
-| **Attention budget** | interruption budget | A cap on interruptions per person per period (**planned**) | not built |
-| **Digest** | summary, roll-up | One message summarising many queued events (**planned**) | not built |
+| **Attention budget** | interruption budget | A rolling cap on standard interruptions per workspace (`ATTENTION_BUDGET_PER_HOUR`); events over it are held for the next digest, never dropped | `pkg/budget` |
+| **Digest** | summary, roll-up | One message summarising held events, workspace-wide or per person | `pkg/attention` |
 | **Agent** | (1) the sender in `/notify`, (2) AI agents in the vision docs, (3) "Layer 2" | In `/notify`, `agent` identifies the caller (`AgentInfo`). It is *not* the AI layer | `notification.AgentInfo` |
-| **Attention Layer / Layer 2** | AI layer, intelligence | The AI-only layer (**planned**) | `learning` is only a stub |
+| **Attention Layer / Layer 2** | AI layer, intelligence | The only place judgement (as opposed to a rule) lives: classification, digests, explanations, suggestions. Optional models sit behind the same interfaces as the heuristic | `pkg/attention`, `pkg/attention/llm`, `pkg/learning` |
 | **Console** | dashboard, web app, UI | The operator-facing web app that shows decisions and takes feedback | `apps/web` |
 | **Ledger** | event list, timeline | The console list; row size follows attention class | `components/Ledger.tsx` |
 | **Flag** | badge, pill | Shape and colour marking a class (pennant, square, outline) or a merge (swallowtail) | `components/Flag.tsx` |
@@ -212,33 +212,39 @@ Status: **Done** (built, tested), **Partial** (built, with a known gap), **Plann
 | 6 | Attention classes | 1 | Done | `event`, `policy` | Unknown classes rejected at load |
 | 7 | Deduplication | 1 | Done | `dedup` | Memory or Redis; window `DEDUP_WINDOW` |
 | 8 | Threading | 1 | Done | `dedup.ThreadID` | By repo and PR/issue number |
-| 9 | Grouping (many events into one) | 1/2 | Planned | | Threads exist; grouping into digests does not |
+| 9 | Grouping (many events into one) | 1/2 | Done | `pkg/attention` | Threads, and digests that group held events by repository and source |
 | 10 | Persistence and retention | 1 | Done | `event`, `db` | PostgreSQL, 90 days default |
 | 11 | Critical delivery, never merged | 1/3 | Done | `pipeline` | Synchronous, all channels concurrent |
 | 12 | Email delivery (SMTP) | 3 | Done | `delivery.SMTPProvider`, `mail` | STARTTLS when offered |
 | 13 | Slack and Teams delivery | 3 | Done | `delivery.WebhookProvider` | https and allow-list; private IPs blocked |
-| 14 | SMS delivery | 3 | Planned | | Via Novu |
-| 15 | Novu provider | 3 | Planned | | Behind `delivery.Provider` |
+| 14 | SMS delivery | 3 | Done | `pkg/sms`, `delivery.SMSProvider` | Mock, HTTP and Amazon SNS gateways; daily cap |
+| 15 | Novu provider | 3 | Done | `delivery/novu.go` | Email, with SMTP as the fallback; not run against the real service |
 | 16 | Agent `/notify` API | 3 | Done | `server`, `notification` | Validated, authenticated |
-| 17 | Feedback capture | 4 | Partial | `feedback`, `/feedback` | In memory; any action string; no event link |
-| 18 | Overrides (always/never notify) | 4 | Planned | | Needs preference storage |
-| 19 | Preference storage | 4 | Planned | | |
-| 20 | AI classification of standard events | 2 | Planned | | |
-| 21 | Digest generation | 2 | Planned | | `digest` status declared |
-| 22 | Scheduling and attention budget | 2 | Planned | | `delayed`, `budget_exceeded` declared |
-| 23 | Learning from feedback | 2 | Partial | `learning` | Ollama summariser, not wired to any route |
-| 24 | Natural-language explanation | 2 | Planned | | `DecisionState.Reason` is rule text today |
+| 17 | Feedback capture | 4 | Done | `pkg/feedback` | Stored, attributed, validated against the event |
+| 18 | Overrides (always/never notify) | 4 | Done | `pkg/overrides` | Visible and reversible; never apply to critical events |
+| 19 | Preference storage | 4 | Done | `pkg/preferences` | Workspace and per person; quiet hours and mutes |
+| 20 | AI classification of standard events | 2 | Done | `pkg/attention`, `pkg/attention/llm` | Heuristic by default; Ollama or Claude optional with fallback; models not run against the real services |
+| 21 | Digest generation | 2 | Done | `pkg/attention` | Workspace and per person; stored; the workspace one can be delivered |
+| 22 | Scheduling and attention budget | 2 | Done | `pkg/budget`, `attention.Worker` | Rolling budget; quiet-hours release; async worker (opt in) |
+| 23 | Learning from feedback | 2 | Done | `pkg/learning` | Reviewable suggestions; an admin applies them; never touches critical or locked rules |
+| 24 | Natural-language explanation | 2 | Done | `GET /api/explain/{id}` | Templated sentences; a model may reword them, labelled |
 | 25 | Metrics and latency histograms | ops | Done | `metrics` | Prometheus text, per route |
 | 26 | Structured logs and request IDs | ops | Done | `server/requestid.go` | JSON, `request_id` |
-| 27 | Distributed tracing | ops | Planned | | Deferred in Milestone 13 |
-| 28 | Event read API | UI | Done | `server/handlers.go` | `GET /events`, newest first, no payload; no pagination yet |
-| 29 | Event replay | UI | Not planned | | Vision document only |
-| 30 | MCP server and SDK | integration | Not planned | | Vision document only |
-| 31 | Agent registry | integration | Not planned | | Vision document only |
-| 32 | NATS event bus | infra | Planned | | In the stack; not used |
-| 33 | Attention console | UI | Done (v1) | `apps/web` | Ledger, detail, feedback, setup and error states; no pagination, search or digest view |
-| 34 | Multi-source ingestion (not only GitHub) | 1 | Planned | | `Source` field is generic |
-| 35 | Authentication for users | security | Planned | | Single shared API key today |
+| 27 | Distributed tracing | ops | Partial | `pkg/telemetry` | `traceparent` and span logs; no collector export |
+| 28 | Event read API | UI | Done | `server` | `GET /events` and `GET /api/notifications` with cursor pagination |
+| 30 | MCP server and SDK | integration | Done | `pkg/mcp`, `cmd/mcp-server`, `sdk/python` | Over stdio and `POST /api/mcp`; not tried with a real MCP client |
+| 32 | NATS event bus | infra | Planned | | In the intended stack only; not in Compose, and nothing uses it (the worker and delivery poll PostgreSQL) |
+| 33 | Attention console | UI | Done | `apps/web` | 15 screens, demo mode, themes, languages |
+| 34 | Multi-source ingestion (not only GitHub) | 1 | Done | `pkg/agentevents` | Agent events through `POST /api/events` into the same pipeline |
+| 35 | Authentication for users | security | Done | `pkg/auth` | Sessions, roles, OpenID Connect; not run against a real provider |
+| 36 | Agent event ingestion and traces | 1/UI | Done | `pkg/agentevents`, `pkg/traces` | Trace, parent and agent name; telemetry in `payload.metadata`; Traces screen |
+| 37 | Payload predicates and per-rule channels | 1 | Done | `pkg/policy` | Strict YAML; a critical rule cannot choose channels |
+| 38 | Asynchronous attention worker | 2 | Done | `attention.Worker`, `event.WorkQueue` | `FOR UPDATE SKIP LOCKED`; opt in with `ATTENTION_ASYNC` |
+| 39 | Cursor pagination | UI | Done | `pkg/pagination` | `(created_at, id)`; numbered pages still work |
+| 40 | Strict STARTTLS | 3 | Done | `pkg/mail` | `SMTP_REQUIRE_STARTTLS` |
+| 41 | Per-person preferences and digests | 2/4 | Partial | `pkg/preferences`, `pkg/attention` | Stored and readable; not delivered to the person |
+| 42 | Event replay | UI | Not planned | | Vision document only |
+| 43 | Agent registry | integration | Not planned | | Vision document only |
 
 ---
 
@@ -722,84 +728,75 @@ Defaults fail closed. Full table: [service README](../go-server/notification-ser
 
 ### 12.1 Milestone history
 
+Each milestone has its own document, `docs/milestone-N.md`, with decisions, tests, acceptance and honest limits. The running index is [CHANGELOG.md](CHANGELOG.md).
+
 | Milestone | Delivered |
 |---|---|
-| 1 | Repository, Docker, CI, basic API, React app, database, health endpoint |
-| 2 | API key authentication, configuration, logging, observability baseline |
-| 3 | GitHub webhook ingestion, normalisation, persistence |
-| 4 | Rule engine, criticality, policy evaluation |
-| 5 | Persistence layer for events and policy decisions |
-| 6 | Delivery layer abstraction (`Provider`, `Service`) |
-| 7 | Concrete provider (SMTP) |
-| 8 | Feedback layer (`/feedback`, in-memory recorder) |
-| 9 | Learning stub with Ollama |
-| 10 | Local deployment and operations baseline |
-| 11 | End-to-end critical event pipeline, YAML rules, PostgreSQL |
-| 12 | Deduplication, grouping keys, threading |
-| 13 | Security and production hardening (6 steps; see [milestone-13.md](milestone-13.md)) |
-| 14 | Operator console and read API (`GET /events`, the Attention console; see [milestone-14.md](milestone-14.md)) |
+| 1 to 4 | Repository, Docker, CI, basic API and React app, API key authentication, configuration, logging, GitHub webhook ingestion and persistence, rule engine and criticality |
+| 5 to 9 | Persistence of events and decisions, the delivery abstraction (`Provider`, `Service`), SMTP, a first in-memory feedback endpoint, an Ollama stub |
+| 10 to 12 | Local deployment, the end-to-end critical pipeline with YAML rules, deduplication and threading |
+| 13 | Security and production hardening (see [milestone-13.md](milestone-13.md)) |
+| 14 | Operator console and read API |
+| 15 to 21 | Inbox with state and a detail drawer; All notifications; Overview, Activity and Analytics; editable Rules and Policies; Channels and Integrations; Preferences and live updates; Help and Support |
+| 22 | Built-in delivery: a durable queue with retries and dead letters, SMS gateways |
+| 23 | Accounts, sessions, roles and single sign-on |
+| 24 | Stored feedback and always and never overrides |
+| 25 | Attention Intelligence: heuristic classifier, digests, explanations |
+| 26 | Ollama and Claude adapters behind Attention, with fallback |
+| 27 | Verification: PostgreSQL contract tests and adapter replay tests |
+| 28 | Learning engine: feedback becomes reviewable suggestions |
+| 29 | Asynchronous attention worker and attention budgets |
+| 30 | Strict rules, payload predicates, per-rule channels, per-person preferences and digests |
+| 31 | AgentPulse: agent events, traces, the MCP server and the Traces screen |
+| 32 | Novu provider, cursor pagination, request tracing, strict STARTTLS |
+| 33 | This reconciliation of the documentation, and the Python SDK |
 
-### 12.2 Quality gates (verified on this branch)
+### 12.2 Quality gates
 
-| Gate | Result |
-|---|---|
-| `gofmt`, `go vet` | Clean |
-| `golangci-lint` v2.15 (errcheck, staticcheck, gosec, errorlint, bodyclose, noctx) | 0 issues |
-| `govulncheck` (toolchain Go 1.26.10) | No vulnerabilities |
-| Go unit tests | 177 test functions, all pass |
-| Web unit tests | 34 (Vitest) over the API client, language helpers and settings; `tsc` and the production build pass |
-| Browser check | Edge against a real backend: list, detail, feedback and Undo, settings, mobile, and the empty, wrong-key and unreachable states |
-| Race detector and PostgreSQL integration tests | Pass (run in Linux with a real database) |
-| Statement coverage | 89.0% total; every tested package is at or above 82% except `mail` (72%). `util` and the entry point have no tests |
-| End-to-end smoke test | Real PostgreSQL and Redis: signature, redelivery, dedup, SSRF rejection, limits, CORS, metrics all as designed |
-| CI gate | Format, vet, lint, vulnerability scan, race tests with PostgreSQL, 80% coverage floor |
+What was **verified locally** (Windows, after each milestone) and what was **confirmed in CI** are different, and this table keeps them apart.
 
-### 12.3 Verdict on the Go backend
+| Gate | Local | CI |
+|---|---|---|
+| `gofmt`, `go vet`, `go vet -tags integration` | Pass | Format and vet steps passed |
+| `go test -cover ./...` | Pass | |
+| `golangci-lint` v2.15 | Not available locally | Found about 20 issues on its first run, all fixed; the lint step and the vulnerability scan passed on later commits |
+| `-race`, PostgreSQL and Redis integration tests, 80 percent coverage gate | Not runnable locally (no C compiler, no Docker) | The first real run failed on two bugs the in-memory tests could not see (overrides could not be saved in PostgreSQL; an integration test used `TRUNCATE` across a foreign key). Both are fixed; **the result of the run after the fix was not confirmed at the time of writing** |
+| Web: `npm test`, `npm run build` | 230 tests pass, build succeeds | The web job passes |
+| Java service | Not touched | The `java-service` job fails; unrelated to this work |
 
-**Sound for what it covers.** The Layer 1 and Layer 3 vertical slice is correct, secure by default, observable and tested against real infrastructure. The critical path is the strongest part: authenticated, replay-safe, never merged, delivered concurrently, and failure-tolerant.
+Local statement coverage by package is in [implementation-sync.md](implementation-sync.md); several packages are below the 80 percent target when integration tests do not run.
 
-**Not yet the product.** Layer 2 (the reason the platform exists) is absent, so standard and background events are stored but never acted on, and nothing can be read back through the API. Closing those two gaps is the next work, not more hardening.
+### 12.3 Verdict
+
+**Sound and broad, with its least-proven parts clearly marked.** The deterministic core, the delivery path, the intelligence layer and the console are built and tested. The first CI run on this branch found real defects in code that had only been run in memory, which is exactly why the integration tests exist. Treat anything in section 3's list of "not as complete as it looks" as unproven until it has run against the real service.
 
 ### 12.4 Known limits and deferred items
 
 | Item | Detail |
 |---|---|
-| Distributed tracing | Deferred; request IDs and per-route histograms cover diagnosis today |
-| SMTP TLS | Opportunistic STARTTLS; plaintext if the server does not offer it |
-| Console auth | The key is entered at runtime and kept in `sessionStorage`; `VITE_API_KEY` seeds local development only because anything in a bundle is public. Real user authentication is still owed |
-| Console limits | Newest 200 events only; 15 s polling; no search or pagination; components have no DOM-level tests |
+| Real services | PostgreSQL stores, Redis budget, Ollama, Claude, Novu, SNS, OpenID Connect and MCP clients were not exercised end to end by the author |
+| Per-person delivery | Personal digests are stored, not delivered; delivery targets are workspace-wide |
+| Learning | Suggests; never applies on its own; reads the newest 1000 events |
+| Tracing | `traceparent` and span logs only; no collector export |
+| Event window | Digests, traces and learning read the newest 1000 events |
+| Console | Newer screens English only; no screens yet for rule predicates, per-rule channels or personal preferences |
+| Java service | Not reviewed; its CI job fails |
+| NATS | In the intended stack only; not in Compose and not used |
 | At-least-once critical delivery | If an alert is delivered but saving fails, the redelivery notifies again. Deliberate: a duplicate beats a lost critical alert |
-| Java service | Not reviewed or changed |
-| `mail` coverage | 72%; the remaining branches are SMTP protocol error paths |
 
 ---
 
 ## 13. Forward Roadmap
 
-The order follows dependency, not the original numbering. Each step is a runnable milestone and stops for review (per `AGENTS.md`).
-
-```mermaid
-flowchart LR
-    A["A. Persisted, validated<br/>feedback (read API done)"] --> B["B. Attention worker<br/>(queue, classify)"]
-    B --> C["C. Digests and<br/>scheduling"]
-    A --> D["D. Preferences and<br/>overrides"]
-    C --> E["E. Learning engine"]
-    D --> E
-    F["F. Novu provider"] --> C
-    E --> G["G. Production hardening 2<br/>tracing, SaaS readiness"]
-```
-
-| Step | Goal | Key decisions | Acceptance |
-|---|---|---|---|
-| **A. Feedback persistence** (read API and console **done**, Milestone 14) | Make feedback durable and valid; add cursor pagination when the table outgrows the cap | `feedback` table; validate `eventId` exists and `action` is an enum (`dismissed`, `always`, `never`, `undo`, `reply`); cursor pagination (not `OFFSET`) on `/events` | Invalid feedback returns 400; feedback survives a restart; the console shows past feedback |
-| **B. Attention worker** | Drain `queued` events through Layer 2 | Start with a PostgreSQL work queue (`FOR UPDATE SKIP LOCKED`) rather than NATS; worker selects only `standard`/`background`; critical rows are unreachable by construction; `modelVersion` and `confidence` set | A queued event gets a Layer 2 decision; a test proves a critical event never reaches the worker |
-| **C. Digests and scheduling** | One message per person per window; attention budget | `digest`, `delayed`, `budget_exceeded` statuses become real; budget counters in Redis | Ten standard events yield one digest; budget overflow defers, never drops |
-| **D. Preferences and overrides** | Always/never notify, per-user rules | `preferences` table; definition layer gains scope and payload predicates | A user's "never" suppresses standard events and **cannot** suppress critical |
-| **F. Novu provider** | Email, Slack, SMS through one vendor | `NovuProvider` implements `delivery.Provider`; keep `MultiProvider` | Swap by configuration; SMTP/webhook providers remain as fallbacks |
-| **E. Learning engine** | Feedback adjusts thresholds and budgets | Offline job first; human-reviewable rule suggestions, no silent changes | Suggestions generated from labelled feedback |
-| **G. Hardening 2** | Operability at scale | OpenTelemetry tracing, STARTTLS requirement, real user auth, rule versioning and dry-run | Trace spans across pipeline; rule changes are audited |
-
-Also owed from earlier reviews: refresh `orchestration-platform.md`, decide the fate of the Java service (remove or align), and reconcile the two `k8s/` directories.
+| Step | Goal |
+|---|---|
+| **Verify against real services** | Run PostgreSQL, Redis, Ollama, Claude, Novu, SNS, an OpenID provider and a real MCP client against the code; record results; fix what they find. Get the CI run green end to end, including `-race` and the coverage gate |
+| **Per-person delivery** | Resolve a person's address at send time without storing it in jobs; deliver personal digests; per-person schedules and budgets |
+| **Console completeness** | Screens for predicates, per-rule channels, personal preferences and "my digest"; translations for the newer screens; component-level tests |
+| **Queue and scale** | Move the worker and delivery from polling to NATS (or another queue) if polling stops being enough; share the circuit breaker across replicas |
+| **Observability** | An OpenTelemetry exporter for the spans already recorded |
+| **Product** | Event replay, an agent registry, multi-tenancy and billing for the hosted offering |
+| **Housekeeping** | Decide the fate of the Java service; reconcile the two `k8s/` directories; raise packages below 80 percent coverage |
 
 ---
 
@@ -809,18 +806,19 @@ What the plan and vision say versus what is built.
 
 | Area | Planned or promised | Built | Delta |
 |---|---|---|---|
-| Layer 1 policy and dedup | Rules, criticality, dedup, threading | All four | **None** (payload predicates missing) |
-| Layer 2 AI | Classify, group, digest, schedule, learn, explain | Ollama summariser, unwired | **Large** |
-| Layer 3 delivery | Novu via abstraction; email, Slack, SMS | `Provider` abstraction; SMTP, Slack, Teams | Novu and SMS missing |
-| Layer 4 feedback | Opened, dismissed, undo, always, never, replies; training signals | One endpoint, in memory | Durable storage, validation and consumers missing |
-| Data | PostgreSQL events, decisions, feedback, preferences | `events` table only | Feedback and preference tables missing |
-| Cache | Redis for dedup keys and budget counters | Redis dedup (optional) | Budget counters missing |
-| Messaging | NATS event bus | Not used | Deferred; PostgreSQL queue proposed first |
-| Security | Auth, hardening | API key, HMAC, SSRF controls, fail-closed defaults | User authentication missing |
-| Observability | Structured logging, observability | Logs, request IDs, Prometheus histograms | Tracing missing |
-| Integration | MCP server, SDK, agent registry, replay | None | Not on any milestone |
-| UI | Dashboard, digest UI with Undo/Always/Never | Console: lead, ledger, detail, feedback with Undo and Always/Never, setup and error states | Digest UI, search and pagination missing |
-| Docs | Accurate status | `orchestration-platform.md` stale | Refresh owed |
+| Layer 1 policy and dedup | Rules, criticality, dedup, threading, payload predicates, scoped routing | All, including strict YAML, payload predicates, per-rule channels and agent-run threads | None known |
+| Layer 2 AI | Classify, group, digest, schedule, learn, explain | Heuristic plus optional Ollama and Claude; digests; explanations; budget and worker; suggestions from feedback | Models not exercised against the real services; learning is advisory |
+| Layer 3 delivery | Novu via abstraction; email, Slack, SMS | SMTP, Novu, Slack, Teams, SMS, durable queue | Novu not run against the real service |
+| Layer 4 feedback | Opened, dismissed, undo, always, never, replies; training signals | Stored, attributed, overrides, learning suggestions | None known |
+| Data | PostgreSQL events, decisions, feedback, preferences | 15 tables covering events, inbox state, trail, preferences, personal preferences, rules, delivery jobs, users, identities, sessions, feedback, overrides, digests, suggestions, audit | PostgreSQL paths proven only in CI |
+| Cache | Redis for dedup keys and budget counters | Redis dedup and budget | Budget script proven only in CI |
+| Messaging | NATS event bus | Not used | Deferred; PostgreSQL queue instead |
+| Security | Auth, hardening | API key, accounts, sessions, CSRF, roles, OIDC, audit, HMAC, SSRF controls, strict STARTTLS option | OIDC not run against a real provider |
+| Observability | Logging, tracing | Logs, request IDs, Prometheus, `traceparent` and span logs | No collector export |
+| Integration | MCP server, SDK, agent registry, replay | MCP server (stdio and HTTP), Python SDK, agent events and traces | Agent registry and replay not built; MCP not tried with a real client |
+| UI | Dashboard, digest UI, traces | 15 screens, demo mode, themes, languages | Newer screens English only |
+| Docs | Accurate status | Reconciled in milestone 33 | Keep `implementation-sync.md` current |
+
 
 ---
 
@@ -1047,20 +1045,37 @@ Invariants enforced by tests: critical events are never `merged`; a failed deliv
 
 ## 19. 🔌 Key API Endpoints
 
-| Method and path | Auth | Purpose | Success | Notable errors |
-|---|---|---|---|---|
-| `GET /health` | none | Liveness and readiness probe, dashboard check | 200 `{status, service}` | |
-| `GET /metrics` | `X-API-Key` | Prometheus metrics | 200 text | 401, 503 |
-| `GET /events` | `X-API-Key` | List recent events, newest first, without payloads (`?limit=1..500`) | 200 `{events:[...]}` | 400 bad limit, 401, 500, 503 |
-| `POST /notify` | `X-API-Key` | Send a notification to email, Slack, Teams | 202 `{status:"accepted"}` | 400 validation, 401, 413, 500, 503 |
-| `POST /feedback` | `X-API-Key` | Record feedback on an event | 202 `{status:"accepted"}` | 400 missing fields, 401, 413 |
-| `POST /webhooks/github` | HMAC `X-Hub-Signature-256` | Ingest a GitHub event into the pipeline | 202 with decision; 200 `duplicate` on redelivery | 400 bad event header, 401 bad signature, 413, 500, 503 no secret |
+Auth: **key** means the API key or a signed-in session; **admin** means an admin session or the API key; the webhook uses an HMAC. The details of each route are in its milestone document.
 
-Required headers on the webhook: `X-GitHub-Event`, `X-Hub-Signature-256`; `X-GitHub-Delivery` is used for idempotency (a random ID is generated if absent or unsafe).
+| Method and path | Auth | Purpose |
+|---|---|---|
+| `GET /health` | none | Liveness and readiness |
+| `GET /metrics` | key | Prometheus metrics |
+| `POST /webhooks/github` | HMAC `X-Hub-Signature-256` | Ingest a GitHub event; 202 with the decision, 200 `duplicate` on redelivery |
+| `POST /api/events` | key | Ingest one agent step (trace, parent, agent, metadata); same pipeline as a webhook |
+| `GET /events`, `GET /api/events` | key | Recent events, newest first; `?limit=`, `?cursor=`, `?traceId=` (`/api/events`) |
+| `POST /notify` | key | Send a validated notification |
+| `POST /feedback` | key | Record opened, dismissed, undo, always, never or reply |
+| `GET /api/notifications` and `/api/notifications/{id}` and actions | key | The inbox: filters, sort, `?cursor=` or `page`, state changes, bulk actions |
+| `GET /api/analytics`, `GET /api/activity` | key | Overview, analytics and activity data |
+| `/api/rules` (list, create, update, delete, `reorder`, `test`), `GET /api/policies` | key to read, admin to change | Rules, with payload predicates and per-rule channels; dry runs accept a sample payload |
+| `GET /api/channels`, `POST /api/channels/{id}/test`, `GET /api/integrations` | key, admin to test | Channel and integration status; rate-limited test sends |
+| `GET /api/deliveries`, `POST /api/deliveries/{id}/retry` | key, admin to retry | The delivery queue and dead letters |
+| `GET`/`PUT /api/preferences` | key to read, admin to change | Workspace quiet hours and mutes |
+| `GET`/`PUT /api/me/preferences` | signed-in person | Personal preferences with workspace fallback |
+| `GET`/`POST`/`DELETE /api/overrides` | key | Always and never notify choices |
+| `GET /api/digests`, `GET /api/digests/{id}`, `POST /api/digests/generate` | key; admin to generate | Workspace digests; `?scope=me` for the signed-in person's own (any person may make theirs) |
+| `GET /api/explain/{eventId}` | key | Plain-language reason for a decision, labelled heuristic or model |
+| `GET /api/attention/status` | admin | Which engine is active, breaker state, fallbacks |
+| `GET /api/learning/suggestions`, `POST .../{id}/apply`, `POST .../{id}/dismiss` | key to read, admin to resolve | Suggestions from feedback |
+| `GET /api/traces`, `GET /api/traces/{id}` | key | Agent runs and their ordered steps with decisions |
+| `POST /api/mcp` | key | Model Context Protocol over HTTP (one JSON-RPC message per request) |
+| `GET /api/stream` | key | Server-sent events for live updates |
+| `/api/auth/*`, `/api/users`, `GET /api/audit` | public sign-in routes; admin for users and audit | Accounts, sessions, single sign-on, audit trail |
 
-**Middleware order**, outermost first: request ID, CORS, logging and metrics, auth (protected routes) or signature (webhook), request timeout, handler. Logging wraps auth so rejected requests are counted. `/events` is a known metric label.
+Every response carries `X-Request-ID` and `traceparent`.
 
-**Planned endpoints:** `GET /events/{id}`, cursor pagination on `/events`, `GET /digests`, `POST /preferences`.
+**Middleware order**, outermost first: request ID, tracing, CORS, logging and metrics, auth (protected routes) or signature (webhook), request timeout, handler. Logging wraps auth so rejected requests are counted; unknown paths share one metric label so a scan cannot create unbounded series.
 
 ---
 
@@ -1126,30 +1141,32 @@ Unit tests use in-memory fakes behind the same interfaces as production. Real-in
 
 ## 22. Status-at-a-Glance
 
-| Area | Status | Evidence |
-|---|---|---|
-| Layer 1: ingestion, rules, dedup, threading | **Done** | Milestones 3, 4, 11, 12; tests and smoke run |
-| Critical path (never suppress) | **Done** | Pipeline invariant tests; critical never merged |
-| Layer 3: email, Slack, Teams | **Done** | Concurrent, SSRF-safe |
-| Layer 3: Novu, SMS | Planned | Step F |
-| Layer 4: feedback capture | **Partial** | In memory, unvalidated |
-| Layer 2: AI classify, digest, schedule | Planned | Step B, C |
-| Learning engine | **Partial** (stub) | Ollama summariser, unwired |
-| Preferences and overrides | Planned | Step D |
-| PostgreSQL persistence and retention | **Done** | Integration tests |
-| Redis dedup across replicas | **Done** | Smoke test with real Redis |
-| Security hardening | **Done** | Milestone 13 step 6; lint, vulnerability scan clean |
-| Metrics and logs | **Done** | Prometheus histograms, JSON logs |
-| Tracing | Planned | Deferred |
-| Read API (`GET /events`) | **Done** | Milestone 14; Go tests |
-| Attention console (ledger, detail, feedback) | **Done** (v1) | Milestone 14; 34 web tests; browser check |
-| Pagination, search, digest view | Planned | Step A and C |
-| Docker, compose, Kubernetes, CI | **Done** | Image builds; CI gates defined (CI not run from here) |
-| Java service | Unreviewed | Parallel implementation |
-| MCP, SDK, replay, agent registry | Not planned | Vision document only |
-| Documentation | **Partial** | `orchestration-platform.md` stale; this document is the current reference |
+"Done" means built and tested locally. "Proven" additionally means it has run against the real service or in CI; the column says which.
 
-**One-line summary:** the deterministic core, the delivery path and an operator console are in place; the attention intelligence that gives the platform its purpose is the next thing to build.
+| Area | Status | Proven |
+|---|---|---|
+| Layer 1: ingestion, rules (payload predicates, channels, strict YAML), dedup, threading | **Done** | Locally; PostgreSQL and Redis paths in CI |
+| Critical path (never suppress, never deferred, never budgeted, never changed) | **Done** | Invariant tests in every milestone from 25 |
+| Layer 2: heuristic classifier, digests, explanations | **Done** | Locally |
+| Layer 2: Ollama and Claude adapters | **Done** | Against local fakes only |
+| Layer 2: learning suggestions | **Done** | Locally; repository in CI |
+| Attention budget, async worker, quiet-hours release | **Done** | Locally; PostgreSQL queue and Redis script in CI |
+| Layer 3: email (SMTP, Novu), Slack, Teams, SMS, retry queue | **Done** | Locally; Novu and SNS against fakes only |
+| Layer 4: feedback, overrides, audit | **Done** | Locally; PostgreSQL stores in CI |
+| Accounts, sessions, roles, OpenID Connect | **Done** | OIDC against a fake provider only |
+| Agent events, traces, MCP server, Python SDK | **Done** | MCP and SDK against local servers; no real MCP client |
+| PostgreSQL persistence and retention | **Done** | CI |
+| Redis dedup and budget across replicas | **Done** | CI |
+| Security hardening | **Done** | Lint and vulnerability scan passed in CI |
+| Metrics, logs, request IDs, `traceparent` and span logs | **Done** | Locally; no collector export |
+| Console: 15 screens, demo mode, themes, languages | **Done** | 230 Vitest tests, production build; newer screens English only |
+| Docker, compose, Kubernetes, CI | **Done** | The Go and web CI jobs pass the steps that have run; see section 12.2 |
+| Per-person delivery | Not built | Personal digests are stored, not delivered |
+| NATS | Not used | Named in the intended stack only |
+| Java service | Unreviewed | Its CI job fails |
+| Event replay, agent registry | Not planned | Vision documents only |
+
+**One-line summary:** the four layers are built end to end and the critical invariant is tested at every layer; the remaining work is proving the parts that have only run against fakes, per-person delivery, and the console screens that are still API-only.
 
 ---
 
@@ -1192,3 +1209,7 @@ Everything changed on `feature-impl` since the milestone 13 plan, in the order i
 Layer rules held throughout: Layer 1 stays deterministic (rules, preferences and dedup contain no AI), and critical events are never merged, delayed, muted or lowered. That is enforced in `pkg/rules` (locked rules), `pkg/preferences` (`Decide`) and `pkg/inbox` (priority guard), each with tests. Details: [milestone-16.md](milestone-16.md) to [milestone-21.md](milestone-21.md).
 
 **Still open:** user authentication, pagination and search, persisted and validated feedback, the AI attention worker, digests, Novu, tracing, STARTTLS requirement, and the Java service review (section 13).
+
+### 23b. Milestones 22 to 33
+
+Milestones 22 to 33 are recorded in [CHANGELOG.md](CHANGELOG.md) and in `docs/milestone-22.md` to `docs/milestone-33.md`, and summarised in section 12.1. The shared handshake between design and implementation, including decisions, verification gaps and open questions, is [implementation-sync.md](implementation-sync.md).

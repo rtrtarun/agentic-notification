@@ -2,7 +2,7 @@
 
 Written for engineers who will change or extend `apps/web`. It explains how the console is built, why it looks the way it does, which component owns what, and where it falls short of the three UI skills in [`skills/`](../skills/README.md). The shorter product-level summary is [frontend.md](frontend.md); the backend contract is in [architecture.md](architecture.md) section 11.4a.
 
-This document describes the console after the inbox redesign (sidebar, search, unread, themes and languages). Sections 15 and 16 record the earlier skills audit, which still applies; new controls follow the same rules.
+This document describes the console core after the inbox redesign (sidebar, search, unread, themes and languages). **Status after Milestone 33:** the console has 15 screens ([frontend.md](frontend.md) lists them). The screens added from milestone 15 on follow the same patterns, so the rules here still apply: a typed client in `src/lib/<area>.ts` with a demo and an HTTP variant, loading through `useLoad` and `LoadGate`, strings in `lib/i18n/en.ts` (English first for the newer namespaces), no new runtime UI dependencies, and every `fetch` inside `lib/api.ts`. Sections 15 and 16 record the earlier skills audit, which still applies.
 
 All statements here were checked against the code at the commit that added this file. Line references are to `apps/web/src`.
 
@@ -39,9 +39,9 @@ There is one screen with three overlays that appear on demand: the detail sheet,
 |---|---|---|
 | UI | React 18, TypeScript (strict) | Project stack in `AGENTS.md` |
 | Build | Vite 5, `tsc -b` | Fast, minimal config |
-| Tests | Vitest 2, node environment | Logic tests only; no DOM runner yet |
+| Tests | Vitest 2, node environment | Logic tests only (230 as of milestone 33); no DOM runner yet |
 | Font | `@fontsource-variable/bricolage-grotesque`, self-hosted | One variable family; no third-party request at runtime |
-| Styling | One hand-written `styles.css` with CSS custom properties | No build-time CSS tooling needed at this size (about 650 lines) |
+| Styling | One hand-written `styles.css` with CSS custom properties | No build-time CSS tooling needed at this size (it has grown with each screen; the tokens and themes are unchanged) |
 | Runtime dependencies | `react`, `react-dom`, the font | Everything else is the platform (`fetch`, `<dialog>`, `sessionStorage`) |
 
 Rules the code follows: components render, `lib/` holds logic and has the tests, only `lib/api.ts` calls `fetch`, and no component imports another component's styles.

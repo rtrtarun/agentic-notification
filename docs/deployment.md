@@ -1,5 +1,7 @@
 # Deployment and hosting
 
+> **Status after Milestone 33.** The service now has accounts and single sign-on, a delivery retry queue, optional Ollama or Claude and Novu, and an MCP server. The environment variables for all of it are in "Production reference" at the end of this document, and each milestone document lists its own settings.
+
 The platform has two deployable parts. They are hosted differently.
 
 | Part | What it is | Where it can run |
@@ -87,7 +89,7 @@ On a server: build the service image from `go-server/notification-service/Docker
 
 - The console is public static code. It contains no secrets; the API key is typed in by the person using it.
 - The service must stay fail-closed: set `API_KEY` and `GITHUB_WEBHOOK_SECRET`, and leave `ALLOW_UNAUTHENTICATED_API` and `ALLOW_UNSIGNED_WEBHOOKS` unset. Both exist only for local development.
-- Anyone who knows the service address can send it requests, so the key is the only gate until real user login exists (listed as open in [ui-architecture.md](ui-architecture.md) section 16).
+- Anyone who knows the service address can send it requests. The API key gates services; people sign in with an account (milestone 23): set `AUTH_BOOTSTRAP_EMAIL` and `AUTH_BOOTSTRAP_PASSWORD` once to create the first admin (they are used only when no account exists), and use `AUTH_COOKIE_SECURE` and `PUBLIC_URL` for an https deployment. Prefer sign-in over typing the key into the console.
 - Do not set `VITE_API_KEY` in a hosted build. Anything in a built bundle is public.
 
 ## Checks before announcing a deployment
