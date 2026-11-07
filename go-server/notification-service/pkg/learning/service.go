@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -253,7 +254,7 @@ func (s *Service) store(ctx context.Context, sug Suggestion) error {
 		return nil
 	case err == nil:
 		sug.CreatedAt = existing.CreatedAt
-	case err != ErrNotFound:
+	case !errors.Is(err, ErrNotFound):
 		return fmt.Errorf("read suggestion: %w", err)
 	default:
 		sug.CreatedAt = now

@@ -168,9 +168,9 @@ func TestStreamRequiresKeyAndRespectsTheCap(t *testing.T) {
 func TestStreamEndsWhenTheServerStops(t *testing.T) {
 	s := newPrefsServer(t)
 	ts := httptest.NewServer(s.Handler())
-	t.Cleanup(ts.Close) // runs after the stream bodies are closed (cleanups run last-in first-out)
-	_, sc := openStream(t, ts, testAPIKey)
-	nextData(t, sc) // ready
+	t.Cleanup(ts.Close)                    // runs after the stream bodies are closed (cleanups run last-in first-out)
+	_, sc := openStream(t, ts, testAPIKey) //nolint:bodyclose // openStream closes the body in a test cleanup
+	nextData(t, sc)                        // ready
 
 	s.stopStreams()
 	s.stopStreams() // idempotent
