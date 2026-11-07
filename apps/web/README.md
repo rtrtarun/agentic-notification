@@ -36,4 +36,4 @@ Design language, states, copy rules and structure: [docs/frontend.md](../../docs
 | Settings | `#/settings` | none |
 | Help and Support | `#/help` | `/health` |
 
-Every screen works in demo mode. Screens from milestone 16 on are English first; see the language note in [docs/milestone-16.md](../../docs/milestone-16.md).
+Every screen works in demo mode. Screens from milestone 16 on are English first; see the language note in [docs/milestones/milestone-16.md](../../docs/milestones/milestone-16.md).

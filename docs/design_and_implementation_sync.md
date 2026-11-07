@@ -2,7 +2,7 @@
 
 This file is the handshake between two roles:
 
-- **Design spec** (the planning assistant, referred to as "Argon"): decides what to build and why. Its source documents are `AGENTS.md`, `docs/coding-standards.md`, `docs/architecture.md`, `docs/agentpulse.md`, `docs/upcoming-milestones.md` and `PROMPT_SPEC.md`.
+- **Design spec** (the planning assistant, referred to as "Argon"): decides what to build and why. Its source documents are `AGENTS.md`, `docs/rules/coding-standards.md`, `docs/architecture.md`, `docs/agentpulse.md`, `docs/upcoming-milestones.md` and `PROMPT_SPEC.md`.
 - **Implementation** (Claude Code working in this repository): builds it, tests it and records what actually happened.
 
 Rule: **the code and the tests are the truth about what exists; this file says what is built, what is in progress and where the implementation differs from the spec.** The designer should read this before proposing the next milestone; the implementer updates it in the same commit as any milestone work. Never mark something done here that has not been run.
@@ -12,7 +12,7 @@ Last updated: design sync approved for sequential execution of milestones 27 to 
 ## 1. Ground rules both sides follow
 1. Critical events never touch AI, are never merged, are never muted, budgeted or delayed, and are delivered inline. Every milestone adds a test proving it.
 2. Clean Architecture; handlers only decode, call one service and encode; no SQL outside repositories; constructor injection only.
-3. Every milestone has `docs/milestone-N.md` and a `docs/CHANGELOG.md` entry in the same commit. No `Co-Authored-By` trailers.
+3. Every milestone has `docs/milestones/milestone-N.md` and a `docs/CHANGELOG.md` entry in the same commit. No `Co-Authored-By` trailers.
 4. A claim of "verified" names the command that was run. A check that could not run here is listed in section 4 as **not verified**, never as passed.
 
 ## 2. Status by milestone
@@ -20,7 +20,7 @@ Last updated: design sync approved for sequential execution of milestones 27 to 
 | # | Milestone | Status | Notes |
 |---|---|---|---|
 | 1 to 25 | Foundation through Attention Intelligence | Done, committed | See `docs/CHANGELOG.md` |
-| 26 | Ollama and Claude adapters behind Attention | Done, committed, pushed | `docs/milestone-26.md`. Fake model servers only |
+| 26 | Ollama and Claude adapters behind Attention | Done, committed, pushed | `docs/milestones/milestone-26.md`. Fake model servers only |
 | 27 | Real-service and PostgreSQL verification | **Approved to complete** | Contract tests in `pkg/db/dbtest` run against memory store always and PostgreSQL under `-tags integration`. Commit once all store contracts pass `go test ./...` |
 | 28 | Learning engine (`pkg/learning`) | **Approved for execution** | Human-reviewable suggestions from feedback + event trail; never alters locked/critical rules |
 | 29 | Async worker and attention budgets | **Approved for execution** | Workspace-level budget in M29 (`ATTENTION_BUDGET_PER_HOUR`); async worker drains non-critical queued events |
@@ -38,7 +38,7 @@ Record every such decision here so the design side can accept or overrule it.
 |---|---|---|---|
 | Store contracts are written once and run against the memory store always and PostgreSQL under `-tags integration` (`pkg/db/dbtest`) | 27 | The memory run proves the test is right before it is trusted against a database | **Accepted.** Keep this pattern for all new stores in M28–M32 |
 | Digests keep `source` and `model` inside the JSON body; no new columns | 26 | Digests are stored as JSON already | **Accepted.** Avoids redundant schema columns |
-| Model classification runs synchronously with a timeout until milestone 29 moves it to a worker | 26 | Keeps milestone 26 small; the limit is recorded in `milestone-26.md` | **Accepted.** Move to the async worker in M29 |
+| Model classification runs synchronously with a timeout until milestone 29 moves it to a worker | 26 | Keeps milestone 26 small; the limit is recorded in `milestones/milestone-26.md` | **Accepted.** Move to the async worker in M29 |
 | The model only supplies wording for digests; groups and counts come from the heuristic | 26 | A model cannot invent or drop an event | **Accepted.** Preserve this deterministic guardrail permanently |
 | `PROMPT_SPEC.md` is an input document and is not committed unless asked | 27 | It is a prompt, not product documentation | **Accepted.** Keep `PROMPT_SPEC.md` untracked; commit `docs/implementation-sync.md` |
 
@@ -57,8 +57,8 @@ Record every such decision here so the design side can accept or overrule it.
 | `npm test -- --run` and `npm run build` | **Mandatory local gate.** Must run and pass after every frontend change |
 
 ## 5. Open questions for the design side (Resolved)
-1. ~~`PROMPT_SPEC.md` asks to proceed through milestones 27 to 33 without stopping, while `AGENTS.md` and `docs/coding-standards.md` say one milestone per review. Which governs?~~
-   - **Design Ruling:** Proceed sequentially through **Milestones 27 to 33 without stopping**, creating **one atomic commit per milestone** (updating `docs/milestone-N.md`, `docs/CHANGELOG.md`, and `docs/implementation-sync.md` in each commit). This preserves single-milestone reviewability and revert safety while completing the full build in one run.
+1. ~~`PROMPT_SPEC.md` asks to proceed through milestones 27 to 33 without stopping, while `AGENTS.md` and `docs/rules/coding-standards.md` say one milestone per review. Which governs?~~
+   - **Design Ruling:** Proceed sequentially through **Milestones 27 to 33 without stopping**, creating **one atomic commit per milestone** (updating `docs/milestones/milestone-N.md`, `docs/CHANGELOG.md`, and `docs/implementation-sync.md` in each commit). This preserves single-milestone reviewability and revert safety while completing the full build in one run.
 2. ~~Milestone 29 says budgets are "per recipient/workspace". Recipients exist only as workspace-wide targets until milestone 30 adds per-person scoping. Proposal: budget per workspace in 29, per person after 30.~~
    - **Design Ruling:** **Approved.** Implement workspace-scoped budgets in Milestone 29 (`scope = "workspace"`), and extend budget keys to support `user_id` (`scope = "user:<id>"` falling back to `"workspace"`) when per-person scoping lands in Milestone 30.
 3. ~~Milestone 31 puts an MCP HTTP endpoint on the main service and a stdio binary. Proposal: both call the same `pkg/mcp` handler so behaviour cannot drift.~~

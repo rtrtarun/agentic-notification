@@ -1,7 +1,7 @@
 """A small agent that reports a run to AgentPulse.
 
 It plans, calls a flaky tool that times out three times, retries, reflects and finishes.
-With the rule from docs/milestone-31.md (attempt above 3) the fourth attempt raises an alert.
+With the rule from docs/milestones/milestone-31.md (attempt above 3) the fourth attempt raises an alert.
 
     AGENTPULSE_URL=http://localhost:8080 AGENTPULSE_API_KEY=dev-key python example.py
 

@@ -1,6 +1,6 @@
 # Contributing
 
-Thank you for helping. This project is built in small, reviewable steps, and a few rules keep it safe to change. They come from [docs/coding-standards.md](docs/coding-standards.md) and [AGENTS.md](AGENTS.md); read those for the full text.
+Thank you for helping. This project is built in small, reviewable steps, and a few rules keep it safe to change. They come from [docs/rules/coding-standards.md](docs/rules/coding-standards.md) and [AGENTS.md](AGENTS.md); read those for the full text.
 
 ## The one rule that matters most
 
@@ -44,7 +44,7 @@ CI (`.github/workflows/ci.yml`) additionally runs golangci-lint, govulncheck and
 ## Document the change in the same commit
 
 - Add an entry at the top of [`docs/CHANGELOG.md`](docs/CHANGELOG.md).
-- For a milestone-sized change, add or update `docs/milestone-N.md` (goals, decisions, database and API changes, risks, tests, acceptance, known limits). For a package, update its `README.md`.
+- For a milestone-sized change, add or update `docs/milestones/milestone-N.md` (goals, decisions, database and API changes, risks, tests, acceptance, known limits). For a package, update its `README.md`.
 - If you decided something the design did not say, or could not verify something, record it in [`docs/implementation-sync.md`](docs/implementation-sync.md).
 - New settings go in the service README; new routes in `docs/architecture.md` section 19.
 

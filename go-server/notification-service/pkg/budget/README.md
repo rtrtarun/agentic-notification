@@ -8,4 +8,4 @@ A cap on how often standard notifications interrupt people: "human attention is 
 - Never consulted for a critical event. Background events and "always notify" choices do not spend it. A store error fails open.
 - Events over the budget become `budget_exceeded` and go in the next digest; they are never dropped.
 
-See [docs/milestone-29.md](../../../../docs/milestone-29.md).
+See [docs/milestones/milestone-29.md](../../../../docs/milestones/milestone-29.md).

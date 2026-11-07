@@ -107,11 +107,11 @@ Related: [ui-architecture.md](ui-architecture.md), [deployment.md](deployment.md
 | [`docs/project vision.md`](<project vision.md>) | Enhanced product vision: timeline, smart rules, MCP server, SDK, dashboard, agent registry, replay | Aspirational. Almost none of it is built |
 | [`docs/agentpulse.md`](agentpulse.md) | Earlier product framing ("AgentPulse") | Historical |
 | [`docs/extrat of what we wnted to see.md`](<extrat of what we wnted to see.md>) | Working notes | Historical |
-| [`docs/milestone-1.md` ... `milestone-13.md`](milestone-13.md) | Per-milestone goals, decisions, tests, acceptance | Accurate for what each milestone delivered |
-| [`docs/coding-standards.md`](coding-standards.md) | Enforced and review-time standards | Accurate; items marked `[Gap]` are tracked |
+| [`docs/milestones/milestone-1.md` ... `milestones/milestone-13.md`](milestones/milestone-13.md) | Per-milestone goals, decisions, tests, acceptance | Accurate for what each milestone delivered |
+| [`docs/rules/coding-standards.md`](rules/coding-standards.md) | Enforced and review-time standards | Accurate; items marked `[Gap]` are tracked |
 | [`docs/runbook.md`](runbook.md) | Operating the service: symptoms, causes, actions | Accurate as of step 6 |
 | [`docs/frontend.md`](frontend.md) | The console: design language, states, copy rules, structure | Accurate |
-| [`docs/milestone-14.md`](milestone-14.md) | Operator console and read API | Accurate |
+| [`docs/milestones/milestone-14.md`](milestones/milestone-14.md) | Operator console and read API | Accurate |
 | [`docs/CHANGELOG.md`](CHANGELOG.md) | Running index of every change | Accurate |
 | [`roadmap.md`](../roadmap.md) | Outline of roadmap headings | Skeleton only |
 | [`skills/`](../skills/README.md) | `golang-pro` and `tarun-code-review` guides | Used for the Milestone 13 review |
@@ -728,14 +728,14 @@ Defaults fail closed. Full table: [service README](../go-server/notification-ser
 
 ### 12.1 Milestone history
 
-Each milestone has its own document, `docs/milestone-N.md`, with decisions, tests, acceptance and honest limits. The running index is [CHANGELOG.md](CHANGELOG.md).
+Each milestone has its own document, `docs/milestones/milestone-N.md`, with decisions, tests, acceptance and honest limits. The running index is [CHANGELOG.md](CHANGELOG.md).
 
 | Milestone | Delivered |
 |---|---|
 | 1 to 4 | Repository, Docker, CI, basic API and React app, API key authentication, configuration, logging, GitHub webhook ingestion and persistence, rule engine and criticality |
 | 5 to 9 | Persistence of events and decisions, the delivery abstraction (`Provider`, `Service`), SMTP, a first in-memory feedback endpoint, an Ollama stub |
 | 10 to 12 | Local deployment, the end-to-end critical pipeline with YAML rules, deduplication and threading |
-| 13 | Security and production hardening (see [milestone-13.md](milestone-13.md)) |
+| 13 | Security and production hardening (see [milestones/milestone-13.md](milestones/milestone-13.md)) |
 | 14 | Operator console and read API |
 | 15 to 21 | Inbox with state and a detail drawer; All notifications; Overview, Activity and Analytics; editable Rules and Policies; Channels and Integrations; Preferences and live updates; Help and Support |
 | 22 | Built-in delivery: a durable queue with retries and dead letters, SMS gateways |
@@ -1172,12 +1172,12 @@ Unit tests use in-memory fakes behind the same interfaces as production. Real-in
 
 ## 23. Change Record
 
-Everything changed on `feature-impl` since the milestone 13 plan, in the order it happened. The running index is [CHANGELOG.md](CHANGELOG.md); per-milestone detail is in [milestone-13.md](milestone-13.md) and [milestone-14.md](milestone-14.md).
+Everything changed on `feature-impl` since the milestone 13 plan, in the order it happened. The running index is [CHANGELOG.md](CHANGELOG.md); per-milestone detail is in [milestones/milestone-13.md](milestones/milestone-13.md) and [milestones/milestone-14.md](milestones/milestone-14.md).
 
 | # | Change | Where | Why |
 |---|---|---|---|
 | 1 | Added the `golang-pro` and `tarun-code-review` skills | [`skills/`](../skills/README.md) | Reference guides for Go work and PR review |
-| 2 | Principal-engineer review of the Go service (verdict BLOCK), then fixed | [milestone-13.md](milestone-13.md) step 6 | Close the security, reliability and scale findings |
+| 2 | Principal-engineer review of the Go service (verdict BLOCK), then fixed | [milestones/milestone-13.md](milestones/milestone-13.md) step 6 | Close the security, reliability and scale findings |
 | 3 | API and webhook security: fail-closed auth with constant-time compare, SSRF and recipient validation, header-injection defence, body limits, server timeouts, CORS allow-list | `server`, `notification`, `delivery`, `config` | An open `/notify` could be used to reach internal hosts |
 | 4 | Reliability: concurrent channels with joined errors, webhook idempotency via the delivery ID, dedup `Forget` after failure, push commits in the dedup key, collision-free event IDs | `delivery`, `pipeline`, `dedup`, `server` | Critical alerts must not be lost or duplicated, and retries must not be suppressed |
 | 5 | Scale and data: Redis dedup, pool settings, migration advisory lock, retention, capped list, `created_at` index, capped feedback recorder | `dedup`, `db`, `event`, `feedback`, `server` | Run more than one replica and bound growth |
@@ -1190,7 +1190,7 @@ Everything changed on `feature-impl` since the milestone 13 plan, in the order i
 | 12 | **Read API** `GET /events` and `Event.CreatedAt` | `server/handlers.go`, `event` | The console needs to read decisions |
 | 13 | **Attention console**: new frontend with its own design language (signal flags, width-encoded type), typed API client, plain-language helpers, error and empty states, settings in `sessionStorage` | `apps/web`, [frontend.md](frontend.md) | Replace the placeholder dashboard |
 | 14 | Frontend tooling: Vitest and 34 tests, `npm test` in CI, favicon, generated `tsbuildinfo` and `vite.config.js` untracked and ignored, compose CORS now includes `http://localhost:3000` | `apps/web`, `.gitignore`, `docker-compose.yml`, CI | Test the logic; stop tracking build output |
-| 15 | Documentation of all of the above | `docs/milestone-14.md`, `docs/frontend.md`, `apps/web/README.md`, service README, runbook, CHANGELOG, this document | Every change recorded |
+| 15 | Documentation of all of the above | `docs/milestones/milestone-14.md`, `docs/frontend.md`, `apps/web/README.md`, service README, runbook, CHANGELOG, this document | Every change recorded |
 
 **Breaking changes to know about:** protected routes return 503 until `API_KEY` is set; `/metrics` is Prometheus text; the log field `status` is now `http_status`; webhook event IDs embed the delivery ID; `dedup.Deduper`, `event.Repository` and `db.Connect` changed signature. Full list: [CHANGELOG.md](CHANGELOG.md).
 
@@ -1206,10 +1206,10 @@ Everything changed on `feature-impl` since the milestone 13 plan, in the order i
 | 20 | `pkg/preferences`, `pkg/stream`, `/api/preferences`, `/api/stream` (SSE), table `preferences`, pipeline hooks | Preferences, live indicator |
 | 21 | none | Help and Support, diagnostics |
 
-Layer rules held throughout: Layer 1 stays deterministic (rules, preferences and dedup contain no AI), and critical events are never merged, delayed, muted or lowered. That is enforced in `pkg/rules` (locked rules), `pkg/preferences` (`Decide`) and `pkg/inbox` (priority guard), each with tests. Details: [milestone-16.md](milestone-16.md) to [milestone-21.md](milestone-21.md).
+Layer rules held throughout: Layer 1 stays deterministic (rules, preferences and dedup contain no AI), and critical events are never merged, delayed, muted or lowered. That is enforced in `pkg/rules` (locked rules), `pkg/preferences` (`Decide`) and `pkg/inbox` (priority guard), each with tests. Details: [milestones/milestone-16.md](milestones/milestone-16.md) to [milestones/milestone-21.md](milestones/milestone-21.md).
 
 **Still open:** user authentication, pagination and search, persisted and validated feedback, the AI attention worker, digests, Novu, tracing, STARTTLS requirement, and the Java service review (section 13).
 
 ### 23b. Milestones 22 to 33
 
-Milestones 22 to 33 are recorded in [CHANGELOG.md](CHANGELOG.md) and in `docs/milestone-22.md` to `docs/milestone-33.md`, and summarised in section 12.1. The shared handshake between design and implementation, including decisions, verification gaps and open questions, is [implementation-sync.md](implementation-sync.md).
+Milestones 22 to 33 are recorded in [CHANGELOG.md](CHANGELOG.md) and in `docs/milestones/milestone-22.md` to `docs/milestones/milestone-33.md`, and summarised in section 12.1. The shared handshake between design and implementation, including decisions, verification gaps and open questions, is [implementation-sync.md](implementation-sync.md).

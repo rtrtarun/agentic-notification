@@ -6,4 +6,4 @@ A Model Context Protocol server. `Server.Handle` turns one JSON-RPC 2.0 message 
 - `POST /api/mcp` uses an in-process backend. Both share this dispatcher, so the tools cannot drift.
 - Arguments are strict and bounded; `notify_user` goes through the validating notification service.
 
-See [docs/milestone-31.md](../../../../docs/milestone-31.md).
+See [docs/milestones/milestone-31.md](../../../../docs/milestones/milestone-31.md).

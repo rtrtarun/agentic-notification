@@ -74,7 +74,7 @@ func TestMigrateCreatesInboxTables(t *testing.T) {
 
 // TestMigrateCreatesEveryStoreTableAndItsLookupIndexes guards the stores added in
 // milestones 22 to 25: each table must exist, and each column used for lookup or
-// ordering must be indexed (docs/coding-standards.md section 5).
+// ordering must be indexed (docs/rules/coding-standards.md section 5).
 func TestMigrateCreatesEveryStoreTableAndItsLookupIndexes(t *testing.T) {
 	exec := &recordingExecer{}
 	if err := Migrate(context.Background(), exec); err != nil {

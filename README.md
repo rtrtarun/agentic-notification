@@ -359,10 +359,10 @@ Everything lives in [`docs/`](docs/), grouped by what you want to do. **[docs/RE
 | Understand what this is and how it works | [Architecture](docs/architecture.md), [Orchestration overview](docs/orchestration-platform.md) |
 | Run it, deploy it, or run it in production | [Deployment](docs/deployment.md), [Runbook](docs/runbook.md) |
 | Know what is built and what is proven | [Implementation sync](docs/implementation-sync.md), [Changelog](docs/CHANGELOG.md) |
-| See how a feature was designed and tested | The matching `docs/milestone-N.md` ([index](docs/README.md#milestones)) |
+| See how a feature was designed and tested | The matching `docs/milestones/milestone-N.md` ([index](docs/README.md#milestones)) |
 | Work on the console | [Frontend](docs/frontend.md), [UI architecture](docs/ui-architecture.md) |
-| Build an AI agent integration | [AgentPulse](docs/agentpulse.md), [Python SDK](sdk/python/README.md), [Milestone 31](docs/milestone-31.md) |
-| Contribute code | [CONTRIBUTING](CONTRIBUTING.md), [Coding standards](docs/coding-standards.md) |
+| Build an AI agent integration | [AgentPulse](docs/agentpulse.md), [Python SDK](sdk/python/README.md), [Milestone 31](docs/milestones/milestone-31.md) |
+| Contribute code | [CONTRIBUTING](CONTRIBUTING.md), [Coding standards](docs/rules/coding-standards.md) |
 
 ---
 

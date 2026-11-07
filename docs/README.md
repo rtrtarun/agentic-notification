@@ -2,10 +2,26 @@
 
 Everything about the project, grouped by what you want to do. Start with the first group if you are new.
 
-> Files are grouped here rather than moved into sub-folders: many documents, workflows and the changelog link to each other by path, and moving them would break those links. If you later want folders, move one group at a time and fix its links in the same commit.
+## Layout
+
+```text
+docs/
+├── README.md                  this index
+├── architecture.md            the checked reference
+├── orchestration-platform.md  the design narrative
+├── deployment.md  runbook.md  going live and operating
+├── frontend.md  ui-architecture.md   the console
+├── agentpulse.md              AI agent observability
+├── implementation-sync.md  CHANGELOG.md  status and history
+├── milestones/                one document per milestone, milestone-1.md to milestone-33.md
+└── rules/                     the rules every change follows (coding-standards.md)
+```
+
+Everything stays under `docs/`. `AGENTS.md` (the design brief), `CONTRIBUTING.md` and the root `README.md` stay at the repository root because tools and GitHub look for them there. Add new milestone documents to `docs/milestones/` and new standards or process rules to `docs/rules/`.
 
 ## Contents
 
+- [Layout](#layout)
 1. [Start here](#1-start-here)
 2. [Understand the system](#2-understand-the-system)
 3. [Run it and operate it](#3-run-it-and-operate-it)
@@ -31,7 +47,7 @@ Everything about the project, grouped by what you want to do. Start with the fir
 |---|---|
 | [Architecture](architecture.md) | The checked reference: layers, flows, data contracts, endpoints, status. Sections 3, 5, 12 to 14, 19 and 22 are current; sections 6 to 11 and 15 to 18 describe the original pipeline |
 | [Orchestration overview](orchestration-platform.md) | The design narrative: classes, attention budget, digests, feedback, the provider abstraction |
-| [Attention Intelligence, milestone 25](milestone-25.md) and [model adapters, milestone 26](milestone-26.md) | How Layer 2 works and how a model is kept on a leash |
+| [Attention Intelligence, milestone 25](milestones/milestone-25.md) and [model adapters, milestone 26](milestones/milestone-26.md) | How Layer 2 works and how a model is kept on a leash |
 | [Compared with Azure Notification Hubs](notification-hubs-comparison.md) | How this differs from a push-delivery service |
 
 ## 3. Run it and operate it
@@ -48,10 +64,10 @@ Everything about the project, grouped by what you want to do. Start with the fir
 | Document | Read it to |
 |---|---|
 | [AgentPulse](agentpulse.md) | The product idea for agent observability (traces, cost, retries, MCP) |
-| [Milestone 31](milestone-31.md) | The agent event API, traces and the MCP server as built |
+| [Milestone 31](milestones/milestone-31.md) | The agent event API, traces and the MCP server as built |
 | [Python SDK](../sdk/python/README.md) | Report an agent run in a few lines |
 | [Frontend](frontend.md) and [UI architecture](ui-architecture.md) | Work on the console: screens, components, design tokens, accessibility |
-| [Rules (milestones 18 and 30)](milestone-18.md), [predicates and channels](milestone-30.md) | Write rules: conditions, payload predicates, per-rule channels |
+| [Rules (milestones 18 and 30)](milestones/milestone-18.md), [predicates and channels](milestones/milestone-30.md) | Write rules: conditions, payload predicates, per-rule channels |
 
 ## 5. Status, verification and history
 
@@ -68,21 +84,21 @@ Each milestone has one document: goals, decisions, database and API changes, ris
 
 | Era | Milestones | What was built |
 |---|---|---|
-| **Foundation** | [1](milestone-1.md), [2](milestone-2.md), [3](milestone-3.md), [4](milestone-4.md) | Repository, auth and configuration, GitHub webhooks, the rule engine |
-| | [5](milestone-5.md), [6](milestone-6.md), [7](milestone-7.md), [8](milestone-8.md), [9](milestone-9.md) | Persistence, the delivery abstraction, SMTP, first feedback endpoint, an Ollama stub |
-| | [10](milestone-10.md), [11](milestone-11.md), [12](milestone-12.md), [13](milestone-13.md), [14](milestone-14.md) | Local deployment, the critical pipeline, deduplication and threading, hardening, the first console |
-| **Console build-out** | [15](milestone-15.md), [16](milestone-16.md), [17](milestone-17.md) | Inbox, all notifications, overview, activity and analytics |
-| | [18](milestone-18.md), [19](milestone-19.md), [20](milestone-20.md), [21](milestone-21.md) | Rules and policies, channels and integrations, preferences and live updates, help |
-| **Service completion** | [22](milestone-22.md), [23](milestone-23.md) | Built-in delivery with a retry queue; accounts and single sign-on |
-| | [24](milestone-24.md), [25](milestone-25.md), [26](milestone-26.md) | Feedback and overrides; Attention Intelligence; Ollama and Claude adapters |
-| **Verification and depth** | [27](milestone-27.md), [28](milestone-28.md), [29](milestone-29.md) | PostgreSQL contract tests; the learning engine; the async worker and attention budgets |
-| | [30](milestone-30.md), [31](milestone-31.md), [32](milestone-32.md), [33](milestone-33.md) | Predicates, channels and per-person digests; AgentPulse and MCP; Novu, cursors, tracing and STARTTLS; this reconciliation and the SDK |
+| **Foundation** | [1](milestones/milestone-1.md), [2](milestones/milestone-2.md), [3](milestones/milestone-3.md), [4](milestones/milestone-4.md) | Repository, auth and configuration, GitHub webhooks, the rule engine |
+| | [5](milestones/milestone-5.md), [6](milestones/milestone-6.md), [7](milestones/milestone-7.md), [8](milestones/milestone-8.md), [9](milestones/milestone-9.md) | Persistence, the delivery abstraction, SMTP, first feedback endpoint, an Ollama stub |
+| | [10](milestones/milestone-10.md), [11](milestones/milestone-11.md), [12](milestones/milestone-12.md), [13](milestones/milestone-13.md), [14](milestones/milestone-14.md) | Local deployment, the critical pipeline, deduplication and threading, hardening, the first console |
+| **Console build-out** | [15](milestones/milestone-15.md), [16](milestones/milestone-16.md), [17](milestones/milestone-17.md) | Inbox, all notifications, overview, activity and analytics |
+| | [18](milestones/milestone-18.md), [19](milestones/milestone-19.md), [20](milestones/milestone-20.md), [21](milestones/milestone-21.md) | Rules and policies, channels and integrations, preferences and live updates, help |
+| **Service completion** | [22](milestones/milestone-22.md), [23](milestones/milestone-23.md) | Built-in delivery with a retry queue; accounts and single sign-on |
+| | [24](milestones/milestone-24.md), [25](milestones/milestone-25.md), [26](milestones/milestone-26.md) | Feedback and overrides; Attention Intelligence; Ollama and Claude adapters |
+| **Verification and depth** | [27](milestones/milestone-27.md), [28](milestones/milestone-28.md), [29](milestones/milestone-29.md) | PostgreSQL contract tests; the learning engine; the async worker and attention budgets |
+| | [30](milestones/milestone-30.md), [31](milestones/milestone-31.md), [32](milestones/milestone-32.md), [33](milestones/milestone-33.md) | Predicates, channels and per-person digests; AgentPulse and MCP; Novu, cursors, tracing and STARTTLS; this reconciliation and the SDK |
 
 ## 7. Standards and process
 
 | Document | Read it to |
 |---|---|
-| [Coding standards](coding-standards.md) | The rules every change follows: architecture, Go, logging, API, database, testing, frontend, hygiene, definition of done |
+| [Coding standards](rules/coding-standards.md) | The rules every change follows: architecture, Go, logging, API, database, testing, frontend, hygiene, definition of done |
 | [Contributing](../CONTRIBUTING.md) | How to propose and land a change |
 | [AGENTS.md](../AGENTS.md) | The original design brief and the milestone process |
 | [Skills](../skills/README.md) | Review and design guides used while building (Go, mobile, UI library choice, code review) |

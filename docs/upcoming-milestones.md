@@ -6,7 +6,7 @@ Planned work after milestone 26, taken from the "known limits" of milestones 22 
 
 ## Milestone 27: Verify against real services
 **Why:** Every adapter so far is tested against fakes. Real behaviour is unproven.
-- Run the Ollama and Claude adapters against live endpoints; record fallback rate and latency in `milestone-27.md`.
+- Run the Ollama and Claude adapters against live endpoints; record fallback rate and latency in `milestones/milestone-27.md`.
 - Run the PostgreSQL stores (digests, feedback, overrides, delivery jobs) against a real database in CI via Docker Compose.
 - Run SNS and Entra ID sign-in once end to end.
 - Acceptance: a CI job that starts Compose and passes integration tests; a written results table.
