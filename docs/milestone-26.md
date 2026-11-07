@@ -60,3 +60,6 @@ New `pkg/attention/llm/` (`model.go`, `prompts.go`, tests, README) and `pkg/clau
 - **A small local model may often fail the strict JSON check** and fall back. The status page counts these; pick a stronger `OLLAMA_MODEL` if fallbacks are high.
 - **The per-minute cap and breaker are per process**, not shared between replicas.
 - **Explanations of non-critical events are sent to the model** (as redacted facts plus the heuristic's sentence). Use `heuristic` or local Ollama if that is not acceptable.
+
+## Next
+See [upcoming-milestones.md](upcoming-milestones.md) for proposed milestones 27 to 31.
