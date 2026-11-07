@@ -240,3 +240,17 @@ func TestAttentionWorkerAndBudgetSettings(t *testing.T) {
 		})
 	}
 }
+
+func TestSMTPRequireSTARTTLSSetting(t *testing.T) {
+	if cfg, err := LoadConfig(); err != nil || cfg.SMTPRequireSTARTTLS {
+		t.Fatalf("strict STARTTLS must be off by default: %v", err)
+	}
+	t.Setenv("SMTP_REQUIRE_STARTTLS", "true")
+	if cfg, err := LoadConfig(); err != nil || !cfg.SMTPRequireSTARTTLS {
+		t.Fatalf("not read: %v", err)
+	}
+	t.Setenv("SMTP_REQUIRE_STARTTLS", "sometimes")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("an unreadable value must be refused")
+	}
+}

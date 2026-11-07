@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/smtp"
 	"strings"
 	"testing"
 	"time"
@@ -122,5 +123,48 @@ func TestSendHonoursContext(t *testing.T) {
 func TestSendRejectsBadAddress(t *testing.T) {
 	if err := Send(context.Background(), "no-port", nil, "a@b.c", nil, nil); err == nil {
 		t.Fatal("expected error for address without port")
+	}
+}
+
+func TestStrictModeRefusesAServerWithoutSTARTTLSAndSendsNothing(t *testing.T) {
+	addr, data := fakeSMTP(t) // this fake does not offer STARTTLS
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err := SendWith(ctx, Options{RequireStartTLS: true}, addr, nil, "from@example.com", []string{"to@example.com"}, []byte("Subject: hi\r\n\r\nsecret body"))
+	if !errors.Is(err, ErrSTARTTLSRequired) {
+		t.Fatalf("got %v, want ErrSTARTTLSRequired", err)
+	}
+	select {
+	case got := <-data:
+		t.Fatalf("nothing may be sent over a plaintext connection, but the server received %q", got)
+	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+func TestStrictModeNeverSendsCredentialsInPlaintext(t *testing.T) {
+	addr, _ := fakeSMTP(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	auth := smtp.PlainAuth("", "user", "hunter2", "127.0.0.1")
+	err := SendWith(ctx, Options{RequireStartTLS: true}, addr, auth, "from@example.com", []string{"to@example.com"}, []byte("x"))
+	if !errors.Is(err, ErrSTARTTLSRequired) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestTheDefaultStillAllowsPlaintextForLocalDevelopment(t *testing.T) {
+	addr, data := fakeSMTP(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := SendWith(ctx, Options{}, addr, nil, "from@example.com", []string{"to@example.com"}, []byte("Subject: hi\r\n\r\nhello")); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	select {
+	case got := <-data:
+		if !strings.Contains(got, "hello") {
+			t.Fatalf("received %q", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no message")
 	}
 }

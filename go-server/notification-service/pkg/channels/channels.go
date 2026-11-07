@@ -34,8 +34,10 @@ var (
 
 // Settings is what the channels are configured with.
 type Settings struct {
-	SMTPHost        string
-	SMTPSender      string
+	SMTPHost   string
+	SMTPSender string
+	// NovuConfigured is true when email is sent through Novu (NOVU_API_KEY is set).
+	NovuConfigured  bool
 	EmailRecipients []string
 	SlackWebhookURL string
 	TeamsWebhookURL string
@@ -73,8 +75,8 @@ func Describe(s Settings) []Channel {
 		}
 		return out
 	}
-	email := Channel{ID: IDEmail, Name: "Email", Receives: receivesFor(IDEmail), Setup: "SMTP_HOST, SMTP_SENDER and DEFAULT_NOTIFY_EMAIL"}
-	if s.SMTPHost != "" && s.SMTPSender != "" && len(s.EmailRecipients) > 0 {
+	email := Channel{ID: IDEmail, Name: "Email", Receives: receivesFor(IDEmail), Setup: "NOVU_API_KEY, or SMTP_HOST and SMTP_SENDER, plus DEFAULT_NOTIFY_EMAIL"}
+	if (s.NovuConfigured || (s.SMTPHost != "" && s.SMTPSender != "")) && len(s.EmailRecipients) > 0 {
 		email.Configured = true
 		masked := make([]string, 0, len(s.EmailRecipients))
 		for _, r := range s.EmailRecipients {

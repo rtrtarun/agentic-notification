@@ -37,6 +37,7 @@ import (
 	"github.com/example/notification-service/pkg/rules"
 	"github.com/example/notification-service/pkg/sms"
 	"github.com/example/notification-service/pkg/stream"
+	"github.com/example/notification-service/pkg/telemetry"
 )
 
 const (
@@ -90,6 +91,7 @@ type Server struct {
 	classifier      attention.Classifier
 	attentionWorker *attention.Worker
 	mcp             *mcp.Server
+	tracer          *telemetry.Tracer
 	redisClient     *redis.Client
 	attentionLLM    *llm.Model
 	overrides       *overrides.Service
@@ -185,6 +187,7 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 	}
 	s.initLearning()
 	s.mcp = mcp.New(mcpBackend{s}, "service")
+	s.tracer = telemetry.NewTracer(logger)
 	s.service = notification.NewValidatingService(
 		impl.NewNotificationServiceWith(provider),
 		notification.Limits{
@@ -202,7 +205,7 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 			TeamsWebhookURLs:       cfg.TeamsWebhookURLs(),
 			SMSRecipients:          targets.SMS,
 		},
-	).WithOutbox(outbox).WithOverrides(s.overrides).WithDeduper(deduper).WithLogger(logger).WithPreferences(s.preferences).WithPublisher(s.broker)
+	).WithOutbox(outbox).WithOverrides(s.overrides).WithDeduper(deduper).WithLogger(logger).WithPreferences(s.preferences).WithPublisher(s.broker).WithTracer(s.tracer)
 	if cfg.AttentionClassify {
 		s.eventPipeline.WithClassifier(s.classifier)
 	}
@@ -235,11 +238,32 @@ func newProvider(cfg *config.Config, logger *slog.Logger) delivery.Provider {
 	return newProviderWith(cfg, logger, nil)
 }
 
+// emailProvider is how email leaves the service: through Novu when NOVU_API_KEY is set, with
+// SMTP behind it when SMTP is configured too, otherwise through SMTP alone, otherwise nowhere.
+// Exactly one provider owns email, so a recipient is never sent the same message twice.
+func emailProvider(cfg *config.Config) delivery.Provider {
+	var smtpProvider delivery.Provider
+	if cfg.SMTPHost != "" && cfg.SMTPSender != "" {
+		smtpProvider = delivery.NewSMTPProvider(cfg)
+	}
+	if cfg.NovuAPIKey == "" {
+		return smtpProvider
+	}
+	novu, err := delivery.NewNovuProvider(cfg.NovuAPIURL, cfg.NovuAPIKey, cfg.NovuWorkflowID)
+	if err != nil {
+		return smtpProvider // LoadConfig already validated the settings; keep email working if they are somehow wrong
+	}
+	if smtpProvider == nil {
+		return novu
+	}
+	return delivery.NewFallbackProvider(novu, smtpProvider)
+}
+
 // newProviderWith is newProvider plus SMS when a gateway is configured.
 func newProviderWith(cfg *config.Config, logger *slog.Logger, gw sms.Gateway) delivery.Provider {
 	providers := []delivery.Provider{delivery.NewWebhookProvider(true)}
-	if cfg.SMTPHost != "" && cfg.SMTPSender != "" {
-		providers = append(providers, delivery.NewSMTPProvider(cfg))
+	if email := emailProvider(cfg); email != nil {
+		providers = append(providers, email)
 	}
 	if gw != nil {
 		providers = append(providers, delivery.NewSMSProvider(gw))
@@ -254,8 +278,8 @@ func newProviderWith(cfg *config.Config, logger *slog.Logger, gw sms.Gateway) de
 func channelProviders(cfg *config.Config, gw sms.Gateway) map[string]delivery.Provider {
 	webhook := delivery.NewWebhookProvider(true)
 	out := map[string]delivery.Provider{delivery.ChannelSlack: webhook, delivery.ChannelTeams: webhook}
-	if cfg.SMTPHost != "" && cfg.SMTPSender != "" {
-		out[delivery.ChannelEmail] = delivery.NewSMTPProvider(cfg)
+	if email := emailProvider(cfg); email != nil {
+		out[delivery.ChannelEmail] = email
 	}
 	if gw != nil {
 		out[delivery.ChannelSMS] = delivery.NewSMSProvider(gw)

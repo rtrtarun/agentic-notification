@@ -117,7 +117,10 @@ type Page struct {
 	Total    int    `json:"total"`
 	Page     int    `json:"page"`
 	PageSize int    `json:"pageSize"`
-	Counts   Counts `json:"counts"`
+	// NextCursor continues a newest-first list after the last item here. It is empty when
+	// nothing older remains or the list is sorted another way.
+	NextCursor string `json:"nextCursor,omitempty"`
+	Counts     Counts `json:"counts"`
 }
 
 // Sort orders.
@@ -148,6 +151,9 @@ type Query struct {
 	Sort       string
 	Page       int
 	PageSize   int
+	// Cursor, when set, returns the items strictly older than that position, newest first,
+	// instead of a numbered page. It needs the default newest-first sort.
+	Cursor string
 }
 
 // ActionType is something a person can do to a notification.

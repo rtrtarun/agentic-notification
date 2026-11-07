@@ -18,6 +18,7 @@ import (
 	"github.com/example/notification-service/pkg/policy"
 	"github.com/example/notification-service/pkg/preferences"
 	"github.com/example/notification-service/pkg/stream"
+	"github.com/example/notification-service/pkg/telemetry"
 )
 
 // ErrDuplicateDelivery means an event with the same ID was already processed,
@@ -77,6 +78,7 @@ type Pipeline struct {
 	deduper      dedup.Deduper
 	budget       budget.Budget
 	async        bool
+	tracer       *telemetry.Tracer
 	logger       *slog.Logger
 }
 
@@ -145,6 +147,18 @@ func (p *Pipeline) WithDeduper(d dedup.Deduper) *Pipeline {
 // Handle runs one event through policy, dedup, delivery and persistence. It
 // returns ErrDuplicateDelivery when the event ID was already processed.
 func (p *Pipeline) Handle(ctx context.Context, evt event.Event) (event.Event, error) {
+	ctx, span := p.tracer.Start(ctx, "pipeline.Handle")
+	out, err := p.handle(ctx, evt)
+	if errors.Is(err, ErrDuplicateDelivery) {
+		err = nil // a redelivery is answered, not a failure
+		span.End(nil)
+		return out, ErrDuplicateDelivery
+	}
+	span.End(err)
+	return out, err
+}
+
+func (p *Pipeline) handle(ctx context.Context, evt event.Event) (event.Event, error) {
 	exists, err := p.eventRepo.Exists(ctx, evt.ID)
 	if err != nil {
 		return evt, fmt.Errorf("check duplicate delivery: %w", err)
@@ -153,8 +167,12 @@ func (p *Pipeline) Handle(ctx context.Context, evt event.Event) (event.Event, er
 		return evt, ErrDuplicateDelivery
 	}
 
+	_, policySpan := p.tracer.Start(ctx, "policy.Evaluate")
 	evt, adaptive := p.applyPolicy(evt)
-	duplicate := p.applyDedup(ctx, &evt)
+	policySpan.End(nil)
+	dedupCtx, dedupSpan := p.tracer.Start(ctx, "dedup.Check")
+	duplicate := p.applyDedup(dedupCtx, &evt)
+	dedupSpan.End(nil)
 
 	switch evt.AttentionClass {
 	case event.AttentionCritical:
@@ -316,7 +334,9 @@ func (p *Pipeline) applyAttention(ctx context.Context, evt *event.Event, adaptiv
 			return
 		}
 	}
-	c, err := p.classifier.Classify(ctx, *evt)
+	cctx, span := p.tracer.Start(ctx, "attention.Classify")
+	c, err := p.classifier.Classify(cctx, *evt)
+	span.End(err)
 	if err != nil {
 		p.logger.Warn("classification failed; keeping the rule's decision", "event_id", evt.ID, "error", err)
 		return
@@ -354,7 +374,8 @@ func (p *Pipeline) deliverCritical(ctx context.Context, evt event.Event) error {
 		evt.Source, evt.EventType, evt.Repository, evt.DecisionState.Reason,
 	)
 
-	return p.deliverySvc.Send(ctx, notification.NotificationRequest{
+	sctx, span := p.tracer.Start(ctx, "delivery.Send")
+	err := p.deliverySvc.Send(sctx, notification.NotificationRequest{
 		Agent: notification.AgentInfo{
 			Name:  "attention-orchestration",
 			Group: evt.Source,
@@ -366,6 +387,8 @@ func (p *Pipeline) deliverCritical(ctx context.Context, evt event.Event) error {
 		TeamsWebhookURLs: p.cfg.TeamsWebhookURLs,
 		SMSRecipients:    p.cfg.SMSRecipients,
 	})
+	span.End(err)
+	return err
 }
 
 // waitingMarker is added to an event's reason while it waits for the attention worker.
@@ -504,4 +527,12 @@ func (p *Pipeline) ruleNow(evt event.Event) (adaptive bool, channels []string) {
 		return decision.Adaptive, decision.Channels
 	}
 	return true, nil
+}
+
+// WithTracer records a span for each step of Handle (pipeline.Handle, policy.Evaluate,
+// dedup.Check, attention.Classify and delivery.Send), joined to the caller's trace when
+// the context carries one. Without it, nothing is recorded.
+func (p *Pipeline) WithTracer(t *telemetry.Tracer) *Pipeline {
+	p.tracer = t
+	return p
 }

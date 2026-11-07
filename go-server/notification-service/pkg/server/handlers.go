@@ -7,12 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/example/notification-service/pkg/event"
 	"github.com/example/notification-service/pkg/notification"
+	"github.com/example/notification-service/pkg/pagination"
 	"github.com/example/notification-service/pkg/pipeline"
 	"github.com/example/notification-service/pkg/util"
 )
@@ -74,7 +76,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/health", s.corsMiddleware(s.loggingMiddleware(http.HandlerFunc(s.healthHandler))))
 	mux.Handle("/webhooks/github", s.corsMiddleware(s.loggingMiddleware(
 		s.webhookAuthMiddleware(s.timeoutMiddleware(http.HandlerFunc(s.githubWebhookHandler))))))
-	return requestIDMiddleware(mux)
+	return requestIDMiddleware(s.tracer.Middleware(func(r *http.Request) string { return r.Method + " " + routeLabel(r.URL.Path) }, mux))
 }
 
 // Run serves HTTP until ctx is cancelled, then shuts down gracefully,
@@ -338,6 +340,15 @@ func (s *Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 		limit = n
 	}
 
+	var cursor *pagination.Cursor
+	if raw := r.URL.Query().Get("cursor"); raw != "" {
+		c, err := pagination.Decode(raw)
+		if err != nil {
+			util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "cursor is not valid; use the nextCursor from a previous page"})
+			return
+		}
+		cursor = &c
+	}
 	traceID := r.URL.Query().Get("traceId")
 	stored, err := s.eventRepo.List(r.Context())
 	if err != nil {
@@ -346,12 +357,24 @@ func (s *Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// List returns oldest first; the console wants newest first.
-	summaries := make([]eventSummary, 0, min(limit, len(stored)))
-	for i := len(stored) - 1; i >= 0 && len(summaries) < limit; i-- {
-		e := stored[i]
+	// List returns oldest first; the console wants newest first, ties broken by ID so a
+	// cursor names one position exactly.
+	ordered := append([]event.Event(nil), stored...)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return pagination.Newer(ordered[i].CreatedAt, ordered[i].ID, ordered[j].CreatedAt, ordered[j].ID)
+	})
+	summaries := make([]eventSummary, 0, min(limit, len(ordered)))
+	more := false
+	for _, e := range ordered {
 		if traceID != "" && e.TraceID != traceID {
 			continue
+		}
+		if cursor != nil && !cursor.Before(e.CreatedAt, e.ID) {
+			continue
+		}
+		if len(summaries) == limit {
+			more = true
+			break
 		}
 		summaries = append(summaries, eventSummary{
 			ID: e.ID, Source: e.Source, EventType: e.EventType, Repository: e.Repository,
@@ -360,5 +383,10 @@ func (s *Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 			TraceID: e.TraceID, ParentEventID: e.ParentEventID, AgentName: e.AgentName,
 		})
 	}
-	util.WriteJSON(w, http.StatusOK, map[string]interface{}{"events": summaries})
+	body := map[string]interface{}{"events": summaries}
+	if more {
+		last := summaries[len(summaries)-1]
+		body["nextCursor"] = pagination.Encode(pagination.Cursor{At: last.CreatedAt, ID: last.ID})
+	}
+	util.WriteJSON(w, http.StatusOK, body)
 }

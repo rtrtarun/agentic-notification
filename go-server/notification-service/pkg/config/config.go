@@ -40,9 +40,16 @@ type Config struct {
 	SMTPPort             int
 	SMTPUsername         string
 	SMTPPassword         string
-	SMTPSender           string
-	SlackWebhookURL      string
-	TeamsWebhookURL      string
+	// SMTPRequireSTARTTLS refuses to send mail over a connection that is not upgraded to TLS.
+	SMTPRequireSTARTTLS bool
+	// NovuAPIKey turns on Novu for email (with SMTP as the fallback when SMTP is configured). NovuAPIURL defaults
+	// to Novu's cloud and NovuWorkflowID names the workflow that renders the message.
+	NovuAPIKey      string
+	NovuAPIURL      string
+	NovuWorkflowID  string
+	SMTPSender      string
+	SlackWebhookURL string
+	TeamsWebhookURL string
 	// SMSGateway selects how texts leave the service: "" (off), "mock", "http" or "sns".
 	SMSGateway     string
 	SMSRecipients  []string
@@ -190,6 +197,19 @@ func LoadConfig() (*Config, error) {
 	cfg.DefaultNotifyEmail = os.Getenv("DEFAULT_NOTIFY_EMAIL")
 	cfg.SMTPHost = os.Getenv("SMTP_HOST")
 	cfg.SMTPUsername = os.Getenv("SMTP_USERNAME")
+	cfg.NovuAPIKey = os.Getenv("NOVU_API_KEY")
+	cfg.NovuAPIURL = strings.TrimSpace(os.Getenv("NOVU_API_URL"))
+	cfg.NovuWorkflowID = strings.TrimSpace(os.Getenv("NOVU_WORKFLOW_ID"))
+	if cfg.NovuAPIURL != "" {
+		if u, perr := url.Parse(cfg.NovuAPIURL); perr != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			return nil, errors.New("invalid NOVU_API_URL: use an http or https address")
+		}
+	}
+	if v := os.Getenv("SMTP_REQUIRE_STARTTLS"); v != "" {
+		if cfg.SMTPRequireSTARTTLS, err = envBool("SMTP_REQUIRE_STARTTLS"); err != nil {
+			return nil, err
+		}
+	}
 	cfg.SMTPPassword = os.Getenv("SMTP_PASSWORD")
 	cfg.SMTPSender = os.Getenv("SMTP_SENDER")
 	cfg.SlackWebhookURL = os.Getenv("SLACK_WEBHOOK_URL")

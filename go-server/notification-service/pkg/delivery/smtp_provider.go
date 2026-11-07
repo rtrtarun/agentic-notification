@@ -40,7 +40,8 @@ func (p *SMTPProvider) Send(ctx context.Context, req notification.NotificationRe
 
 	auth := smtp.PlainAuth("", p.cfg.SMTPUsername, p.cfg.SMTPPassword, p.cfg.SMTPHost)
 	addr := fmt.Sprintf("%s:%d", p.cfg.SMTPHost, p.cfg.SMTPPort)
-	return mailer.Send(ctx, addr, auth, p.cfg.SMTPSender, req.EmailRecipients, buildMessage(p.cfg.SMTPSender, req))
+	opts := mailer.Options{RequireStartTLS: p.cfg.SMTPRequireSTARTTLS}
+	return mailer.SendWith(ctx, opts, addr, auth, p.cfg.SMTPSender, req.EmailRecipients, buildMessage(p.cfg.SMTPSender, req))
 }
 
 // Name identifies the provider.
