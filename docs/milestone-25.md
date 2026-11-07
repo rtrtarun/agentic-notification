@@ -53,7 +53,7 @@ New `pkg/attention` (`attention.go`, `heuristic.go`, `digest.go`, `postgres.go`)
 - [x] Explicit rules and people's overrides are never second-guessed.
 
 ## Known limits (honest list)
-- **No language model exists yet.** "Attention Intelligence" today is the heuristic. It is deterministic and honest about that, but it does not understand text. Claude API and Ollama adapters are the next step behind the same interfaces; the existing `pkg/learning` Ollama summariser is not wired in.
+- **No language model exists yet.** "Attention Intelligence" today is the heuristic. It is deterministic and honest about that, but it does not understand text. Claude API and Ollama adapters arrived in milestone 26 behind the same interfaces.
 - **The heuristic is tuned for GitHub events.** Other sources get the base score unless their payload has a `sender` and `action`.
 - **Digests read the newest 1000 events** and are workspace-wide.
 - **Timing is an interval, not a time of day:** `ATTENTION_DIGEST_EVERY=24h` runs 24 hours after start, not at 08:00. A time-of-day schedule and per-person digests need per-person delivery.

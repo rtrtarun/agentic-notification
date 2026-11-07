@@ -70,6 +70,8 @@ type Summary struct {
 	Title  string
 	Text   string
 	Groups []Group
+	// Model names what wrote it; empty means the built-in heuristic.
+	Model string
 }
 
 // Summarizer describes a set of non-critical events.
@@ -80,6 +82,19 @@ type Summarizer interface {
 // Explainer says in plain language why an event was handled the way it was.
 type Explainer interface {
 	Explain(ctx context.Context, evt event.Event) (string, error)
+}
+
+// SourcedExplainer is an Explainer that also says what wrote the explanation.
+type SourcedExplainer interface {
+	ExplainSourced(ctx context.Context, evt event.Event) (text, model string, err error)
+}
+
+// SourceOf says whether a model name means the built-in heuristic or a language model.
+func SourceOf(model string) string {
+	if model == "" || model == ModelHeuristic {
+		return "heuristic"
+	}
+	return "model"
 }
 
 // Guarded wraps a Classifier so it can never see a critical event and can

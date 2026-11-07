@@ -30,8 +30,24 @@ export interface Digest {
   groups: DigestGroup[]
   highlights: Highlight[]
   model: string
+  /** Who wrote the text: the built-in rules or a language model. */
+  source?: AuthorSource
   createdBy: string
   createdAt: string
+}
+
+/** An explanation and what wrote it: the built-in rules, or a language model. */
+export interface Explanation {
+  text: string
+  source: AuthorSource
+  model: string
+}
+
+export type AuthorSource = 'heuristic' | 'model'
+
+/** Digests stored before models existed have no source; the model name says who wrote them. */
+export function sourceOf(d: { source?: AuthorSource; model: string }): AuthorSource {
+  return d.source ?? (d.model === '' || d.model === 'heuristic-v1' ? 'heuristic' : 'model')
 }
 
 export interface DigestList {
@@ -44,7 +60,7 @@ export interface DigestsClient {
   list(signal?: AbortSignal): Promise<DigestList>
   /** Makes a digest of what was held back since the last one. Null when there is nothing to report. */
   generate(): Promise<Digest | null>
-  explain(eventId: string): Promise<string>
+  explain(eventId: string): Promise<Explanation>
 }
 
 /** "Every 24 hours", "Every 30 minutes" or null when digests are only made on request. */
@@ -106,7 +122,11 @@ export function demoDigestsClient(): DigestsClient {
       return made
     },
     async explain() {
-      return 'Demo mode: explanations come from the service. For a real event it says which rule applied, whether Attention Intelligence was involved, and why it was held, merged or sent.'
+      return {
+        text: 'Demo mode: explanations come from the service. For a real event it says which rule applied, whether Attention Intelligence was involved, and why it was held, merged or sent.',
+        source: 'heuristic',
+        model: 'heuristic-v1',
+      }
     },
   }
 }
@@ -121,7 +141,8 @@ export function httpDigests(settings: Settings): DigestsClient {
       return body.generated ? body.digest : null
     },
     async explain(eventId) {
-      return ((await (await request(settings, `/api/explain/${encodeURIComponent(eventId)}`)).json()) as { explanation: string }).explanation
+      const body = (await (await request(settings, `/api/explain/${encodeURIComponent(eventId)}`)).json()) as { explanation: string; source?: AuthorSource; model?: string }
+      return { text: body.explanation, source: body.source ?? 'heuristic', model: body.model ?? 'heuristic-v1' }
     },
   }
 }

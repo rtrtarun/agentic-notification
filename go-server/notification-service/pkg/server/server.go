@@ -13,6 +13,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/example/notification-service/pkg/attention"
+	"github.com/example/notification-service/pkg/attention/llm"
 	"github.com/example/notification-service/pkg/auth"
 	"github.com/example/notification-service/pkg/channels"
 	"github.com/example/notification-service/pkg/config"
@@ -82,6 +83,8 @@ type Server struct {
 	digestStore     attention.DigestStore
 	digestScheduler *attention.Scheduler
 	explainer       attention.Explainer
+	classifier      attention.Classifier
+	attentionLLM    *llm.Model
 	overrides       *overrides.Service
 	policyEngine    *policy.Engine
 	eventPipeline   *pipeline.Pipeline
@@ -189,7 +192,7 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 		},
 	).WithOutbox(outbox).WithOverrides(s.overrides).WithDeduper(deduper).WithLogger(logger).WithPreferences(s.preferences).WithPublisher(s.broker)
 	if cfg.AttentionClassify {
-		s.eventPipeline.WithClassifier(attention.NewHeuristic())
+		s.eventPipeline.WithClassifier(s.classifier)
 	}
 	if purger, ok := eventRepo.(event.Purger); ok {
 		s.purger = purger

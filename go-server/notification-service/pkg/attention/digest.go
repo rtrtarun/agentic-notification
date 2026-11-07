@@ -37,7 +37,9 @@ type Digest struct {
 	Groups     []DigestGroup `json:"groups"`
 	Highlights []Highlight   `json:"highlights"`
 	// Model names what wrote it ("heuristic-v1"), for the audit trail.
-	Model     string    `json:"model"`
+	Model string `json:"model"`
+	// Source is "heuristic" or "model", so a screen can say who wrote it without parsing Model.
+	Source    string    `json:"source"`
 	CreatedBy string    `json:"createdBy"`
 	CreatedAt time.Time `json:"createdAt"`
 }
@@ -153,9 +155,13 @@ func (g *Generator) Generate(ctx context.Context, actor string) (Digest, bool, e
 	if err != nil {
 		return Digest{}, false, fmt.Errorf("summarise: %w", err)
 	}
+	model := sum.Model
+	if model == "" {
+		model = ModelHeuristic
+	}
 	d := Digest{
 		ID: newID(), From: from, To: to, Count: len(held), Title: sum.Title, Summary: sum.Text,
-		Highlights: g.highlights(ctx, held), Model: ModelHeuristic, CreatedBy: actor, CreatedAt: g.now().UTC(),
+		Highlights: g.highlights(ctx, held), Model: model, Source: SourceOf(model), CreatedBy: actor, CreatedAt: g.now().UTC(),
 	}
 	for _, grp := range sum.Groups {
 		d.Groups = append(d.Groups, DigestGroup{Key: grp.Key, Title: grp.Title, Summary: grp.Summary, Count: grp.Count, EventIDs: grp.EventIDs})

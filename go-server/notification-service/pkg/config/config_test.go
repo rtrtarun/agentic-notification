@@ -132,3 +132,54 @@ func TestSMSDefaults(t *testing.T) {
 		t.Fatalf("defaults = %+v", cfg)
 	}
 }
+
+func TestAttentionProviderSettings(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AttentionProvider != ProviderHeuristic || cfg.AttentionTimeout != 5*time.Second || cfg.AttentionMaxCallsPerMin != 60 {
+		t.Fatalf("defaults wrong: %q %v %d", cfg.AttentionProvider, cfg.AttentionTimeout, cfg.AttentionMaxCallsPerMin)
+	}
+
+	t.Setenv("ATTENTION_PROVIDER", "Ollama")
+	t.Setenv("OLLAMA_URL", "http://ollama:11434")
+	t.Setenv("OLLAMA_MODEL", "llama3.2")
+	t.Setenv("ATTENTION_TIMEOUT", "8s")
+	t.Setenv("ATTENTION_MAX_CALLS_PER_MIN", "10")
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AttentionProvider != ProviderOllama || cfg.OllamaURL != "http://ollama:11434" || cfg.OllamaModel != "llama3.2" ||
+		cfg.AttentionTimeout != 8*time.Second || cfg.AttentionMaxCallsPerMin != 10 {
+		t.Fatalf("settings not read: %+v", cfg)
+	}
+}
+
+func TestAttentionProviderValidation(t *testing.T) {
+	cases := map[string]map[string]string{
+		"unknown provider":   {"ATTENTION_PROVIDER": "gpt"},
+		"claude without key": {"ATTENTION_PROVIDER": "claude"},
+		"claude blank key":   {"ATTENTION_PROVIDER": "claude", "ANTHROPIC_API_KEY": "  "},
+		"bad timeout":        {"ATTENTION_TIMEOUT": "soon"},
+		"zero timeout":       {"ATTENTION_TIMEOUT": "0s"},
+		"zero calls per min": {"ATTENTION_MAX_CALLS_PER_MIN": "0"},
+		"calls not a number": {"ATTENTION_MAX_CALLS_PER_MIN": "many"},
+	}
+	for name, env := range cases {
+		t.Run(name, func(t *testing.T) {
+			for k, v := range env {
+				t.Setenv(k, v)
+			}
+			if _, err := LoadConfig(); err == nil {
+				t.Fatal("expected an error")
+			}
+		})
+	}
+	t.Setenv("ATTENTION_PROVIDER", "claude")
+	t.Setenv("ANTHROPIC_API_KEY", "sk-test")
+	if _, err := LoadConfig(); err != nil {
+		t.Fatalf("claude with a key should load: %v", err)
+	}
+}

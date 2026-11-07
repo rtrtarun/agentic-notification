@@ -15,6 +15,6 @@ Promises, enforced in code:
 - `Scheduler` — runs the generator on an interval; a zero interval never runs.
 - `DigestStore` — `MemoryDigestStore` and `PostgresDigestStore` (table `digests`).
 
-Adding a model means implementing `Classifier` (and optionally `Summarizer` and `Explainer`) and passing it through `Guarded`. No other code changes.
+A model is provided by `pkg/attention/llm` (Ollama or Claude, milestone 26): it implements these interfaces, is wrapped by `Guarded`, and falls back to `Heuristic` on any failure. `SourcedExplainer` and `SourceOf` let an API say whether the heuristic or a model wrote something.
 
 Tests cover classification, determinism, the guard, summaries, explanations, digest selection and windows, bounds and the scheduler.

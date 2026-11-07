@@ -108,3 +108,6 @@ A digest covers events whose outcome is `digest` or `delayed` since the last one
 Events are in PostgreSQL; use the managed database's backups and point-in-time recovery. The service holds no other durable state (Redis only caches the dedup window; losing it just allows one window of duplicates). Test a restore into a scratch database before relying on it.
 
 Targets (proposed, confirm with stakeholders): RPO 5 minutes, RTO 30 minutes.
+
+### Attention model (milestone 26)
+By default Attention Intelligence is the built-in rules-with-reasons heuristic. To use a model, set `ATTENTION_PROVIDER=ollama` (with `OLLAMA_URL` and `OLLAMA_MODEL`) or `ATTENTION_PROVIDER=claude` (with `ANTHROPIC_API_KEY`). Check `GET /api/attention/status` as an admin: `breaker` should be `closed`, and `fallbacks` should stay small compared with `calls`. A rising `fallbacks` count with a `lastError` means the model is down, too slow (raise `ATTENTION_TIMEOUT`) or answering outside the strict JSON format (use a stronger model). Nothing breaks meanwhile: the heuristic answers. A breaker that stays `open` is retried every 30 seconds. To stop any model use immediately, unset `ATTENTION_PROVIDER` and restart. Critical events are never sent to a model, and digests and explanations show a "Written by" badge so you can tell who wrote them.

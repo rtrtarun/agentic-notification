@@ -5,7 +5,8 @@ import { useAuth } from '../app/AuthGate'
 import { useToast } from '../design/Toast'
 import { LoadGate, useLoad } from '../features/manage/useLoad'
 import { ApiError } from '../lib/api'
-import { describeEvery, digestsClientFor, type Digest } from '../lib/digests'
+import { SourceBadge } from '../components/SourceBadge'
+import { describeEvery, digestsClientFor, sourceOf, type Digest } from '../lib/digests'
 import { relativeTime } from '../lib/events'
 import { useI18n } from '../lib/i18n/I18nContext'
 
@@ -91,6 +92,7 @@ function DigestCard({ digest: d, open, onToggle, when, onOpenEvent }: { digest: 
         {when} · {d.createdBy === 'schedule' ? t('dg.byschedule') : t('dg.by', { who: d.createdBy })}
       </p>
       <p>{d.summary}</p>
+      <SourceBadge source={sourceOf(d)} model={d.model} />
       {d.highlights.length > 0 && (
         <>
           <h4 className="sheet-subtitle">{t('dg.lookFirst')}</h4>

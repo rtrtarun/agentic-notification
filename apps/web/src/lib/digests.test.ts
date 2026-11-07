@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { demoDigestsClient, describeEvery, httpDigests } from './digests'
+import { demoDigestsClient, describeEvery, httpDigests, sourceOf } from './digests'
 
 const settings = { backendUrl: 'http://svc', apiKey: 'k' }
 const realFetch = globalThis.fetch
@@ -32,7 +32,7 @@ describe('digests clients', () => {
     const made = await c.generate()
     expect(made?.createdBy).toBe('demo@example.com')
     expect((await c.list()).digests).toHaveLength(before + 1)
-    expect(await c.explain('x')).toContain('Demo mode')
+    expect((await c.explain('x')).text).toContain('Demo mode')
   })
 
   it('the http client uses the documented endpoints and reads the answers', async () => {
@@ -47,7 +47,26 @@ describe('digests clients', () => {
     const c = httpDigests(settings)
     expect((await c.list()).every).toBe('0s')
     expect(await c.generate()).toBeNull()
-    expect(await c.explain('a/b')).toBe('because')
+    expect(await c.explain('a/b')).toEqual({ text: 'because', source: 'heuristic', model: 'heuristic-v1' })
     expect(calls).toEqual(['GET /api/digests', 'POST /api/digests/generate', 'GET /api/explain/a%2Fb'])
+  })
+})
+
+describe('sourceOf', () => {
+  it('trusts the service when it says who wrote a digest', () => {
+    expect(sourceOf({ source: 'model', model: 'heuristic-v1' })).toBe('model')
+    expect(sourceOf({ source: 'heuristic', model: 'ollama:llama3.2' })).toBe('heuristic')
+  })
+
+  it('works out the author of older digests from the model name', () => {
+    expect(sourceOf({ model: 'heuristic-v1' })).toBe('heuristic')
+    expect(sourceOf({ model: '' })).toBe('heuristic')
+    expect(sourceOf({ model: 'claude:claude-haiku-5-5' })).toBe('model')
+  })
+
+  it('the http client passes the explanation source through', async () => {
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ explanation: 'because', source: 'model', model: 'ollama:llama3.2' }), { status: 200 })) as typeof fetch
+    expect(await httpDigests(settings).explain('a')).toEqual({ text: 'because', source: 'model', model: 'ollama:llama3.2' })
   })
 })

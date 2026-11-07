@@ -613,6 +613,8 @@ export const en = {
   'dg.explain': 'Explain in words',
   'dg.explaining': 'Explaining',
   'dg.explainFailed': 'An explanation could not be made right now.',
+  'dg.source.heuristic': 'Written by rules, no AI',
+  'dg.source.model': 'Written by {model}',
   'rules.adaptive': 'Let Attention refine this',
   'rules.adaptiveHelp': 'When on, Attention Intelligence may move a quiet event (a star, a bot, a draft) to the digest. Off means this rule decides alone. It never applies to critical rules.',
   'rules.adaptiveTag': 'Attention may refine this',

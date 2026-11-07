@@ -86,6 +86,20 @@ type Config struct {
 	AttentionClassify bool
 	// AttentionDigestEvery is how often a digest is generated; zero means only on request.
 	AttentionDigestEvery time.Duration
+	// AttentionProvider chooses what powers Attention Intelligence: "heuristic" (default, no model),
+	// "ollama" or "claude". A model that is down or invalid falls back to the heuristic.
+	AttentionProvider string
+	// OllamaURL and OllamaModel locate a local Ollama server (provider "ollama").
+	OllamaURL   string
+	OllamaModel string
+	// AnthropicAPIKey is required for provider "claude" and is never logged or returned by the API.
+	AnthropicAPIKey string
+	// AttentionModel overrides the Claude model name (provider "claude").
+	AttentionModel string
+	// AttentionTimeout bounds one model call.
+	AttentionTimeout time.Duration
+	// AttentionMaxCallsPerMin caps model calls per minute.
+	AttentionMaxCallsPerMin int
 	// DigestChannels lists the channels a digest is delivered to; empty means digests are only stored.
 	DigestChannels        []string
 	GitHubWebhookSecret   string
@@ -233,6 +247,25 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 	cfg.BackgroundChannels = envList("NOTIFY_BACKGROUND_CHANNELS", "")
+	cfg.AttentionProvider = strings.ToLower(envDefault("ATTENTION_PROVIDER", ProviderHeuristic))
+	switch cfg.AttentionProvider {
+	case ProviderHeuristic, ProviderOllama, ProviderClaude:
+	default:
+		return nil, fmt.Errorf("invalid ATTENTION_PROVIDER: %q (use heuristic, ollama or claude)", cfg.AttentionProvider)
+	}
+	cfg.OllamaURL = os.Getenv("OLLAMA_URL")
+	cfg.OllamaModel = os.Getenv("OLLAMA_MODEL")
+	cfg.AnthropicAPIKey = os.Getenv("ANTHROPIC_API_KEY")
+	cfg.AttentionModel = os.Getenv("ATTENTION_MODEL")
+	if cfg.AttentionProvider == ProviderClaude && strings.TrimSpace(cfg.AnthropicAPIKey) == "" {
+		return nil, errors.New("ATTENTION_PROVIDER=claude requires ANTHROPIC_API_KEY")
+	}
+	if cfg.AttentionTimeout, err = envDuration("ATTENTION_TIMEOUT", defaultAttentionTimeout, false); err != nil {
+		return nil, err
+	}
+	if cfg.AttentionMaxCallsPerMin, err = envInt("ATTENTION_MAX_CALLS_PER_MIN", defaultAttentionMaxCalls, 1, 100000); err != nil {
+		return nil, err
+	}
 	cfg.CORSAllowedOrigins = envList("CORS_ALLOWED_ORIGINS", "")
 	cfg.AllowedWebhookHosts = envList("NOTIFY_ALLOWED_WEBHOOK_HOSTS", defaultWebhookHostList)
 	cfg.AllowedEmailDomains = envList("NOTIFY_ALLOWED_EMAIL_DOMAINS", "")
@@ -353,3 +386,15 @@ func splitList(s string) []string {
 	}
 	return out
 }
+
+// Attention Intelligence providers for ATTENTION_PROVIDER.
+const (
+	ProviderHeuristic = "heuristic"
+	ProviderOllama    = "ollama"
+	ProviderClaude    = "claude"
+)
+
+const (
+	defaultAttentionTimeout  = 5 * time.Second
+	defaultAttentionMaxCalls = 60
+)
