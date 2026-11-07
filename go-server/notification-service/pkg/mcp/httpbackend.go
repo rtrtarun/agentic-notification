@@ -19,7 +19,7 @@ import (
 const (
 	httpTimeout     = 15 * time.Second
 	maxResponseSize = 1 << 20
-	apiKeyHeader    = "X-API-Key"
+	apiKeyHeader    = "X-API-Key" //nolint:gosec // the name of a header, not a credential
 )
 
 // HTTPBackend runs the tools against a running AgentPulse service over its REST API,

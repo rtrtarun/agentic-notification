@@ -3,6 +3,7 @@ package pipeline
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"regexp"
 	"strings"
@@ -68,7 +69,7 @@ func TestARedeliveryIsNotRecordedAsAFailedSpan(t *testing.T) {
 		t.Fatal(err)
 	}
 	buf.Reset()
-	if _, err := p.Handle(context.Background(), noisy("dup")); err != ErrDuplicateDelivery {
+	if _, err := p.Handle(context.Background(), noisy("dup")); !errors.Is(err, ErrDuplicateDelivery) {
 		t.Fatalf("got %v", err)
 	}
 	if strings.Contains(buf.String(), "error=") {

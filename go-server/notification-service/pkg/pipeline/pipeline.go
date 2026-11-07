@@ -150,7 +150,6 @@ func (p *Pipeline) Handle(ctx context.Context, evt event.Event) (event.Event, er
 	ctx, span := p.tracer.Start(ctx, "pipeline.Handle")
 	out, err := p.handle(ctx, evt)
 	if errors.Is(err, ErrDuplicateDelivery) {
-		err = nil // a redelivery is answered, not a failure
 		span.End(nil)
 		return out, ErrDuplicateDelivery
 	}
