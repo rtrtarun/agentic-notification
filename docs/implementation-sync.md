@@ -7,7 +7,7 @@ This file is the handshake between two roles:
 
 Rule: **the code and the tests are the truth about what exists; this file says what is built, what is in progress and where the implementation differs from the spec.** The designer should read this before proposing the next milestone; the implementer updates it in the same commit as any milestone work. Never mark something done here that has not been run.
 
-Last updated: milestone 29 committed; milestones 30 to 33 approved for sequential execution on branch `feature/attention-models`.
+Last updated: milestone 30 part 1 committed; part 2 and milestones 31 to 33 NOT started, on branch `feature/attention-models`.
 
 ## 1. Ground rules both sides follow
 1. Critical events never touch AI, are never merged, are never muted, budgeted or delayed, and are delivered inline. Every milestone adds a test proving it.
@@ -24,10 +24,10 @@ Last updated: milestone 29 committed; milestones 30 to 33 approved for sequentia
 | 27 | Real-service and PostgreSQL verification | Done, committed, pushed | `docs/milestone-27.md`. Contracts pass on memory stores; PostgreSQL runs are left to CI |
 | 28 | Learning engine (`pkg/learning`) | Done, committed | `docs/milestone-28.md`. Guardrail tested at suggest and apply time; PostgreSQL repository left to CI |
 | 29 | Async worker and attention budgets | Done, committed | `docs/milestone-29.md`. PostgreSQL queue and Redis script left to CI; default budget of 10 per hour flagged in section 5 |
-| 30 | Per-person digests, scoped routing, rich predicates | **Approved for execution** | Strict YAML decoding, payload predicates, per-user digests and preferences, per-person budget scope |
-| 31 | AgentPulse traces, agent telemetry, MCP server | **Approved for execution** | Shared `pkg/mcp` handler backing both `cmd/mcp-server` (stdio) and `/api/mcp` (HTTP); Trace Explorer UI |
-| 32 | Novu provider, cursor pagination, OpenTelemetry, strict STARTTLS | **Approved for execution** | `NOVU_API_KEY`, `NOVU_API_URL`, `SMTP_REQUIRE_STARTTLS`, `?cursor=`, trace spans |
-| 33 | Documentation reconciliation, Python SDK | **Approved for execution** | Reconcile `architecture.md`, `orchestration-platform.md`, `upcoming-milestones.md`, `deployment.md`; add `sdk/python/agentpulse.py` |
+| 30 | Per-person digests, scoped routing, rich predicates | **Part 1 done, part 2 NOT started** | Strict YAML, payload predicates and per-rule channels are done (`docs/milestone-30.md`). Per-person preferences, overrides and digests need a ruling (section 8) |
+| 31 | AgentPulse traces, agent telemetry, MCP server | **Not started** | Shared `pkg/mcp` handler backing both `cmd/mcp-server` (stdio) and `/api/mcp` (HTTP); Trace Explorer UI |
+| 32 | Novu provider, cursor pagination, OpenTelemetry, strict STARTTLS | **Not started** | `NOVU_API_KEY`, `NOVU_API_URL`, `SMTP_REQUIRE_STARTTLS`, `?cursor=`, trace spans |
+| 33 | Documentation reconciliation, Python SDK | **Not started** | Reconcile `architecture.md`, `orchestration-platform.md`, `upcoming-milestones.md`, `deployment.md`; add `sdk/python/agentpulse.py` |
 
 Numbering note: `docs/upcoming-milestones.md` proposed 27 to 31 and `PROMPT_SPEC.md` supersedes it with 27 to 33. Where they differ, `PROMPT_SPEC.md` wins and `upcoming-milestones.md` will be updated in milestone 33.
 
@@ -93,3 +93,9 @@ The environment variables, ordering and smoke checks for going live are in [depl
 ## 8. Open questions for the design side (new)
 1. **Default budget.** `ATTENTION_BUDGET_PER_HOUR` is 10 by default per `PROMPT_SPEC.md`. That silently quiets busy workspaces after upgrade. Keep it, or default to 0 and announce it?
 2. **CI never ran on this branch** until milestone 29 added `feature/**` to its triggers. Open a pull request or watch the Actions tab for the first real result of the PostgreSQL, Redis, race, lint and coverage gates.
+3. **Per-person digests (milestone 30, part 2).** Events, overrides and delivery targets are workspace-wide and jobs store no address, so "a person's digest" is undefined. Proposal: per-user preferences with workspace fallback; a per-person digest is the workspace digest filtered by that person's mutes and "never" choices, stored and readable in the app, on request first and on a schedule later; per-person email delivery as its own milestone that adds recipient resolution to delivery. Which model do you want?
+
+## 9. CI findings so far (read from the public GitHub API)
+- CI had never run on this branch before milestone 29 and `go-service` failed at **Lint** on its first runs. About 20 findings in code from milestones 22 to 28 and my own test helper were fixed in three commits (gosec, errorlint, staticcheck, bodyclose, unused). Because CI skips later steps after a failing lint step, **the race, integration, vulnerability and coverage steps had still not run** at the time of writing; check the Actions tab for the latest run.
+- The `java-service` job (`mvn verify`) fails in `Build and test`. That is code this work did not touch; it needs its own look.
+- `golangci-lint` could not be run locally: building it from source was blocked by the tool-use policy, so lint results come only from CI.

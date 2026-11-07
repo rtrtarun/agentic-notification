@@ -96,6 +96,9 @@ type Message struct {
 	Title   string
 	Body    string
 	Group   string
+	// Channels, when set, replaces the channels the class is routed to. It comes from a
+	// rule's channel override and is never used for a critical event.
+	Channels []string
 }
 
 // Outbox turns processed events into queued jobs according to a route table.
@@ -121,7 +124,7 @@ func (o *Outbox) Enqueue(ctx context.Context, m Message) (int, error) {
 		return 0, nil
 	}
 	created := 0
-	for _, channel := range o.routes[m.Class] {
+	for _, channel := range o.channelsFor(m) {
 		if len(o.targets.For(channel)) == 0 {
 			continue
 		}
@@ -168,3 +171,27 @@ func (o *Outbox) Routed(class string) bool {
 
 // Targets returns the configured targets.
 func (o *Outbox) Targets() Targets { return o.targets }
+
+// channelsFor is where a message goes: the rule's own channels when it names any,
+// otherwise the channels its class is routed to.
+func (o *Outbox) channelsFor(m Message) []string {
+	if len(m.Channels) > 0 {
+		return m.Channels
+	}
+	return o.routes[m.Class]
+}
+
+// RoutedFor reports whether anything would be delivered for the class, taking a
+// rule's channel override into account. A channel with no configured target does not count.
+func (o *Outbox) RoutedFor(class string, override []string) bool {
+	channels := o.routes[class]
+	if len(override) > 0 {
+		channels = override
+	}
+	for _, c := range channels {
+		if len(o.targets.For(c)) > 0 {
+			return true
+		}
+	}
+	return false
+}

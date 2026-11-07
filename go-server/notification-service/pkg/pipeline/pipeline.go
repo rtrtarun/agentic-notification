@@ -54,6 +54,8 @@ type Outbox interface {
 	Enqueue(ctx context.Context, m delivery.Message) (int, error)
 	// Routed reports whether the class has a configured channel to be sent to.
 	Routed(class string) bool
+	// RoutedFor is Routed taking a rule's channel override into account.
+	RoutedFor(class string, override []string) bool
 	RecordDirect(ctx context.Context, m delivery.Message, channels string, sendErr error) error
 }
 
@@ -219,7 +221,7 @@ func deliveryMessage(evt event.Event) delivery.Message {
 		reason = evt.DecisionState.Reason
 	}
 	return delivery.Message{
-		EventID: evt.ID, Class: string(evt.AttentionClass), Group: evt.Source,
+		EventID: evt.ID, Class: string(evt.AttentionClass), Group: evt.Source, Channels: evt.RouteChannels,
 		Title: fmt.Sprintf("[%s] %s/%s", strings.ToUpper(string(evt.AttentionClass)), evt.Source, evt.EventType),
 		Body: fmt.Sprintf("%s\nSource: %s\nEvent: %s\nRepository: %s\nReason: %s",
 			evt.AttentionClass, evt.Source, evt.EventType, evt.Repository, reason),
@@ -295,7 +297,7 @@ func (p *Pipeline) forgetDedup(evt event.Event) {
 // defaultStatus is "queued", except for background events when nothing is
 // configured to deliver them: those are held for the digest.
 func (p *Pipeline) defaultStatus(evt event.Event) string {
-	if evt.AttentionClass == event.AttentionBackground && (p.outbox == nil || !p.outbox.Routed(event.AttentionBackground)) {
+	if evt.AttentionClass == event.AttentionBackground && (p.outbox == nil || !p.outbox.RoutedFor(event.AttentionBackground, evt.RouteChannels)) {
 		return event.DecisionDigest
 	}
 	return event.DecisionQueued
@@ -334,6 +336,7 @@ func (p *Pipeline) applyPolicy(evt event.Event) (event.Event, bool) {
 			Reason:      decision.Reason,
 			MatchedRule: decision.MatchedRule,
 		}
+		evt.RouteChannels = decision.Channels
 		return evt, decision.Adaptive
 	}
 	// No rule decided, so nothing explicit can be second-guessed: the event is adaptive.
@@ -408,7 +411,7 @@ func (p *Pipeline) applyBudget(ctx context.Context, evt *event.Event, overridden
 	if p.budget == nil || overridden || evt.AttentionClass != event.AttentionStandard || evt.DecisionState.Status != "" {
 		return
 	}
-	if p.outbox == nil || !p.outbox.Routed(event.AttentionStandard) {
+	if p.outbox == nil || !p.outbox.RoutedFor(event.AttentionStandard, evt.RouteChannels) {
 		return
 	}
 	res, err := p.budget.Take(ctx, budget.ScopeWorkspace)
@@ -439,7 +442,9 @@ func (p *Pipeline) ProcessPending(ctx context.Context, evt event.Event) (event.E
 	evt.DecisionState.Reason = strings.TrimSuffix(evt.DecisionState.Reason, waitingMarker)
 	evt.DecisionState.Status = ""
 
-	p.attend(ctx, &evt, p.adaptiveNow(evt))
+	adaptive, channels := p.ruleNow(evt)
+	evt.RouteChannels = channels
+	p.attend(ctx, &evt, adaptive)
 	p.settle(ctx, &evt)
 	p.announce(evt)
 	return evt, nil
@@ -468,6 +473,7 @@ func (p *Pipeline) ReleaseDelayed(ctx context.Context, evt event.Event) (event.E
 		}
 	}
 	evt.DecisionState.Status = ""
+	_, evt.RouteChannels = p.ruleNow(evt)
 	evt.DecisionState.Reason += "; released after quiet hours"
 	p.applyBudget(ctx, &evt, false)
 	p.settle(ctx, &evt)
@@ -491,11 +497,11 @@ func (p *Pipeline) announce(evt event.Event) {
 	}
 }
 
-// adaptiveNow reads the current rule's adaptive flag for an event: an event no rule
-// decides is adaptive, as it is at ingest.
-func (p *Pipeline) adaptiveNow(evt event.Event) bool {
+// ruleNow reads the current rule for an event: whether it is adaptive (an event no rule
+// decides is adaptive, as it is at ingest) and the channels it routes to, if any.
+func (p *Pipeline) ruleNow(evt event.Event) (adaptive bool, channels []string) {
 	if decision, matched := p.policyEngine.Evaluate(evt); matched {
-		return decision.Adaptive
+		return decision.Adaptive, decision.Channels
 	}
-	return true
+	return true, nil
 }

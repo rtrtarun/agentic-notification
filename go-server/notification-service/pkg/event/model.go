@@ -26,6 +26,9 @@ type Event struct {
 	// AttentionPending is set by the pipeline when it saves a non-critical event that the
 	// asynchronous attention worker must still decide on. It is not part of the API.
 	AttentionPending bool `json:"-"`
+	// RouteChannels is the channel override of the rule that matched, set while the pipeline
+	// decides. It is not stored: the worker reads it again from the current rule.
+	RouteChannels []string `json:"-"`
 }
 
 const (

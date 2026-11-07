@@ -301,6 +301,22 @@ func normalise(in policy.Rule, existing []policy.Rule, ownID string) (policy.Rul
 	if r.Then.Adaptive && r.Then.AttentionClass == event.AttentionCritical {
 		return r, fmt.Errorf("%w: a critical rule cannot be adaptive; critical events never reach Attention Intelligence", ErrInvalid)
 	}
+	// Copy before tidying so the caller's slices are never edited in place.
+	r.When.PayloadMatch = append([]policy.Predicate(nil), r.When.PayloadMatch...)
+	for i := range r.When.PayloadMatch {
+		r.When.PayloadMatch[i].Field = strings.TrimSpace(r.When.PayloadMatch[i].Field)
+		r.When.PayloadMatch[i].Op = strings.ToLower(strings.TrimSpace(r.When.PayloadMatch[i].Op))
+	}
+	if err := policy.ValidatePredicates(r.When.PayloadMatch); err != nil {
+		return r, fmt.Errorf("%w: %s", ErrInvalid, err.Error())
+	}
+	r.Then.Channels = append([]string(nil), r.Then.Channels...)
+	for i := range r.Then.Channels {
+		r.Then.Channels[i] = strings.ToLower(strings.TrimSpace(r.Then.Channels[i]))
+	}
+	if err := policy.ValidateChannels(r.Then.AttentionClass, r.Then.Channels); err != nil {
+		return r, fmt.Errorf("%w: %s", ErrInvalid, err.Error())
+	}
 	if r.Then.Reason == "" {
 		r.Then.Reason = "matched rule " + r.Name
 	}
@@ -323,6 +339,8 @@ type Sample struct {
 	Source     string `json:"source"`
 	EventType  string `json:"eventType"`
 	Repository string `json:"repository"`
+	// Payload is optional sample content for rules that match on payload predicates.
+	Payload map[string]any `json:"payload,omitempty"`
 }
 
 // Step is one rule's part in a dry run.
@@ -341,6 +359,8 @@ type Result struct {
 	AttentionClass string `json:"attentionClass"`
 	Reason         string `json:"reason"`
 	MatchedRule    string `json:"matchedRule,omitempty"`
+	// Channels is the matched rule's channel override, if it has one.
+	Channels []string `json:"channels,omitempty"`
 	// Bypassed is true for critical outcomes: they never reach the AI layer.
 	Bypassed bool   `json:"aiBypassed"`
 	Steps    []Step `json:"steps"`
@@ -358,7 +378,7 @@ func (s *Service) Test(ctx context.Context, in Sample) (Result, error) {
 // Evaluate is the pure dry run behind Test. An unmatched event falls back to
 // standard, exactly as the pipeline does.
 func Evaluate(list []policy.Rule, in Sample) Result {
-	evt := event.Event{Source: in.Source, EventType: in.EventType, Repository: in.Repository}
+	evt := event.Event{Source: in.Source, EventType: in.EventType, Repository: in.Repository, Payload: in.Payload}
 	res := Result{AttentionClass: event.AttentionStandard, Reason: "no matching rule, default standard", Steps: make([]Step, 0, len(list))}
 	for _, r := range list {
 		step := Step{ID: r.ID, Name: r.Name, Disabled: r.Disabled}
@@ -367,6 +387,9 @@ func Evaluate(list []policy.Rule, in Sample) Result {
 			step.Winner = true
 			res.Matched = true
 			res.AttentionClass, res.Reason, res.MatchedRule = r.Then.AttentionClass, r.Then.Reason, r.Name
+			if r.Then.AttentionClass != event.AttentionCritical {
+				res.Channels = append([]string(nil), r.Then.Channels...)
+			}
 		}
 		res.Steps = append(res.Steps, step)
 	}

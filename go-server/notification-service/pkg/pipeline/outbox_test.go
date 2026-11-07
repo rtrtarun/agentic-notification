@@ -101,7 +101,8 @@ type failingOutbox struct{}
 func (failingOutbox) Enqueue(context.Context, delivery.Message) (int, error) {
 	return 0, errors.New("queue down")
 }
-func (failingOutbox) Routed(string) bool { return false }
+func (failingOutbox) Routed(string) bool              { return false }
+func (failingOutbox) RoutedFor(string, []string) bool { return false }
 func (failingOutbox) RecordDirect(context.Context, delivery.Message, string, error) error {
 	return errors.New("log down")
 }
