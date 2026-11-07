@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main, feature-impl ]
+    branches: [ main, feature-impl, "feature/**" ]
   pull_request:
     branches: [ main ]
 
@@ -21,8 +21,18 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       TEST_DATABASE_URL: postgres://postgres:test@localhost:5432/postgres?sslmode=disable
+      TEST_REDIS_URL: redis://localhost:6379/0
     defaults:
       run:
         working-directory: go-server/notification-service

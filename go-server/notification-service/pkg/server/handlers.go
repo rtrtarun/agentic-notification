@@ -116,6 +116,14 @@ func (s *Server) Run(ctx context.Context) error {
 		}()
 	}
 
+	if s.attentionWorker != nil {
+		background.Add(1)
+		go func() {
+			defer background.Done()
+			s.attentionWorker.Run(ctx)
+		}()
+	}
+
 	shutdownDone := make(chan error, 1)
 	go func() {
 		<-ctx.Done()

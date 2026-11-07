@@ -48,6 +48,7 @@ Accounts and sign-in (milestone 23; all optional, the API key keeps working): `A
 Attention Intelligence (milestone 25; all optional): `ATTENTION_CLASSIFY` (default `true`), `ATTENTION_DIGEST_EVERY` (default `0`, on request only; e.g. `24h`), `NOTIFY_DIGEST_CHANNELS` (channels a digest is delivered to; empty means stored only).
 Language model (milestone 26; all optional): `ATTENTION_PROVIDER` (`heuristic` default, `ollama` or `claude`), `OLLAMA_URL`, `OLLAMA_MODEL`, `ANTHROPIC_API_KEY` (required for `claude`), `ATTENTION_MODEL` (Claude model name), `ATTENTION_TIMEOUT` (default `5s`), `ATTENTION_MAX_CALLS_PER_MIN` (default `60`). A model that fails falls back to the heuristic; see `GET /api/attention/status`.
 Learning suggestions (milestone 28; optional): `LEARNING_MIN_SIGNALS` (default `5`) and `LEARNING_LOOKBACK` (default `720h`).
+Attention budget and worker (milestone 29): `ATTENTION_BUDGET_PER_HOUR` (default `10`, `0` off), `ATTENTION_ASYNC` (default `false`), `ATTENTION_WORKER_INTERVAL` (default `2s`); `REDIS_URL` shares the budget across replicas.
 
 `OVERRIDES_ADMIN_ONLY` (default `false`) limits creating always/never notify overrides to admins.
 

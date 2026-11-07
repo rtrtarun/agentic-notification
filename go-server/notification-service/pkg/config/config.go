@@ -98,6 +98,13 @@ type Config struct {
 	AttentionModel string
 	// AttentionTimeout bounds one model call.
 	AttentionTimeout time.Duration
+	// AttentionAsync makes the attention step (classification, preferences, budget, delivery) run in a background
+	// worker instead of while an event is ingested. Critical events are never deferred.
+	AttentionAsync bool
+	// AttentionWorkerInterval is how often the worker polls for pending and delayed events.
+	AttentionWorkerInterval time.Duration
+	// AttentionBudgetPerHour caps standard interruptions per rolling hour for the workspace; 0 turns the budget off.
+	AttentionBudgetPerHour int
 	// LearningMinSignals is how many dismissed or never signals (with no positive one) justify a suggestion.
 	LearningMinSignals int
 	// LearningLookback is how far back feedback is read for suggestions.
@@ -267,6 +274,17 @@ func LoadConfig() (*Config, error) {
 	if cfg.AttentionTimeout, err = envDuration("ATTENTION_TIMEOUT", defaultAttentionTimeout, false); err != nil {
 		return nil, err
 	}
+	if v := os.Getenv("ATTENTION_ASYNC"); v != "" {
+		if cfg.AttentionAsync, err = envBool("ATTENTION_ASYNC"); err != nil {
+			return nil, err
+		}
+	}
+	if cfg.AttentionWorkerInterval, err = envDuration("ATTENTION_WORKER_INTERVAL", defaultAttentionWorkerInterval, false); err != nil {
+		return nil, err
+	}
+	if cfg.AttentionBudgetPerHour, err = envInt("ATTENTION_BUDGET_PER_HOUR", defaultAttentionBudgetPerHour, 0, 100000); err != nil {
+		return nil, err
+	}
 	if cfg.LearningMinSignals, err = envInt("LEARNING_MIN_SIGNALS", defaultLearningMinSignals, 1, 10000); err != nil {
 		return nil, err
 	}
@@ -405,8 +423,10 @@ const (
 )
 
 const (
-	defaultAttentionTimeout   = 5 * time.Second
-	defaultAttentionMaxCalls  = 60
-	defaultLearningMinSignals = 5
-	defaultLearningLookback   = 30 * 24 * time.Hour
+	defaultAttentionTimeout        = 5 * time.Second
+	defaultAttentionMaxCalls       = 60
+	defaultAttentionWorkerInterval = 2 * time.Second
+	defaultAttentionBudgetPerHour  = 10
+	defaultLearningMinSignals      = 5
+	defaultLearningLookback        = 30 * 24 * time.Hour
 )

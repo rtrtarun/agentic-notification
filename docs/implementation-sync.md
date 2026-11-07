@@ -7,7 +7,7 @@ This file is the handshake between two roles:
 
 Rule: **the code and the tests are the truth about what exists; this file says what is built, what is in progress and where the implementation differs from the spec.** The designer should read this before proposing the next milestone; the implementer updates it in the same commit as any milestone work. Never mark something done here that has not been run.
 
-Last updated: milestone 28 committed; milestones 29 to 33 approved for sequential execution on branch `feature/attention-models`.
+Last updated: milestone 29 committed; milestones 30 to 33 approved for sequential execution on branch `feature/attention-models`.
 
 ## 1. Ground rules both sides follow
 1. Critical events never touch AI, are never merged, are never muted, budgeted or delayed, and are delivered inline. Every milestone adds a test proving it.
@@ -23,7 +23,7 @@ Last updated: milestone 28 committed; milestones 29 to 33 approved for sequentia
 | 26 | Ollama and Claude adapters behind Attention | Done, committed, pushed | `docs/milestone-26.md`. Fake model servers only |
 | 27 | Real-service and PostgreSQL verification | Done, committed, pushed | `docs/milestone-27.md`. Contracts pass on memory stores; PostgreSQL runs are left to CI |
 | 28 | Learning engine (`pkg/learning`) | Done, committed | `docs/milestone-28.md`. Guardrail tested at suggest and apply time; PostgreSQL repository left to CI |
-| 29 | Async worker and attention budgets | **Approved for execution** | Workspace-level budget (`ATTENTION_BUDGET_PER_HOUR`); async worker drains non-critical queued events |
+| 29 | Async worker and attention budgets | Done, committed | `docs/milestone-29.md`. PostgreSQL queue and Redis script left to CI; default budget of 10 per hour flagged in section 5 |
 | 30 | Per-person digests, scoped routing, rich predicates | **Approved for execution** | Strict YAML decoding, payload predicates, per-user digests and preferences, per-person budget scope |
 | 31 | AgentPulse traces, agent telemetry, MCP server | **Approved for execution** | Shared `pkg/mcp` handler backing both `cmd/mcp-server` (stdio) and `/api/mcp` (HTTP); Trace Explorer UI |
 | 32 | Novu provider, cursor pagination, OpenTelemetry, strict STARTTLS | **Approved for execution** | `NOVU_API_KEY`, `NOVU_API_URL`, `SMTP_REQUIRE_STARTTLS`, `?cursor=`, trace spans |
@@ -41,6 +41,11 @@ Record every such decision here so the design side can accept or overrule it.
 | Model classification runs synchronously with a timeout until milestone 29 moves it to a worker | 26 | Keeps milestone 26 small; the limit is recorded in `milestone-26.md` | **Accepted.** Move to the async worker in M29 |
 | The model only supplies wording for digests; groups and counts come from the heuristic | 26 | A model cannot invent or drop an event | **Accepted.** Preserve this guardrail permanently |
 | `PROMPT_SPEC.md` is an input document and is not committed unless asked | 27 | It is a prompt, not product documentation | **Accepted.** Keep it untracked; commit this file |
+| Attention budget uses a rolling window (sorted set in Redis), not fixed hourly buckets | 29 | The spec says "rolling window"; a fixed bucket allows twice the cap across a boundary | Pending review |
+| `ATTENTION_ASYNC` defaults to `false`; the worker always runs so delayed events are released in both modes | 29 | Async changes when delivery happens and was not run against a real database; opt-in is safer | Pending review |
+| `ATTENTION_BUDGET_PER_HOUR` defaults to 10 as in the spec, which **changes behaviour**: a busy workspace's 11th standard notification in an hour is now held for the digest | 29 | Followed the spec; held events are explained and appear in the digest, never dropped | **Needs a ruling:** keep 10, or default to 0 (off) and let operators opt in |
+| The work queue lives on the `events` table (columns `attention_*`) rather than a separate table | 29 | The spec asked for `FOR UPDATE SKIP LOCKED` on `events`; a column marks what is still undecided | Pending review |
+| The budget is skipped when no standard route is configured, and for "always notify" overrides | 29 | Nothing interrupts anyone in those cases | Pending review |
 
 ## 4. Verification gates and what could not be run
 `PROMPT_SPEC.md` ends with a mandatory gate. Run every available local gate after each milestone and record what happened.
@@ -48,14 +53,14 @@ Record every such decision here so the design side can accept or overrule it.
 | Gate | Local requirement and status |
 |---|---|
 | `gofmt -s -w .` and `go vet ./...` | **Mandatory local gate.** Ran and passed after milestone 27 |
-| `go test -cover ./...` | **Mandatory local gate.** Ran and passed after milestone 28 (`pkg/learning` 80.9 percent); per-package figures below are from milestone 27 |
+| `go test -cover ./...` | **Mandatory local gate.** Ran and passed after milestone 29 (new `pkg/budget` 96.6, `pkg/learning` 80.9, `pkg/pipeline` 95.6, `pkg/attention` 87.3 percent); the table below is from milestone 27 |
 | `go test -race ./...` | **Not verified locally** (no CGO or C compiler). Enforced in `.github/workflows/ci.yml` |
 | `golangci-lint` | **Not verified locally** (not installed). Enforced in `.github/workflows/ci.yml` |
 | PostgreSQL integration tests (`-tags integration`) | **Not verified locally** (Docker daemon stopped, no `psql`). Contract suites pass against the in-memory stores and `go vet -tags integration ./...` compiles them. CI runs them against PostgreSQL 16 |
-| Redis-backed code | **Not verified locally.** Use an in-memory store in unit tests |
+| Redis-backed code | **Not verified locally.** The budget logic runs against a fake store and a fake script runner; the Lua script itself runs only in CI (`TEST_REDIS_URL`) |
 | Real Ollama and real Claude API | **Not verified locally.** Replay tests through the real clients cover success, timeout, breaker, rate cap and redaction on the wire |
 | `npm test -- --run` and `npm run build` | **Mandatory local gate.** Ran after milestone 28: 220 tests pass, `tsc -b` clean, `npm run build` succeeds |
-| CI result for this branch | **Not seen.** The `gh` CLI is not installed here, so the CI run cannot be read from this machine. Check the Actions tab; milestone 27's integration tests are only proven once that run is green |
+| CI result for this branch | **Not seen, and CI had not run at all until milestone 29.** `ci.yml` only triggered on pushes to `main` and `feature-impl` and on pull requests into `main`, so pushes to `feature/attention-models` ran nothing. Milestone 29 adds `feature/**` to the push trigger and a Redis service. The `gh` CLI is not installed here, so the result must be read on the Actions tab; the PostgreSQL, Redis, race, lint and coverage claims of milestones 27 to 29 are only proven once that run is green |
 
 ### Measured coverage after milestone 27 (`go test -cover`, no integration tag)
 The 80 percent target in `PROMPT_SPEC.md` is **not met by every package** locally. Most gaps are PostgreSQL code that only the integration tests reach, so CI's figure (with `-tags integration`) will be higher.
@@ -84,3 +89,7 @@ The `go.mod` says `go 1.21` with `toolchain go1.26.10`, while the local `go` is 
 
 ## 7. Production deployment reference
 The environment variables, ordering and smoke checks for going live are in [deployment.md](deployment.md), section "Production reference". Variables for features not yet built are marked **planned** there and promoted to **active** as each milestone lands.
+
+## 8. Open questions for the design side (new)
+1. **Default budget.** `ATTENTION_BUDGET_PER_HOUR` is 10 by default per `PROMPT_SPEC.md`. That silently quiets busy workspaces after upgrade. Keep it, or default to 0 and announce it?
+2. **CI never ran on this branch** until milestone 29 added `feature/**` to its triggers. Open a pull request or watch the Actions tab for the first real result of the PostgreSQL, Redis, race, lint and coverage gates.

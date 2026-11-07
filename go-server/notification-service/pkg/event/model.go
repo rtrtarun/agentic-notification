@@ -23,6 +23,9 @@ type Event struct {
 	Payload        map[string]interface{} `json:"payload"`
 	// CreatedAt is when the event was stored. Set by the repository.
 	CreatedAt time.Time `json:"createdAt,omitempty"`
+	// AttentionPending is set by the pipeline when it saves a non-critical event that the
+	// asynchronous attention worker must still decide on. It is not part of the API.
+	AttentionPending bool `json:"-"`
 }
 
 const (

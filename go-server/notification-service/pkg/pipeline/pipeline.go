@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/example/notification-service/pkg/attention"
+	"github.com/example/notification-service/pkg/budget"
 	"github.com/example/notification-service/pkg/dedup"
 	"github.com/example/notification-service/pkg/delivery"
 	"github.com/example/notification-service/pkg/event"
@@ -72,6 +73,8 @@ type Pipeline struct {
 	eventRepo    event.Repository
 	cfg          Config
 	deduper      dedup.Deduper
+	budget       budget.Budget
+	async        bool
 	logger       *slog.Logger
 }
 
@@ -161,16 +164,18 @@ func (p *Pipeline) Handle(ctx context.Context, evt event.Event) (event.Event, er
 		}
 		evt.DecisionState.Status = event.DecisionSent
 	default:
-		if duplicate {
+		switch {
+		case duplicate:
 			evt.DecisionState.Status = event.DecisionMerged
-		} else {
-			p.applyAttention(ctx, &evt, adaptive)
-			p.applyPreferences(&evt)
+		case p.async:
+			p.deferAttention(&evt)
+		default:
+			p.attend(ctx, &evt, adaptive)
 		}
 		if evt.DecisionState.Status == "" {
 			evt.DecisionState.Status = p.defaultStatus(evt)
 		}
-		if evt.DecisionState.Status == event.DecisionQueued && !duplicate {
+		if evt.DecisionState.Status == event.DecisionQueued && !duplicate && !evt.AttentionPending {
 			p.enqueueDelivery(ctx, evt)
 		}
 	}
@@ -224,7 +229,7 @@ func deliveryMessage(evt event.Event) delivery.Message {
 // applyPreferences lets a person's quiet hours and mutes change a non-critical
 // event's outcome. It never runs for critical events: Handle only calls it from
 // the non-critical branch, and preferences.Decide refuses critical events too.
-func (p *Pipeline) applyPreferences(evt *event.Event) {
+func (p *Pipeline) applyPreferences(evt *event.Event) (overridden bool) {
 	if evt.AttentionClass == event.AttentionCritical {
 		return
 	}
@@ -237,19 +242,20 @@ func (p *Pipeline) applyPreferences(evt *event.Event) {
 				evt.AttentionClass = event.AttentionBackground
 				evt.DecisionState.Status = event.DecisionDigest
 			}
-			return
+			return true
 		}
 	}
 	if p.prefs == nil {
-		return
+		return false
 	}
 	adj, ok := p.prefs.Decide(*evt)
 	if !ok {
-		return
+		return false
 	}
 	evt.AttentionClass = adj.AttentionClass
 	evt.DecisionState.Status = adj.Status
 	evt.DecisionState.Reason = adj.Reason
+	return false
 }
 
 // applyDedup tags the event with its dedup key and thread. It reports whether the
@@ -357,4 +363,139 @@ func (p *Pipeline) deliverCritical(ctx context.Context, evt event.Event) error {
 		TeamsWebhookURLs: p.cfg.TeamsWebhookURLs,
 		SMSRecipients:    p.cfg.SMSRecipients,
 	})
+}
+
+// waitingMarker is added to an event's reason while it waits for the attention worker.
+const waitingMarker = "; waiting for the attention worker"
+
+// WithBudget caps how many standard events interrupt people per window. When it is
+// used up, further standard events are held for the next digest with the status
+// budget_exceeded. It is never consulted for a critical event, and an "always notify"
+// override outranks it. A budget store that fails lets the event through.
+func (p *Pipeline) WithBudget(b budget.Budget) *Pipeline {
+	p.budget = b
+	return p
+}
+
+// WithAsyncAttention makes Handle save non-critical events as queued and pending
+// instead of deciding on them, leaving classification, preferences, the budget and
+// delivery to the attention worker (see ProcessPending). Only enable it when a
+// worker is running, or those events will wait. Critical events are unaffected:
+// they are always delivered inline.
+func (p *Pipeline) WithAsyncAttention() *Pipeline {
+	p.async = true
+	return p
+}
+
+// attend runs the steps that decide how a non-critical event interrupts people.
+func (p *Pipeline) attend(ctx context.Context, evt *event.Event, adaptive bool) {
+	p.applyAttention(ctx, evt, adaptive)
+	overridden := p.applyPreferences(evt)
+	p.applyBudget(ctx, evt, overridden)
+}
+
+// deferAttention leaves a non-critical event for the attention worker.
+func (p *Pipeline) deferAttention(evt *event.Event) {
+	evt.DecisionState.Status = event.DecisionQueued
+	evt.DecisionState.Reason += waitingMarker
+	evt.AttentionPending = true
+}
+
+// applyBudget holds a standard event that would interrupt someone when the budget
+// is used up. It only counts events that would really be delivered (a standard
+// route exists), never touches background events, and never runs for critical ones.
+func (p *Pipeline) applyBudget(ctx context.Context, evt *event.Event, overridden bool) {
+	if p.budget == nil || overridden || evt.AttentionClass != event.AttentionStandard || evt.DecisionState.Status != "" {
+		return
+	}
+	if p.outbox == nil || !p.outbox.Routed(event.AttentionStandard) {
+		return
+	}
+	res, err := p.budget.Take(ctx, budget.ScopeWorkspace)
+	if err != nil {
+		p.logger.Warn("attention budget unavailable; letting the event through", "event_id", evt.ID, "error", err)
+		return
+	}
+	if res.Allowed {
+		return
+	}
+	evt.DecisionState.Status = event.DecisionBudgetExceeded
+	evt.DecisionState.Reason += fmt.Sprintf("; attention budget used (%d of %d interruptions this hour), held for the next digest", res.Used, res.Limit)
+}
+
+// ProcessPending finishes the attention step for an event the worker claimed. It
+// refuses a critical event: that never waits for a worker and is never throttled.
+// The returned event carries the decision to store; delivery is queued here when
+// the event will interrupt.
+func (p *Pipeline) ProcessPending(ctx context.Context, evt event.Event) (event.Event, error) {
+	if evt.AttentionClass == event.AttentionCritical {
+		return evt, attention.ErrCritical
+	}
+	if evt.DecisionState == nil {
+		evt.DecisionState = &event.DecisionState{}
+	}
+	state := *evt.DecisionState
+	evt.DecisionState = &state
+	evt.DecisionState.Reason = strings.TrimSuffix(evt.DecisionState.Reason, waitingMarker)
+	evt.DecisionState.Status = ""
+
+	p.attend(ctx, &evt, p.adaptiveNow(evt))
+	p.settle(ctx, &evt)
+	p.announce(evt)
+	return evt, nil
+}
+
+// ReleaseDelayed lets an event that was held for quiet hours go out once they have
+// ended. It reports whether the event changed and needs its decision stored; a
+// critical event is refused and never changes.
+func (p *Pipeline) ReleaseDelayed(ctx context.Context, evt event.Event) (event.Event, bool, error) {
+	if evt.AttentionClass == event.AttentionCritical {
+		return evt, false, attention.ErrCritical
+	}
+	if evt.DecisionState == nil || evt.DecisionState.Status != event.DecisionDelayed {
+		return evt, false, nil
+	}
+	state := *evt.DecisionState
+	evt.DecisionState = &state
+	if p.prefs != nil {
+		if adj, ok := p.prefs.Decide(evt); ok {
+			if adj.Status == event.DecisionDelayed {
+				return evt, false, nil // still inside quiet hours
+			}
+			evt.AttentionClass, evt.DecisionState.Status, evt.DecisionState.Reason = adj.AttentionClass, adj.Status, adj.Reason
+			p.announce(evt)
+			return evt, true, nil
+		}
+	}
+	evt.DecisionState.Status = ""
+	evt.DecisionState.Reason += "; released after quiet hours"
+	p.applyBudget(ctx, &evt, false)
+	p.settle(ctx, &evt)
+	p.announce(evt)
+	return evt, true, nil
+}
+
+// settle gives an event its final status when nothing else has, and queues its delivery.
+func (p *Pipeline) settle(ctx context.Context, evt *event.Event) {
+	if evt.DecisionState.Status == "" {
+		evt.DecisionState.Status = p.defaultStatus(*evt)
+	}
+	if evt.DecisionState.Status == event.DecisionQueued {
+		p.enqueueDelivery(ctx, *evt)
+	}
+}
+
+func (p *Pipeline) announce(evt event.Event) {
+	if p.publisher != nil {
+		p.publisher.Publish(stream.Message{Type: stream.TypeEvent, ID: evt.ID, AttentionClass: evt.AttentionClass})
+	}
+}
+
+// adaptiveNow reads the current rule's adaptive flag for an event: an event no rule
+// decides is adaptive, as it is at ingest.
+func (p *Pipeline) adaptiveNow(evt event.Event) bool {
+	if decision, matched := p.policyEngine.Evaluate(evt); matched {
+		return decision.Adaptive
+	}
+	return true
 }

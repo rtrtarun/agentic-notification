@@ -54,8 +54,11 @@ func TestPostgresRepositorySaveUsesExpectedColumns(t *testing.T) {
 	if len(queryer.queries) != 1 {
 		t.Fatalf("expected 1 query, got %d", len(queryer.queries))
 	}
-	if len(queryer.args[0]) != 14 {
-		t.Fatalf("expected 14 query args, got %d", len(queryer.args[0]))
+	if len(queryer.args[0]) != 15 {
+		t.Fatalf("expected 15 query args, got %d", len(queryer.args[0]))
+	}
+	if queryer.args[0][14] != AttentionStateDone {
+		t.Fatalf("an event decided at ingest must not be pending, got %v", queryer.args[0][14])
 	}
 	if queryer.args[0][4] != AttentionCritical {
 		t.Fatalf("expected attention_class critical, got %v", queryer.args[0][4])

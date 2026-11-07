@@ -166,6 +166,9 @@ func (h *Heuristic) Explain(ctx context.Context, evt event.Event) (string, error
 	case state.Status == event.DecisionDigest:
 		parts = append(parts, "It was held for your digest instead of being sent now.")
 		parts = append(parts, ruleSentence(state))
+	case state.Status == event.DecisionBudgetExceeded:
+		parts = append(parts, "You had already been interrupted as often as your attention budget allows this hour, so this was held for your next digest instead of interrupting you again. It was not dropped.")
+		parts = append(parts, ruleSentence(state))
 	case state.Status == event.DecisionDelayed:
 		parts = append(parts, "It was held until quiet hours end.")
 		parts = append(parts, ruleSentence(state))

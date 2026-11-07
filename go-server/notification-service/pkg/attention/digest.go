@@ -107,7 +107,7 @@ func (g *Generator) WithClock(now func() time.Time) *Generator {
 }
 
 // Generate covers everything held back since the previous digest: events whose
-// outcome is digest or delayed, never critical ones and never merged repeats. It
+// outcome is digest, delayed or budget_exceeded, never critical ones and never merged repeats. It
 // returns false and stores nothing when there is nothing to report. A failure to
 // hand the digest to delivery is logged; the digest is already stored and can be read.
 func (g *Generator) Generate(ctx context.Context, actor string) (Digest, bool, error) {
@@ -133,7 +133,7 @@ func (g *Generator) Generate(ctx context.Context, actor string) (Digest, bool, e
 		if e.AttentionClass == event.AttentionCritical || e.MergedInto != "" || e.DecisionState == nil {
 			continue
 		}
-		if s := e.DecisionState.Status; s != event.DecisionDigest && s != event.DecisionDelayed {
+		if s := e.DecisionState.Status; s != event.DecisionDigest && s != event.DecisionDelayed && s != event.DecisionBudgetExceeded {
 			continue
 		}
 		if !e.CreatedAt.After(from) || e.CreatedAt.After(to) {

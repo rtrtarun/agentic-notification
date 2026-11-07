@@ -15,6 +15,7 @@ import (
 	"github.com/example/notification-service/pkg/attention"
 	"github.com/example/notification-service/pkg/attention/llm"
 	"github.com/example/notification-service/pkg/auth"
+	"github.com/example/notification-service/pkg/budget"
 	"github.com/example/notification-service/pkg/channels"
 	"github.com/example/notification-service/pkg/config"
 	"github.com/example/notification-service/pkg/db"
@@ -86,6 +87,8 @@ type Server struct {
 	digestScheduler *attention.Scheduler
 	explainer       attention.Explainer
 	classifier      attention.Classifier
+	attentionWorker *attention.Worker
+	redisClient     *redis.Client
 	attentionLLM    *llm.Model
 	overrides       *overrides.Service
 	policyEngine    *policy.Engine
@@ -197,6 +200,23 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 	if cfg.AttentionClassify {
 		s.eventPipeline.WithClassifier(s.classifier)
 	}
+	attentionBudget, err := s.initBudget(ctx)
+	if err != nil {
+		s.releaseOnStartupFailure()
+		return nil, fmt.Errorf("init attention budget: %w", err)
+	}
+	if attentionBudget != nil {
+		s.eventPipeline.WithBudget(attentionBudget)
+	}
+	if queue, ok := eventRepo.(event.WorkQueue); ok {
+		s.attentionWorker = attention.NewWorker(queue, s.eventPipeline, logger).WithInterval(cfg.AttentionWorkerInterval)
+		if cfg.AttentionAsync {
+			s.eventPipeline.WithAsyncAttention()
+		}
+	} else if cfg.AttentionAsync {
+		s.releaseOnStartupFailure()
+		return nil, errors.New("ATTENTION_ASYNC needs an event store that supports a work queue")
+	}
 	if purger, ok := eventRepo.(event.Purger); ok {
 		s.purger = purger
 	}
@@ -287,11 +307,11 @@ func migrate(ctx context.Context, sqlDB *sql.DB) error {
 	return db.MigrateLocked(ctx, sqlDB)
 }
 
-// initDeduper shares the dedup window through Redis when REDIS_URL is set, so
-// replicas agree on duplicates; otherwise it dedups within this process only.
-func (s *Server) initDeduper(ctx context.Context) (dedup.Deduper, error) {
-	if s.cfg.RedisURL == "" {
-		return dedup.NewMemoryDeduper(s.cfg.DedupWindow), nil
+// connectRedis opens the shared Redis client once, for every feature that needs it
+// (deduplication and the attention budget), and closes it on shutdown.
+func (s *Server) connectRedis(ctx context.Context) (*redis.Client, error) {
+	if s.redisClient != nil {
+		return s.redisClient, nil
 	}
 	opts, err := redis.ParseURL(s.cfg.RedisURL)
 	if err != nil {
@@ -299,11 +319,41 @@ func (s *Server) initDeduper(ctx context.Context) (dedup.Deduper, error) {
 	}
 	client := redis.NewClient(opts)
 	s.closers = append(s.closers, client.Close)
-
 	pingCtx, cancel := context.WithTimeout(ctx, redisConnectTimeout)
 	defer cancel()
 	if err := client.Ping(pingCtx).Err(); err != nil {
 		return nil, fmt.Errorf("ping redis: %w", err)
+	}
+	s.redisClient = client
+	return client, nil
+}
+
+// initBudget builds the attention budget: shared through Redis when REDIS_URL is set,
+// so replicas count one budget together, otherwise per process. A cap of 0 turns it off.
+func (s *Server) initBudget(ctx context.Context) (budget.Budget, error) {
+	n := s.cfg.AttentionBudgetPerHour
+	if n <= 0 {
+		return nil, nil
+	}
+	if s.cfg.RedisURL == "" {
+		return budget.NewMemoryBudget(n, budget.DefaultWindow), nil
+	}
+	client, err := s.connectRedis(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return budget.NewRedisBudget(budget.NewRedisStore(client), n, budget.DefaultWindow), nil
+}
+
+// initDeduper shares the dedup window through Redis when REDIS_URL is set, so
+// replicas agree on duplicates; otherwise it dedups within this process only.
+func (s *Server) initDeduper(ctx context.Context) (dedup.Deduper, error) {
+	if s.cfg.RedisURL == "" {
+		return dedup.NewMemoryDeduper(s.cfg.DedupWindow), nil
+	}
+	client, err := s.connectRedis(ctx)
+	if err != nil {
+		return nil, err
 	}
 	s.logger.Info("using Redis for deduplication")
 	return dedup.NewRedisDeduper(dedup.NewRedisStore(client), s.cfg.DedupWindow), nil

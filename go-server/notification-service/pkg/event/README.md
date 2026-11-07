@@ -7,3 +7,5 @@ Event model and persistence.
 - `InMemoryRepository` for tests and local runs; `PostgresRepository` for production (parameterised SQL only).
 
 PostgreSQL integration tests: `go test -tags integration` with `TEST_DATABASE_URL` set.
+
+`WorkQueue` (milestone 29, optional): `ClaimPending` (FOR UPDATE SKIP LOCKED with leases, never a critical event), `ListDelayed`, `UpdateDecision` (refuses to change a critical event). Implemented by the in-memory and PostgreSQL repositories.

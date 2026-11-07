@@ -129,10 +129,11 @@ Everything in the earlier steps, as one checklist for going live at `https://rtr
 | Channels | `SLACK_WEBHOOK_URL` | Your Slack incoming webhook |
 | | `NOTIFY_ALLOWED_WEBHOOK_HOSTS` | `hooks.slack.com,webhook.office.com` (the SSRF allow-list) |
 | | `NOTIFY_STANDARD_CHANNELS`, `NOTIFY_DIGEST_CHANNELS` | For example `slack,email` |
-| Planned, milestone 29 | `ATTENTION_BUDGET_PER_HOUR` | Interruption cap; also uses `REDIS_URL` across replicas |
+| Attention budget (milestone 29) | `ATTENTION_BUDGET_PER_HOUR` | Standard interruptions per rolling hour (default `10`, `0` off); shared across replicas through `REDIS_URL` |
+| | `ATTENTION_ASYNC`, `ATTENTION_WORKER_INTERVAL` | Defer the attention step to a background worker (default off); poll interval (default `2s`) |
 | Planned, milestone 32 | `NOVU_API_KEY`, `NOVU_API_URL`, `SMTP_REQUIRE_STARTTLS` | Novu delivery and strict STARTTLS |
 
-Cross-replica attention budgets and the Novu provider are not implemented yet, so do not rely on them. The hosted demo shows the AgentPulse trace screen only after milestone 31.
+The Novu provider is not implemented yet, so do not rely on it. The budget and the worker are implemented but their PostgreSQL and Redis parts have only run in CI. The hosted demo shows the AgentPulse trace screen only after milestone 31.
 
 ### Claude Desktop or Cursor (planned, milestone 31)
 The MCP server binary does not exist yet. When milestone 31 ships, it is configured like this (names may change; the milestone doc is the reference):
