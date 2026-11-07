@@ -191,7 +191,7 @@ func validate(o Override) error {
 }
 
 func scopeKey(o Override) string {
-	return strings.ToLower(o.Source) + "\x00" + strings.ToLower(o.EventType) + "\x00" + strings.ToLower(o.Repository)
+	return strings.ToLower(o.Source) + scopeSep + strings.ToLower(o.EventType) + scopeSep + strings.ToLower(o.Repository)
 }
 
 // ScopeKey is the identity of an override's scope, for stores that enforce uniqueness.
