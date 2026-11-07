@@ -1,5 +1,7 @@
 # Attention Orchestration Platform Architecture
 
+> **Status after Milestone 33.** This document is the design narrative. [architecture.md](architecture.md) is the checked reference for what is built, and [implementation-sync.md](implementation-sync.md) records what has and has not been proven.
+
 Modern notification systems must *respect user attention* rather than simply broadcasting alerts. Early work by Horvitz et al. described a "notification platform" that sits as an **attention-savvy layer** between incoming messages and the user, weighing the value of information against the cost of interruption. In our design, we take this further: instead of a pure "notification delivery platform," we build an **Attention Orchestration Platform** that uses AI only in the middle layer.
 
 ## Pipeline Overview
@@ -87,12 +89,12 @@ type DecisionState struct {
 
 | Status | Set by | Meaning |
 |---|---|---|
-| `sent` | Pipeline (critical) or Attention Layer | Delivered immediately |
-| `queued` | Pipeline (standard/background) | Waiting for Attention Layer |
-| `merged` | Attention Layer | Combined with similar events |
-| `digest` | Attention Layer | Held for digest delivery |
-| `delayed` | Attention Layer | Scheduled for later (e.g. outside work hours) |
-| `budget_exceeded` | Attention Layer | Standard event deferred — daily attention budget spent |
+| `sent` | Pipeline (critical) | Delivered immediately to every configured channel |
+| `queued` | Pipeline or the attention worker | Will be (or has been) delivered through the retry queue to the channels it is routed to |
+| `merged` | Deduplication | Combined with a recent, equivalent event; never applied to critical events |
+| `digest` | Rules, preferences, an override or the attention classifier | Held for the next digest |
+| `delayed` | Preferences (quiet hours) | Held until quiet hours end, then released by the worker |
+| `budget_exceeded` | Attention budget | Standard event held for the next digest because the rolling budget is spent; never dropped |
 
 Critically, **all decision details are logged at write time** (not recomputed). This ensures we can always trace "why was this notification hidden six months ago?" without re-running the model.
 
@@ -110,13 +112,13 @@ This mirrors iOS interruption levels: Critical alerts bypass everything; Active 
 
 ## Attention Budget vs Suppression
 
-We avoid "suppression" — users don't like feeling ignored. Instead, each person has a finite **attention budget** (default: ~5 standard notifications per day):
+We avoid "suppression" — users don't like feeling ignored. Instead there is a finite **attention budget**: by default 10 standard interruptions per rolling hour for the workspace (`ATTENTION_BUDGET_PER_HOUR`, `0` turns it off; Redis shares it between replicas). Per-person budgets are not built yet.
 
-- **Critical** → costs zero budget, always delivered.
-- **Standard** → consumes 1 budget slot when delivered.
-- **Background** → costs zero (lives in digest or vanishes).
+- **Critical** → costs zero budget, is never throttled, always delivered.
+- **Standard** → consumes one slot when it would really be delivered. An "always notify" choice skips the budget.
+- **Background** → costs zero (lives in the digest).
 
-When the budget is exceeded, standard events receive `decision_state.status = budget_exceeded` and are held until the next daily reset. Only critical items break through.
+When the budget is spent, standard events receive `decision_state.status = budget_exceeded`, are explained as such, and are included in the next digest. They are stored and visible, never dropped. Only critical items break through.
 
 ## The Central Role of Digests
 
@@ -195,7 +197,7 @@ type Provider interface {
 }
 ```
 
-Implementations: `StubProvider` (dev), `SMTPProvider` (email), future `NovuProvider`, `SlackProvider`.
+Implementations: `StubProvider` (dev), `SMTPProvider` and `NovuProvider` (email, one owning email at a time with SMTP as the fallback), `WebhookProvider` (Slack and Teams), `SMSProvider`.
 
 ## Technology Stack
 
@@ -204,40 +206,45 @@ Implementations: `StubProvider` (dev), `SMTPProvider` (email), future `NovuProvi
 | Backend | Go | Clean Architecture, dependency injection |
 | Frontend | React + TypeScript | Dashboard and digest UI |
 | Database | PostgreSQL | Events, decisions, feedback, preferences |
-| Cache | Redis | Future: dedup keys, budget counters |
-| Messaging | NATS | Future: event bus between layers |
-| Delivery | Novu (via abstraction) | Multi-channel routing |
-| AI | Ollama / external LLM | Attention Layer only |
+| Cache | Redis | Optional: shared dedup keys and the attention budget |
+| Messaging | NATS | Intended, not built (the worker and delivery poll PostgreSQL) |
+| Delivery | SMTP, Novu (optional), webhooks, SMS, behind `delivery.Provider` | Multi-channel routing with a durable retry queue |
+| AI | Heuristic by default; Ollama or Claude optional | Attention Layer only |
 | Local dev | Docker Compose | Postgres, Ollama, API, UI |
 
 ## Implementation Status
 
-| Component | Status |
-|---|---|
-| Event ingestion (GitHub webhook) | Implemented |
-| Policy engine + YAML rules | Milestone 11 |
-| Critical → delivery pipeline | Milestone 11 |
-| PostgreSQL persistence | Milestone 11 |
-| `decision_state` first-class fields | Milestone 11 |
-| SMTP delivery provider | Implemented |
-| Feedback capture (`/feedback`) | Implemented |
-| Attention Layer (AI classify/schedule) | Planned |
-| Attention budget enforcement | Planned |
-| Digest generation + interactive UI | Planned |
-| Novu provider | Planned |
-| NATS event bus | Planned |
-| Deduplication / threading | Planned |
-| Learning from feedback | Stub (Ollama summarizer) |
+Status after Milestone 33. The detailed, checked reference is [architecture.md](architecture.md); this table is the short version. "Built" means built and tested; the last column says what has only run against fakes.
+
+| Component | Status | Notes |
+|---|---|---|
+| Event ingestion (GitHub webhook, agent events, `/notify`) | Built | Same pipeline for webhooks and agent steps |
+| Policy engine, YAML and API-edited rules, payload predicates, per-rule channels | Built | Strict YAML; critical rules are locked and cannot choose channels |
+| Critical → inline delivery to every channel | Built | Never merged, muted, delayed, budgeted, deferred or changed |
+| PostgreSQL persistence, retention | Built | Integration tests run in CI |
+| `decision_state` fields and all six statuses | Built | `sent`, `queued`, `merged`, `digest`, `delayed`, `budget_exceeded` are all assigned |
+| Delivery: SMTP, Novu (email), Slack, Teams, SMS, durable retry queue | Built | Novu and SNS only against fakes |
+| Feedback capture, overrides, preferences (workspace and personal), audit | Built | |
+| Deduplication and threading | Built | In process or Redis; an agent run is one thread |
+| Attention Layer: heuristic classify, digests, explanations | Built | Deterministic by default |
+| Attention Layer: Ollama and Claude adapters | Built | Fall back to the heuristic; only against fakes |
+| Attention budget, asynchronous worker, quiet-hours release | Built | Budget default 10 per rolling hour; worker opt in |
+| Learning from feedback | Built | Suggestions an admin reviews; never automatic |
+| Accounts, sessions, roles, single sign-on | Built | OIDC only against a fake provider |
+| Agent traces, MCP server, Python SDK | Built | No real MCP client tried |
+| Console (15 screens, demo mode) | Built | Newer screens English only; some features API-only |
+| `traceparent` propagation and span logs | Built | No collector export |
+| NATS event bus | Not used | Intended stack only |
+| Per-person delivery | Not built | Personal digests are stored, not delivered |
 
 ## Roadmap Priorities
 
-1. **Core Pipeline** *(Milestone 11 — current)*: Wire ingestion → policy → critical delivery → persistence. YAML rules. Canonical schema.
-2. **Reliable Delivery**: Novu integration for email, Slack, SMS. Critical delivery guarantees.
-3. **Attention Layer**: AI classifiers for standard events. Deduplication, grouping, scheduling, digests.
-4. **Feedback Loop**: Interactive digest interfaces with Undo/Always/Never. Training labels.
-5. **Learning**: Refine thresholds and personalize attention budget from feedback.
-6. **Advanced**: Admin dashboard, multi-agent routing, analytics, NATS event bus, compliance.
+1. **Prove it against the real services**: PostgreSQL, Redis, Ollama, Claude, Novu, SNS, an OpenID provider and a real MCP client; get CI green end to end.
+2. **Per-person delivery**: resolve a person's address at send time without storing it; deliver personal digests; per-person schedules and budgets.
+3. **Console completeness**: screens for predicates, per-rule channels and personal preferences; translations for the newer screens.
+4. **Scale**: a real queue instead of polling if needed; a shared circuit breaker; an OpenTelemetry exporter.
+5. **Product**: replay, an agent registry, multi-tenancy and billing for the hosted offering.
 
-Each piece depends on the rule/pipeline foundation. The goal is systems that respect attention, reduce friction, and help people stay focused on what matters.
+Each piece depends on the rule and pipeline foundation. The goal is systems that respect attention, reduce friction, and help people stay focused on what matters.
 
 **Sources:** Novu design guide (digests, multi-channel), Apple notification summaries, Horvitz et al. (intelligent notification platform), MagicBell UI patterns.

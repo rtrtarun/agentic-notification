@@ -9,7 +9,7 @@ Delivered in two commits with one review stop at the end.
 **What changed (frontend only, no API or database change).**
 
 - Routing with `react-router-dom` (the one new dependency) using `HashRouter`, so deep links survive GitHub Pages and any static host. Screens are lazy-loaded.
-- One navigation map, [lib/nav.ts](../apps/web/src/lib/nav.ts), drives the sidebar, mobile bottom bar, router and command palette. Unbuilt screens carry `plannedIn` and render an honest "not built yet" page: no sample numbers, no fake controls.
+- One navigation map, [lib/nav.ts](../../apps/web/src/lib/nav.ts), drives the sidebar, mobile bottom bar, router and command palette. Unbuilt screens carry `plannedIn` and render an honest "not built yet" page: no sample numbers, no fake controls.
 - Shell (`apps/web/src/app/`): collapsible sidebar (state remembered, tooltips and `aria-label` when collapsed, active bar indicator, unread badge on Inbox), workspace switcher (one workspace; says sign-in is needed for more), top bar (search, time range, palette button, bell, account menu), skip link, phone bottom bar, drawer below 62rem.
 - Command palette, Ctrl/Cmd+K: fuzzy search over screens, mark all read, search, connection settings, themes, languages. Combobox/listbox semantics, focus returned on close.
 - Toasts (`design/Toast.tsx`): polite live region; errors stay until dismissed.
@@ -32,7 +32,7 @@ Delivered in two commits with one review stop at the end.
 
 ### Architecture decisions
 
-- New package `go-server/notification-service/pkg/inbox` (the plan said `pkg/notification/state`; that name is taken by the send service). It reads events through `event.Repository` and writes only its own state, so the pipeline stays the only author of decisions. See its [README](../go-server/notification-service/pkg/inbox/README.md).
+- New package `go-server/notification-service/pkg/inbox` (the plan said `pkg/notification/state`; that name is taken by the send service). It reads events through `event.Repository` and writes only its own state, so the pipeline stays the only author of decisions. See its [README](../../go-server/notification-service/pkg/inbox/README.md).
 - **Four levels are a display mapping** over the three stored classes. Critical stays Critical and nothing can lower or raise it. Standard shows as **High** when the pipeline sent it to you, otherwise **Normal**. Background shows as **Low**. A person can override standard and background only. This is enforced in the service and tested, including in bulk.
 - **Outcomes:** delivered (sent), held (queued, delayed, digest), suppressed (budget exceeded), merged, recorded.
 - Filtering, sorting, counts and paging run in Go over the newest 1000 events, so memory and PostgreSQL behave the same. Merged repeats are hidden from the list and counted on the original (`repeatCount`).
@@ -104,7 +104,7 @@ The first inbox looked like a prototype. The console now follows the reference d
 
 The console now speaks nine languages: English, Spanish, **French, German, Portuguese (Brazil), Arabic, Japanese and Simplified Chinese** (plus Hindi from before). Every catalogue has all 330 strings, and a test fails if a language is missing a key or changes a `{placeholder}`.
 
-- **Right to left.** Arabic sets `<html dir="rtl">` through the `dir` field on each `LOCALES` entry. The shell mirrors itself: the sidebar moves to the right, the rail to the left, drawers and toasts slide in from the other side, and arrows (`.arrow`) flip. Layout CSS now uses logical properties (`inline-start`, `inline-end`, `text-align: start`) instead of `left` and `right`; what is left lives in [app/rtl.css](../apps/web/src/app/rtl.css). Charts keep their left-to-right time axis; numbers and percentages are isolated so they read in order.
+- **Right to left.** Arabic sets `<html dir="rtl">` through the `dir` field on each `LOCALES` entry. The shell mirrors itself: the sidebar moves to the right, the rail to the left, drawers and toasts slide in from the other side, and arrows (`.arrow`) flip. Layout CSS now uses logical properties (`inline-start`, `inline-end`, `text-align: start`) instead of `left` and `right`; what is left lives in [app/rtl.css](../../apps/web/src/app/rtl.css). Charts keep their left-to-right time axis; numbers and percentages are isolated so they read in order.
 - **Choosing.** The saved choice wins, then the browser language, matching regional codes to the base language (`pt-BR`, `zh-TW`, `fr-CA` and so on), then English. The picker is in Settings and the command palette; each language is named in itself.
 - **Fonts.** Inter covers Latin, Cyrillic and Greek. Arabic, Japanese, Chinese and Devanagari use the system fonts named in the `--font` stack, so nothing extra is downloaded.
 - **Adding a language:** copy `en.ts` to `<code>.ts`, translate the values, add it to `Locale`, `LOCALES` (with `dir`) and `CATALOGS` in `lib/i18n/index.ts`, and add it to the catalogue list and locale-count test in `i18n.test.ts`.

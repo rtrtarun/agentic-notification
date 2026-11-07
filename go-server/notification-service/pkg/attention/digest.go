@@ -38,6 +38,8 @@ type Digest struct {
 	Highlights []Highlight   `json:"highlights"`
 	// Model names what wrote it ("heuristic-v1"), for the audit trail.
 	Model string `json:"model"`
+	// UserID is set on a digest made for one person; it is empty for the workspace digest.
+	UserID string `json:"userId,omitempty"`
 	// Source is "heuristic" or "model", so a screen can say who wrote it without parsing Model.
 	Source    string    `json:"source"`
 	CreatedBy string    `json:"createdBy"`
@@ -66,6 +68,8 @@ type DigestStore interface {
 	Add(ctx context.Context, d Digest) error
 	// List returns digests newest first.
 	List(ctx context.Context, limit int) ([]Digest, error)
+	// ListFor returns one person's digests newest first. List never includes them.
+	ListFor(ctx context.Context, userID string, limit int) ([]Digest, error)
 	Get(ctx context.Context, id string) (Digest, error)
 }
 
@@ -107,14 +111,36 @@ func (g *Generator) WithClock(now func() time.Time) *Generator {
 }
 
 // Generate covers everything held back since the previous digest: events whose
-// outcome is digest or delayed, never critical ones and never merged repeats. It
+// outcome is digest, delayed or budget_exceeded, never critical ones and never merged repeats. It
 // returns false and stores nothing when there is nothing to report. A failure to
 // hand the digest to delivery is logged; the digest is already stored and can be read.
 func (g *Generator) Generate(ctx context.Context, actor string) (Digest, bool, error) {
+	return g.generate(ctx, actor, "", nil)
+}
+
+// GenerateFor makes a digest for one person: the same held events, minus the ones
+// exclude says that person does not want (their mutes and "never notify" choices).
+// It covers what was held since that person's previous digest, is stored and readable,
+// and is never delivered: personal delivery needs a per-person target. A critical
+// event is never held, so exclude cannot hide one.
+func (g *Generator) GenerateFor(ctx context.Context, actor, userID string, exclude func(event.Event) bool) (Digest, bool, error) {
+	if userID == "" {
+		return Digest{}, false, errors.New("a personal digest needs a person")
+	}
+	return g.generate(ctx, actor, userID, exclude)
+}
+
+func (g *Generator) generate(ctx context.Context, actor, userID string, exclude func(event.Event) bool) (Digest, bool, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	latest, err := g.store.List(ctx, 1)
+	var latest []Digest
+	var err error
+	if userID == "" {
+		latest, err = g.store.List(ctx, 1)
+	} else {
+		latest, err = g.store.ListFor(ctx, userID, 1)
+	}
 	if err != nil {
 		return Digest{}, false, fmt.Errorf("read previous digest: %w", err)
 	}
@@ -130,10 +156,10 @@ func (g *Generator) Generate(ctx context.Context, actor string) (Digest, bool, e
 	}
 	var held []event.Event
 	for _, e := range all {
-		if e.AttentionClass == event.AttentionCritical || e.MergedInto != "" || e.DecisionState == nil {
+		if e.AttentionClass == event.AttentionCritical || e.MergedInto != "" || e.DecisionState == nil || (exclude != nil && exclude(e)) {
 			continue
 		}
-		if s := e.DecisionState.Status; s != event.DecisionDigest && s != event.DecisionDelayed {
+		if s := e.DecisionState.Status; s != event.DecisionDigest && s != event.DecisionDelayed && s != event.DecisionBudgetExceeded {
 			continue
 		}
 		if !e.CreatedAt.After(from) || e.CreatedAt.After(to) {
@@ -161,15 +187,15 @@ func (g *Generator) Generate(ctx context.Context, actor string) (Digest, bool, e
 	}
 	d := Digest{
 		ID: newID(), From: from, To: to, Count: len(held), Title: sum.Title, Summary: sum.Text,
-		Highlights: g.highlights(ctx, held), Model: model, Source: SourceOf(model), CreatedBy: actor, CreatedAt: g.now().UTC(),
+		Highlights: g.highlights(ctx, held), Model: model, Source: SourceOf(model), UserID: userID, CreatedBy: actor, CreatedAt: g.now().UTC(),
 	}
 	for _, grp := range sum.Groups {
-		d.Groups = append(d.Groups, DigestGroup{Key: grp.Key, Title: grp.Title, Summary: grp.Summary, Count: grp.Count, EventIDs: grp.EventIDs})
+		d.Groups = append(d.Groups, DigestGroup(grp))
 	}
 	if err := g.store.Add(ctx, d); err != nil {
 		return Digest{}, false, fmt.Errorf("store digest: %w", err)
 	}
-	if g.notifier != nil {
+	if g.notifier != nil && userID == "" {
 		if err := g.notifier.Notify(ctx, d.ID, "Attention digest: "+d.Title, Message(d)); err != nil {
 			g.logger.Warn("digest stored but could not be queued for delivery", "digest", d.ID, "error", err)
 		}
@@ -287,18 +313,33 @@ func (m *MemoryDigestStore) Add(_ context.Context, d Digest) error {
 	return nil
 }
 
-// List implements DigestStore.
+// List implements DigestStore: workspace digests only, newest first.
 func (m *MemoryDigestStore) List(_ context.Context, limit int) ([]Digest, error) {
+	return m.newest("", limit), nil
+}
+
+// ListFor implements DigestStore.
+func (m *MemoryDigestStore) ListFor(_ context.Context, userID string, limit int) ([]Digest, error) {
+	if userID == "" {
+		return nil, errors.New("a person is required")
+	}
+	return m.newest(userID, limit), nil
+}
+
+func (m *MemoryDigestStore) newest(userID string, limit int) []Digest {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	out := make([]Digest, 0, len(m.list))
 	for i := len(m.list) - 1; i >= 0; i-- {
+		if m.list[i].UserID != userID {
+			continue
+		}
 		out = append(out, m.list[i])
 		if limit > 0 && len(out) >= limit {
 			break
 		}
 	}
-	return out, nil
+	return out
 }
 
 // Get implements DigestStore.

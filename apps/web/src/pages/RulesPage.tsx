@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ConfirmDialog } from '../design/ConfirmDialog'
 import { useToast } from '../design/Toast'
 import { LoadGate, useLoad } from '../features/manage/useLoad'
+import { LearningPanel } from '../features/manage/LearningPanel'
 import { RuleForm } from '../features/manage/RuleForm'
 import { useRulesClient } from '../features/manage/useRules'
 import { useI18n } from '../lib/i18n/I18nContext'
@@ -159,6 +160,8 @@ export default function RulesPage() {
           </>
         )}
       </LoadGate>
+
+      <LearningPanel />
 
       <RuleTester />
 

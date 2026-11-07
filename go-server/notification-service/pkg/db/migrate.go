@@ -93,6 +93,17 @@ func Migrate(ctx context.Context, db Execer) error {
 		`ALTER TABLE events ADD COLUMN IF NOT EXISTS dedup_key TEXT`,
 		`ALTER TABLE events ADD COLUMN IF NOT EXISTS thread_id TEXT`,
 		`ALTER TABLE events ADD COLUMN IF NOT EXISTS merged_into TEXT`,
+		// Asynchronous attention work (milestone 29): done for events decided at ingest, pending for those the worker must decide.
+		`ALTER TABLE events ADD COLUMN IF NOT EXISTS attention_state TEXT NOT NULL DEFAULT 'done'`,
+		`ALTER TABLE events ADD COLUMN IF NOT EXISTS attention_lease_until TIMESTAMPTZ`,
+		`ALTER TABLE events ADD COLUMN IF NOT EXISTS attention_attempts INTEGER NOT NULL DEFAULT 0`,
+		`CREATE INDEX IF NOT EXISTS events_attention_work_idx ON events (created_at) WHERE attention_state IN ('pending','processing')`,
+		`CREATE INDEX IF NOT EXISTS events_delayed_idx ON events (created_at) WHERE decision_status = 'delayed'`,
+		// Agent traces (milestone 31): one run of an agent is a trace; each step may name its parent.
+		`ALTER TABLE events ADD COLUMN IF NOT EXISTS trace_id TEXT`,
+		`ALTER TABLE events ADD COLUMN IF NOT EXISTS parent_event_id TEXT`,
+		`ALTER TABLE events ADD COLUMN IF NOT EXISTS agent_name TEXT`,
+		`CREATE INDEX IF NOT EXISTS events_trace_id_idx ON events (trace_id) WHERE trace_id IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS events_thread_id_idx ON events (thread_id)`,
 		`CREATE INDEX IF NOT EXISTS events_created_at_idx ON events (created_at)`,
 		`CREATE INDEX IF NOT EXISTS events_dedup_key_idx ON events (dedup_key)`,
@@ -123,6 +134,12 @@ func Migrate(ctx context.Context, db Execer) error {
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 		// Editable policy rules, kept in evaluation order. See pkg/rules.
+		// Per-person preferences, keyed by user ID; a person with no row uses the workspace row above.
+		`CREATE TABLE IF NOT EXISTS user_preferences (
+			user_id    TEXT PRIMARY KEY,
+			body       JSONB NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
 		`CREATE TABLE IF NOT EXISTS policy_rules (
 			position INT  NOT NULL,
 			id       TEXT PRIMARY KEY,
@@ -211,6 +228,15 @@ func Migrate(ctx context.Context, db Execer) error {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 		`CREATE INDEX IF NOT EXISTS digests_created_idx ON digests (created_at DESC)`,
+		// Suggestions made by the learning engine from stored feedback. See pkg/learning.
+		`CREATE TABLE IF NOT EXISTS learning_suggestions (
+			id         TEXT PRIMARY KEY,
+			status     TEXT NOT NULL CHECK (status IN ('pending','applied','dismissed')),
+			body       JSONB NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS learning_suggestions_status_idx ON learning_suggestions (status, updated_at DESC)`,
 		`CREATE TABLE IF NOT EXISTS audit_log (
 			id     BIGSERIAL PRIMARY KEY,
 			at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),

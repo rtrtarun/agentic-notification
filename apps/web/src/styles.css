@@ -1193,3 +1193,95 @@ button {
     transform: none;
   }
 }
+
+/* ---------- Agent traces (AgentPulse) ---------- */
+
+.traces-layout {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 62rem) {
+  .traces-layout {
+    grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+.trace-card {
+  display: grid;
+  gap: 0.15rem;
+  width: 100%;
+  text-align: start;
+  cursor: pointer;
+}
+.trace-card[aria-pressed='true'] {
+  outline: 2px solid var(--signal);
+  outline-offset: -2px;
+}
+.trace-id {
+  font-size: 0.75rem;
+  color: var(--fog);
+  overflow-wrap: anywhere;
+}
+.trace-status {
+  justify-self: start;
+  font-size: 0.8125rem;
+  font-weight: 650;
+}
+.trace-status[data-status='failed'] {
+  color: var(--distress);
+}
+.trace-status[data-status='waiting'] {
+  color: var(--pennant);
+}
+.trace-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+.trace-step {
+  border-inline-start: 3px solid var(--fog);
+  padding-block: 0.25rem;
+  padding-inline-end: 0;
+}
+.trace-step[data-failed] {
+  border-inline-start-color: var(--distress);
+}
+.trace-step[data-kind='retry'] {
+  border-inline-start-color: var(--pennant);
+}
+.trace-step-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding-inline-start: 0.6rem;
+}
+.trace-step > p,
+.trace-step > button,
+.trace-bar {
+  margin-inline-start: 0.6rem;
+}
+.trace-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 28rem;
+}
+.trace-bar > span {
+  display: block;
+  height: 0.5rem;
+  min-width: 0.25rem;
+  border-radius: 0.25rem;
+  background: var(--sea);
+}
+.trace-step[data-failed] .trace-bar > span {
+  background: var(--distress);
+}
+.trace-bar small {
+  font-size: 0.75rem;
+  color: var(--fog);
+  white-space: nowrap;
+}

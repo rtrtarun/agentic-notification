@@ -1,7 +1,10 @@
 package policy
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"gopkg.in/yaml.v3"
@@ -23,7 +26,14 @@ func LoadRulesFromFile(path string) ([]Rule, error) {
 
 func ParseRules(data []byte) ([]Rule, error) {
 	var file RulesFile
-	if err := yaml.Unmarshal(data, &file); err != nil {
+	// Strict decoding: a misspelt key such as "eventTpye" fails at load time instead of
+	// silently widening a rule to match everything.
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	dec.KnownFields(true)
+	if err := dec.Decode(&file); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil, fmt.Errorf("rules file contains no rules")
+		}
 		return nil, fmt.Errorf("parse rules yaml: %w", err)
 	}
 	if len(file.Rules) == 0 {
@@ -41,6 +51,12 @@ func ParseRules(data []byte) ([]Rule, error) {
 		case event.AttentionCritical, event.AttentionStandard, event.AttentionBackground:
 		default:
 			return nil, fmt.Errorf("rule %q has unknown attentionClass %q", rule.Name, rule.Then.AttentionClass)
+		}
+		if err := ValidatePredicates(rule.When.PayloadMatch); err != nil {
+			return nil, fmt.Errorf("rule %q: %w", rule.Name, err)
+		}
+		if err := ValidateChannels(rule.Then.AttentionClass, rule.Then.Channels); err != nil {
+			return nil, fmt.Errorf("rule %q: %w", rule.Name, err)
 		}
 		for _, pattern := range []string{rule.When.Source, rule.When.EventType, rule.When.Repository} {
 			if err := ValidatePattern(pattern); err != nil {

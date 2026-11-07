@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"time"
 )
 
@@ -100,7 +101,7 @@ func (p *PostgresStore) Requeue(ctx context.Context, id string, now time.Time) e
 	}
 	var status string
 	err = p.db.QueryRowContext(ctx, `SELECT status FROM delivery_jobs WHERE id = $1`, id).Scan(&status)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
 	if err != nil {

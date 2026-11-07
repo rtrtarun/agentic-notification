@@ -120,6 +120,10 @@ func (s *Server) digestsHandler(w http.ResponseWriter, r *http.Request) {
 			}
 			limit = n
 		}
+		if r.URL.Query().Get("scope") == scopeMe {
+			s.listPersonalDigests(w, r, limit)
+			return
+		}
 		list, err := s.digestStore.List(r.Context(), limit)
 		if err != nil {
 			s.attentionFailure(w, r, err)
@@ -130,6 +134,10 @@ func (s *Server) digestsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		util.WriteJSON(w, http.StatusOK, map[string]any{"digests": list, "every": s.cfg.AttentionDigestEvery.String()})
 	case rest == "generate" && r.Method == http.MethodPost:
+		if r.URL.Query().Get("scope") == scopeMe {
+			s.generatePersonalDigest(w, r)
+			return
+		}
 		if !s.requireAdmin(w, r) {
 			return
 		}

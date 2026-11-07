@@ -1,5 +1,7 @@
 # Deployment and hosting
 
+> **Status after Milestone 33.** The service now has accounts and single sign-on, a delivery retry queue, optional Ollama or Claude and Novu, and an MCP server. The environment variables for all of it are in "Production reference" at the end of this document, and each milestone document lists its own settings.
+
 The platform has two deployable parts. They are hosted differently.
 
 | Part | What it is | Where it can run |
@@ -69,7 +71,7 @@ npx vite preview     # serves dist/
 On one machine, with Docker:
 
 ```bash
-docker compose up --build        # service on :8080, PostgreSQL, Redis
+docker compose up --build postgres redis go-notification-service   # service on :8080, PostgreSQL, Redis
 cd apps/web && npm install && npm run dev      # console on :3000
 ```
 
@@ -87,7 +89,7 @@ On a server: build the service image from `go-server/notification-service/Docker
 
 - The console is public static code. It contains no secrets; the API key is typed in by the person using it.
 - The service must stay fail-closed: set `API_KEY` and `GITHUB_WEBHOOK_SECRET`, and leave `ALLOW_UNAUTHENTICATED_API` and `ALLOW_UNSIGNED_WEBHOOKS` unset. Both exist only for local development.
-- Anyone who knows the service address can send it requests, so the key is the only gate until real user login exists (listed as open in [ui-architecture.md](ui-architecture.md) section 16).
+- Anyone who knows the service address can send it requests. The API key gates services; people sign in with an account (milestone 23): set `AUTH_BOOTSTRAP_EMAIL` and `AUTH_BOOTSTRAP_PASSWORD` once to create the first admin (they are used only when no account exists), and use `AUTH_COOKIE_SECURE` and `PUBLIC_URL` for an https deployment. Prefer sign-in over typing the key into the console.
 - Do not set `VITE_API_KEY` in a hosted build. Anything in a built bundle is public.
 
 ## Checks before announcing a deployment
@@ -99,3 +101,58 @@ On a server: build the service image from `go-server/notification-service/Docker
 | Service is healthy | `GET https://<service>/health` returns 200 |
 | CORS is right | Connection settings save without "Can't reach" |
 | Signed webhook accepted | Send a test delivery from the GitHub webhook page; expect 202 |
+
+## Production reference
+
+Everything in the earlier steps, as one checklist for going live at `https://rtrtarun.github.io/agentic-notification/` (console) and your own HTTPS service address (API). Variables marked **planned** belong to a milestone that is not built yet; setting them today does nothing.
+
+### Order of work
+1. Settings, then Pages, source **GitHub Actions**; merge to `main`. The console is live in demo mode.
+2. Merge a change under `go-server/notification-service` to `main`; the image is pushed to `ghcr.io/rtrtarun/agentic-notification/notification-service:latest`. Make the package public.
+3. Provision PostgreSQL (Neon, Supabase or Render) and, only for more than one replica, Redis (Upstash). Run the image on port 8080 with the variables below.
+4. Add the repository variable `BACKEND_URL`, re-run the Pages workflow, and add the GitHub webhook.
+
+### Service environment
+
+| Group | Variable | Production value |
+|---|---|---|
+| Security (fail closed) | `API_KEY` | 32+ random bytes, for example `openssl rand -hex 32` |
+| | `GITHUB_WEBHOOK_SECRET` | Random secret, identical to the one in the GitHub webhook |
+| | `CORS_ALLOWED_ORIGINS` | `https://rtrtarun.github.io` (origin only, no path, no trailing slash) |
+| | `ALLOW_UNAUTHENTICATED_API`, `ALLOW_UNSIGNED_WEBHOOKS` | Leave unset |
+| Data | `DATABASE_URL` | `postgres://user:pass@host:5432/db?sslmode=require` |
+| | `REDIS_URL` | `rediss://default:pass@host:6379`; shared deduplication across replicas |
+| | `EVENT_RETENTION` | For example `2160h` (90 days) |
+| | `DEDUP_WINDOW` | `10m` |
+| Attention | `ATTENTION_PROVIDER` | `heuristic` (default), `ollama` or `claude`; a model that fails falls back to the heuristic |
+| | `ANTHROPIC_API_KEY` | Required when the provider is `claude` |
+| | `OLLAMA_URL`, `OLLAMA_MODEL` | When the provider is `ollama` |
+| | `ATTENTION_CLASSIFY`, `ATTENTION_DIGEST_EVERY` | `true`, and for example `1h` |
+| Channels | `SLACK_WEBHOOK_URL` | Your Slack incoming webhook |
+| | `NOTIFY_ALLOWED_WEBHOOK_HOSTS` | `hooks.slack.com,webhook.office.com` (the SSRF allow-list) |
+| | `NOTIFY_STANDARD_CHANNELS`, `NOTIFY_DIGEST_CHANNELS` | For example `slack,email` |
+| Attention budget (milestone 29) | `ATTENTION_BUDGET_PER_HOUR` | Standard interruptions per rolling hour (default `10`, `0` off); shared across replicas through `REDIS_URL` |
+| | `ATTENTION_ASYNC`, `ATTENTION_WORKER_INTERVAL` | Defer the attention step to a background worker (default off); poll interval (default `2s`) |
+| Email (milestone 32) | `NOVU_API_KEY`, `NOVU_API_URL`, `NOVU_WORKFLOW_ID` | Email through Novu, with SMTP as the fallback when SMTP is configured; exactly one provider sends each email |
+| | `SMTP_REQUIRE_STARTTLS` | `true` refuses to send mail over a plaintext connection |
+
+The budget, the worker, agent traces and the Novu provider are implemented. Their PostgreSQL, Redis and real-service parts have only run in CI or against local fakes; try Novu with one test recipient before relying on it. 
+
+### Claude Desktop or Cursor (planned, milestone 31)
+The MCP server binary does not exist yet. When milestone 31 ships, it is configured like this (names may change; the milestone doc is the reference):
+
+```json
+{
+  "mcpServers": {
+    "agentpulse": {
+      "command": "/path/to/go-server/notification-service/bin/mcp-server",
+      "env": { "AGENTPULSE_URL": "https://your-service", "AGENTPULSE_API_KEY": "your-api-key" }
+    }
+  }
+}
+```
+
+### Smoke checks
+- `GET https://<service>/health` returns 200.
+- Redeliver a ping from the GitHub webhook page to `https://<service>/webhooks/github`: first delivery is accepted (202), a redelivery of the same event answers `{"status":"duplicate"}` with 200.
+- `GET https://<service>/api/attention/status` with the API key shows the provider and a closed breaker.

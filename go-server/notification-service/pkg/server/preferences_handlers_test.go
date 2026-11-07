@@ -126,7 +126,7 @@ func TestStreamSendsReadyThenPublishedMessages(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close) // runs after the stream bodies are closed (cleanups run last-in first-out)
 
-	res, sc := openStream(t, ts, testAPIKey)
+	res, sc := openStream(t, ts, testAPIKey) //nolint:bodyclose // openStream closes the body in a test cleanup
 	if res.StatusCode != http.StatusOK || !strings.HasPrefix(res.Header.Get("Content-Type"), "text/event-stream") {
 		t.Fatalf("status=%d type=%q", res.StatusCode, res.Header.Get("Content-Type"))
 	}
@@ -151,15 +151,15 @@ func TestStreamRequiresKeyAndRespectsTheCap(t *testing.T) {
 	ts := httptest.NewServer(s.Handler())
 	t.Cleanup(ts.Close) // runs after the stream bodies are closed (cleanups run last-in first-out)
 
-	if res, _ := openStream(t, ts, ""); res.StatusCode != http.StatusUnauthorized {
+	if res, _ := openStream(t, ts, ""); res.StatusCode != http.StatusUnauthorized { //nolint:bodyclose // openStream closes the body in a test cleanup
 		t.Fatalf("no key = %d", res.StatusCode)
 	}
-	if res, _ := openStream(t, ts, "wrong"); res.StatusCode != http.StatusUnauthorized {
+	if res, _ := openStream(t, ts, "wrong"); res.StatusCode != http.StatusUnauthorized { //nolint:bodyclose // openStream closes the body in a test cleanup
 		t.Fatalf("wrong key = %d", res.StatusCode)
 	}
-	a, _ := openStream(t, ts, testAPIKey)
-	b, _ := openStream(t, ts, testAPIKey)
-	c, _ := openStream(t, ts, testAPIKey)
+	a, _ := openStream(t, ts, testAPIKey) //nolint:bodyclose // openStream closes the body in a test cleanup
+	b, _ := openStream(t, ts, testAPIKey) //nolint:bodyclose // openStream closes the body in a test cleanup
+	c, _ := openStream(t, ts, testAPIKey) //nolint:bodyclose // openStream closes the body in a test cleanup
 	if a.StatusCode != 200 || b.StatusCode != 200 || c.StatusCode != http.StatusServiceUnavailable || c.Header.Get("Retry-After") == "" {
 		t.Fatalf("statuses = %d %d %d", a.StatusCode, b.StatusCode, c.StatusCode)
 	}
@@ -168,9 +168,9 @@ func TestStreamRequiresKeyAndRespectsTheCap(t *testing.T) {
 func TestStreamEndsWhenTheServerStops(t *testing.T) {
 	s := newPrefsServer(t)
 	ts := httptest.NewServer(s.Handler())
-	t.Cleanup(ts.Close) // runs after the stream bodies are closed (cleanups run last-in first-out)
-	_, sc := openStream(t, ts, testAPIKey)
-	nextData(t, sc) // ready
+	t.Cleanup(ts.Close)                    // runs after the stream bodies are closed (cleanups run last-in first-out)
+	_, sc := openStream(t, ts, testAPIKey) //nolint:bodyclose // openStream closes the body in a test cleanup
+	nextData(t, sc)                        // ready
 
 	s.stopStreams()
 	s.stopStreams() // idempotent

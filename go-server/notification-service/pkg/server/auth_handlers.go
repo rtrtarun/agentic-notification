@@ -112,14 +112,14 @@ func (s *Server) sameSite() http.SameSite {
 }
 
 func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, token string, expires time.Time) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure follows the request scheme (secureCookie) so local http development works
 		Name: sessionCookie, Value: token, Path: "/", Expires: expires, MaxAge: int(time.Until(expires).Seconds()),
 		HttpOnly: true, Secure: s.secureCookie(r), SameSite: s.sameSite(),
 	})
 }
 
 func (s *Server) clearCookie(w http.ResponseWriter, r *http.Request, name, path string) {
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure follows the request scheme (secureCookie) so local http development works
 		Name: name, Value: "", Path: path, MaxAge: -1, HttpOnly: true, Secure: s.secureCookie(r), SameSite: s.sameSite(),
 	})
 }
@@ -253,7 +253,7 @@ func (s *Server) oidcStartHandler(w http.ResponseWriter, r *http.Request) {
 		s.redirectToConsole(w, r, "failed")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{
+	http.SetCookie(w, &http.Cookie{ //nolint:gosec // Secure follows the request scheme (secureCookie) so local http development works
 		Name: oidcCookie, Value: auth.SealTransaction(s.authSecret, tx), Path: authPrefix + "/oidc", MaxAge: 600,
 		HttpOnly: true, Secure: s.secureCookie(r), SameSite: http.SameSiteLaxMode, // Lax: the provider's redirect is a cross-site navigation
 	})

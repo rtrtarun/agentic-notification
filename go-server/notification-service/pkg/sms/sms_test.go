@@ -2,6 +2,7 @@ package sms
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -41,7 +42,7 @@ func TestMockRecordsAndValidates(t *testing.T) {
 	if got := m.Sent(); len(got) != 1 || got[0].Text != "hi" {
 		t.Fatalf("sent = %+v", got)
 	}
-	if err := m.Send(context.Background(), "nope", "x"); err != ErrInvalidNumber {
+	if err := m.Send(context.Background(), "nope", "x"); !errors.Is(err, ErrInvalidNumber) {
 		t.Fatalf("err = %v", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -105,7 +106,7 @@ func TestHTTPGatewayRejectsBadInput(t *testing.T) {
 		t.Fatal("empty URL must be rejected")
 	}
 	g, _ := NewHTTP("http://localhost", nil, "")
-	if g.Send(context.Background(), "bad", "x") != ErrInvalidNumber {
+	if !errors.Is(g.Send(context.Background(), "bad", "x"), ErrInvalidNumber) {
 		t.Fatal("bad number must be rejected before any request")
 	}
 }
@@ -161,7 +162,7 @@ func TestSNSNeedsCredentialsAndReportsStatus(t *testing.T) {
 	if err := g.Send(context.Background(), "+14155550100", "x"); err == nil || !strings.Contains(err.Error(), "400") {
 		t.Fatalf("err = %v", err)
 	}
-	if g.Send(context.Background(), "bad", "x") != ErrInvalidNumber {
+	if !errors.Is(g.Send(context.Background(), "bad", "x"), ErrInvalidNumber) {
 		t.Fatal("bad number")
 	}
 }

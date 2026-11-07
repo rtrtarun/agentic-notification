@@ -283,7 +283,7 @@ func parseInboxQuery(r *http.Request) (inbox.Query, error) {
 	v := r.URL.Query()
 	q := inbox.Query{
 		Text: strings.TrimSpace(v.Get("q")), Source: v.Get("source"), Repository: v.Get("repo"),
-		Sort: v.Get("sort"),
+		Sort: v.Get("sort"), Cursor: v.Get("cursor"),
 	}
 	if len(q.Text) > 200 {
 		return q, errors.New("q is too long")

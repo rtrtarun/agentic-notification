@@ -35,7 +35,7 @@ func buildSMSGateway(cfg *config.Config, logger *slog.Logger) (sms.Gateway, erro
 // (email without SMTP, SMS without a gateway) gets no targets, so it is never routed to.
 func buildTargets(cfg *config.Config, gw sms.Gateway) (delivery.Targets, error) {
 	t := delivery.Targets{Slack: cfg.SlackWebhookURLs(), Teams: cfg.TeamsWebhookURLs()}
-	if cfg.SMTPHost != "" && cfg.SMTPSender != "" {
+	if (cfg.SMTPHost != "" && cfg.SMTPSender != "") || cfg.NovuAPIKey != "" {
 		t.Email = cfg.DefaultEmailRecipients()
 	}
 	if gw != nil {

@@ -15,4 +15,4 @@ Guarantees (all tested):
 - The model sees redacted event titles and flags, never comment bodies or raw payloads.
 - Digest groups, counts and event IDs always come from the heuristic; the model only supplies wording.
 
-`Model.Status()` feeds `GET /api/attention/status`. A new provider only has to implement `Completer`. See [docs/milestone-26.md](../../../../../docs/milestone-26.md).
+`Model.Status()` feeds `GET /api/attention/status`. A new provider only has to implement `Completer`. See [docs/milestones/milestone-26.md](../../../../../docs/milestones/milestone-26.md).

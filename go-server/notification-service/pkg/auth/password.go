@@ -64,10 +64,10 @@ func VerifyPassword(hash, password string) bool {
 	}
 	salt, err1 := base64.RawStdEncoding.DecodeString(parts[2])
 	want, err2 := base64.RawStdEncoding.DecodeString(parts[3])
-	if err1 != nil || err2 != nil || len(want) == 0 {
+	if err1 != nil || err2 != nil || len(want) == 0 || len(want) > maxHashBytes {
 		return false
 	}
-	got := argon2.IDKey([]byte(password), salt, t, m, p, uint32(len(want)))
+	got := argon2.IDKey([]byte(password), salt, t, m, p, uint32(len(want))) //nolint:gosec // len(want) is bounded by maxHashBytes above
 	return subtle.ConstantTimeCompare(got, want) == 1
 }
 
@@ -80,3 +80,6 @@ var dummyHash = func() string {
 	}
 	return h
 }()
+
+// maxHashBytes bounds the length of a stored hash we are willing to verify against.
+const maxHashBytes = 1024

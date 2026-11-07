@@ -47,6 +47,9 @@ Accounts and sign-in (milestone 23; all optional, the API key keeps working): `A
 
 Attention Intelligence (milestone 25; all optional): `ATTENTION_CLASSIFY` (default `true`), `ATTENTION_DIGEST_EVERY` (default `0`, on request only; e.g. `24h`), `NOTIFY_DIGEST_CHANNELS` (channels a digest is delivered to; empty means stored only).
 Language model (milestone 26; all optional): `ATTENTION_PROVIDER` (`heuristic` default, `ollama` or `claude`), `OLLAMA_URL`, `OLLAMA_MODEL`, `ANTHROPIC_API_KEY` (required for `claude`), `ATTENTION_MODEL` (Claude model name), `ATTENTION_TIMEOUT` (default `5s`), `ATTENTION_MAX_CALLS_PER_MIN` (default `60`). A model that fails falls back to the heuristic; see `GET /api/attention/status`.
+Learning suggestions (milestone 28; optional): `LEARNING_MIN_SIGNALS` (default `5`) and `LEARNING_LOOKBACK` (default `720h`).
+Email through Novu (milestone 32; optional): `NOVU_API_KEY`, `NOVU_API_URL` (default `https://api.novu.co`), `NOVU_WORKFLOW_ID` (default `attention-orchestration`); `SMTP_REQUIRE_STARTTLS` (default `false`) refuses plaintext SMTP.
+Attention budget and worker (milestone 29): `ATTENTION_BUDGET_PER_HOUR` (default `10`, `0` off), `ATTENTION_ASYNC` (default `false`), `ATTENTION_WORKER_INTERVAL` (default `2s`); `REDIS_URL` shares the budget across replicas.
 
 `OVERRIDES_ADMIN_ONLY` (default `false`) limits creating always/never notify overrides to admins.
 
@@ -58,10 +61,10 @@ Language model (milestone 26; all optional): `ATTENTION_PROVIDER` (`heuristic` d
 | `GET /metrics` | API key | Prometheus text format: request counts and latency histograms per route |
 | `GET /events` | API key | Recent events, newest first, without raw payloads. `?limit=1..500` (default 100). Used by the [web console](../../apps/web/README.md) |
 | `POST /notify` | API key | Send a notification (validated, see below) |
-| `POST /feedback` | session or API key | Record feedback (`opened`, `dismissed`, `undo`, `always`, `never`, `reply`); `always`/`never` create an override. See [milestone-24](../../docs/milestone-24.md) |
-| `GET /api/digests`, `GET /api/digests/{id}`, `POST /api/digests/generate` (admin), `GET /api/explain/{id}` | session or API key | Digests of held notifications and plain-language explanations. See [milestone-25](../../docs/milestone-25.md) |
+| `POST /feedback` | session or API key | Record feedback (`opened`, `dismissed`, `undo`, `always`, `never`, `reply`); `always`/`never` create an override. See [milestone-24](../../docs/milestones/milestone-24.md) |
+| `GET /api/digests`, `GET /api/digests/{id}`, `POST /api/digests/generate` (admin), `GET /api/explain/{id}` | session or API key | Digests of held notifications and plain-language explanations. See [milestone-25](../../docs/milestones/milestone-25.md) |
 | `GET/POST /api/overrides`, `DELETE /api/overrides/{id}` | session or API key | Always and never notify choices |
-| `GET /api/auth/status`, `POST /api/auth/login`, `GET /api/auth/oidc/start` | none | Sign-in (see [milestone-23](../../docs/milestone-23.md)). `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/password` need a session or the API key |
+| `GET /api/auth/status`, `POST /api/auth/login`, `GET /api/auth/oidc/start` | none | Sign-in (see [milestone-23](../../docs/milestones/milestone-23.md)). `GET /api/auth/me`, `POST /api/auth/logout`, `POST /api/auth/password` need a session or the API key |
 | `GET/POST /api/users`, `PATCH /api/users/{id}`, `GET /api/audit` | admin | Accounts and the security log |
 | `GET /api/deliveries` | API key | Delivery log and queue with counts by status (no targets or message text). `POST /api/deliveries/{id}/retry` sends a dead delivery again |
 | `POST /webhooks/github` | HMAC signature | Ingest a GitHub event. Redeliveries (same `X-GitHub-Delivery`) return `200 {"status":"duplicate"}` and notify nothing |

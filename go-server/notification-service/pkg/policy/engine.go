@@ -42,6 +42,7 @@ func (e *Engine) Evaluate(evt event.Event) (PolicyDecision, bool) {
 				Reason:         rule.Then.Reason,
 				MatchedRule:    rule.Name,
 				Adaptive:       rule.Then.Adaptive && rule.Then.AttentionClass != event.AttentionCritical,
+				Channels:       channelsFor(rule),
 			}, true
 		}
 	}
@@ -52,7 +53,8 @@ func (e *Engine) Evaluate(evt event.Event) (PolicyDecision, bool) {
 func Matches(c RuleCondition, evt event.Event) bool {
 	return fieldMatches(c.Source, evt.Source) &&
 		fieldMatches(c.EventType, evt.EventType) &&
-		fieldMatches(c.Repository, evt.Repository)
+		fieldMatches(c.Repository, evt.Repository) &&
+		matchPredicates(c.PayloadMatch, evt)
 }
 
 // fieldMatches treats an empty pattern as "anything" and otherwise matches with
@@ -74,4 +76,13 @@ func fieldMatches(pattern, value string) bool {
 func ValidatePattern(pattern string) error {
 	_, err := path.Match(pattern, "")
 	return err
+}
+
+// channelsFor returns a rule's channel override. A critical rule never has one:
+// critical events always go to every configured channel.
+func channelsFor(r Rule) []string {
+	if r.Then.AttentionClass == event.AttentionCritical || len(r.Then.Channels) == 0 {
+		return nil
+	}
+	return append([]string(nil), r.Then.Channels...)
 }

@@ -11,8 +11,6 @@ import (
 	"github.com/example/notification-service/pkg/sms"
 )
 
-const starPayload = `{"action":"created","repository":{"full_name":"acme/web"}}`
-
 func starEvents(s *Server, n int) {
 	for i := 0; i < n; i++ {
 		repo := []string{"acme/web", "acme/api", "acme/docs"}[i%3]

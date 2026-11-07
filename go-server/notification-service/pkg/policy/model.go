@@ -6,6 +6,8 @@ type RuleCondition struct {
 	Source     string `json:"source,omitempty" yaml:"source,omitempty"`
 	EventType  string `json:"eventType,omitempty" yaml:"eventType,omitempty"`
 	Repository string `json:"repository,omitempty" yaml:"repository,omitempty"`
+	// PayloadMatch narrows the rule to events whose contents satisfy every predicate.
+	PayloadMatch []Predicate `json:"payloadMatch,omitempty" yaml:"payloadMatch,omitempty"`
 }
 
 type RuleOutcome struct {
@@ -15,6 +17,9 @@ type RuleOutcome struct {
 	// standard event may be moved to background. It never applies to a critical
 	// rule, and an explicit rule without it is never second-guessed.
 	Adaptive bool `json:"adaptive,omitempty" yaml:"adaptive,omitempty"`
+	// Channels sends events this rule matches to these channels instead of the ones the
+	// class is routed to. Never allowed on a critical rule.
+	Channels []string `json:"channels,omitempty" yaml:"channels,omitempty"`
 }
 
 // Rule maps a condition to an attention class. Rules run top to bottom and the
@@ -39,4 +44,6 @@ type PolicyDecision struct {
 	MatchedRule    string
 	// Adaptive is true when the rule allows Attention Intelligence to refine its outcome.
 	Adaptive bool
+	// Channels is the matched rule's channel override; empty means route by class.
+	Channels []string
 }

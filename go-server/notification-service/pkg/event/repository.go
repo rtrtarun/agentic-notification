@@ -26,6 +26,7 @@ const DefaultListLimit = 1000
 type InMemoryRepository struct {
 	mu     sync.Mutex
 	events []Event
+	work   map[string]*workState
 }
 
 func NewInMemoryRepository() *InMemoryRepository {
@@ -47,6 +48,9 @@ func (r *InMemoryRepository) Save(ctx context.Context, evt Event) error {
 		evt.CreatedAt = time.Now().UTC()
 	}
 	r.events = append(r.events, evt)
+	if evt.AttentionPending {
+		r.markPending(evt.ID)
+	}
 	return nil
 }
 

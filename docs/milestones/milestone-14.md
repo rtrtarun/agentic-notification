@@ -1,6 +1,6 @@
 # Milestone 14: Operator Console and Read API
 
-**Status: complete.** Built after Milestone 13. Not in the original `AGENTS.md` plan; it implements step A of the forward roadmap ([architecture.md](architecture.md) section 13).
+**Status: complete.** Built after Milestone 13. Not in the original `AGENTS.md` plan; it implements step A of the forward roadmap ([architecture.md](../architecture.md) section 13).
 
 ## Goals
 
@@ -15,7 +15,7 @@
 - **Newest first, capped.** The handler reverses `List` (oldest first, capped at 1,000) and applies `limit` (default 100, maximum 500). Cursor pagination is deferred until the table outgrows the cap.
 - **No new frontend runtime dependencies** beyond the self-hosted font. Plain `fetch`, React state and one hook.
 - **API key in `sessionStorage`**, entered by the user, instead of a key baked into the bundle.
-- **Design language from the subject** (signal flags): see [frontend.md](frontend.md).
+- **Design language from the subject** (signal flags): see [frontend.md](../frontend.md).
 - Generated TypeScript output (`tsbuildinfo`, `vite.config.js`, `vite.config.d.ts`) is now untracked and ignored.
 
 ## Database changes

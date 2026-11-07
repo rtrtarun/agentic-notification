@@ -38,7 +38,7 @@ func (p *SMSProvider) Send(ctx context.Context, req notification.NotificationReq
 	}
 	for _, to := range req.SMSRecipients {
 		if !sms.ValidNumber(to) {
-			return fmt.Errorf("%w: %v", ErrPermanent, sms.ErrInvalidNumber)
+			return fmt.Errorf("%w: %w", ErrPermanent, sms.ErrInvalidNumber)
 		}
 	}
 	text := smsText(req)

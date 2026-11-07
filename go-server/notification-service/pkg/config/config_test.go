@@ -183,3 +183,74 @@ func TestAttentionProviderValidation(t *testing.T) {
 		t.Fatalf("claude with a key should load: %v", err)
 	}
 }
+
+func TestLearningSettings(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil || cfg.LearningMinSignals != 5 || cfg.LearningLookback != 30*24*time.Hour {
+		t.Fatalf("defaults wrong: %v %+v", err, cfg)
+	}
+	t.Setenv("LEARNING_MIN_SIGNALS", "8")
+	t.Setenv("LEARNING_LOOKBACK", "168h")
+	cfg, err = LoadConfig()
+	if err != nil || cfg.LearningMinSignals != 8 || cfg.LearningLookback != 168*time.Hour {
+		t.Fatalf("settings not read: %v %+v", err, cfg)
+	}
+	for name, env := range map[string]map[string]string{
+		"zero signals": {"LEARNING_MIN_SIGNALS": "0"},
+		"bad lookback": {"LEARNING_LOOKBACK": "forever"},
+		"zero look":    {"LEARNING_LOOKBACK": "0s"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			for k, v := range env {
+				t.Setenv(k, v)
+			}
+			if _, err := LoadConfig(); err == nil {
+				t.Fatal("expected an error")
+			}
+		})
+	}
+}
+
+func TestAttentionWorkerAndBudgetSettings(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil || cfg.AttentionAsync || cfg.AttentionWorkerInterval != 2*time.Second || cfg.AttentionBudgetPerHour != 10 {
+		t.Fatalf("defaults wrong: %v %+v", err, cfg)
+	}
+	t.Setenv("ATTENTION_ASYNC", "true")
+	t.Setenv("ATTENTION_WORKER_INTERVAL", "500ms")
+	t.Setenv("ATTENTION_BUDGET_PER_HOUR", "0")
+	cfg, err = LoadConfig()
+	if err != nil || !cfg.AttentionAsync || cfg.AttentionWorkerInterval != 500*time.Millisecond || cfg.AttentionBudgetPerHour != 0 {
+		t.Fatalf("settings not read: %v %+v", err, cfg)
+	}
+	for name, env := range map[string]map[string]string{
+		"bad async":      {"ATTENTION_ASYNC": "maybe"},
+		"bad interval":   {"ATTENTION_WORKER_INTERVAL": "often"},
+		"zero interval":  {"ATTENTION_WORKER_INTERVAL": "0s"},
+		"negative cap":   {"ATTENTION_BUDGET_PER_HOUR": "-3"},
+		"cap not number": {"ATTENTION_BUDGET_PER_HOUR": "lots"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			for k, v := range env {
+				t.Setenv(k, v)
+			}
+			if _, err := LoadConfig(); err == nil {
+				t.Fatal("expected an error")
+			}
+		})
+	}
+}
+
+func TestSMTPRequireSTARTTLSSetting(t *testing.T) {
+	if cfg, err := LoadConfig(); err != nil || cfg.SMTPRequireSTARTTLS {
+		t.Fatalf("strict STARTTLS must be off by default: %v", err)
+	}
+	t.Setenv("SMTP_REQUIRE_STARTTLS", "true")
+	if cfg, err := LoadConfig(); err != nil || !cfg.SMTPRequireSTARTTLS {
+		t.Fatalf("not read: %v", err)
+	}
+	t.Setenv("SMTP_REQUIRE_STARTTLS", "sometimes")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("an unreadable value must be refused")
+	}
+}

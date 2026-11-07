@@ -289,7 +289,7 @@ func (s *Service) UpdateUser(ctx context.Context, actor, id string, p UserPatch)
 		}
 		endSessions = true
 	}
-	if wasActiveAdmin && !(u.Role == RoleAdmin && !u.Disabled) {
+	if wasActiveAdmin && (u.Role != RoleAdmin || u.Disabled) {
 		if n, err := s.store.CountActiveAdmins(ctx); err != nil {
 			return User{}, err
 		} else if n <= 1 {

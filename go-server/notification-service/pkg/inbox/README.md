@@ -9,6 +9,6 @@ What a person does with events: read, archive, snooze, acknowledge, resolve, del
 - **Delete** hides the notification; the event stays for audit and retention.
 - **Window.** Lists, counts and filters run over the newest `event.DefaultListLimit` (1000) events, in Go, so memory and Postgres behave the same.
 
-HTTP routes are in `pkg/server/inbox_handlers.go`; see `docs/milestone-15.md` for the API.
+HTTP routes are in `pkg/server/inbox_handlers.go`; see `docs/milestones/milestone-15.md` for the API.
 
 Repositories: `MemoryRepository` (no database, tests) and `PostgresRepository`.

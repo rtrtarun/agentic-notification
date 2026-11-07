@@ -40,9 +40,16 @@ type Config struct {
 	SMTPPort             int
 	SMTPUsername         string
 	SMTPPassword         string
-	SMTPSender           string
-	SlackWebhookURL      string
-	TeamsWebhookURL      string
+	// SMTPRequireSTARTTLS refuses to send mail over a connection that is not upgraded to TLS.
+	SMTPRequireSTARTTLS bool
+	// NovuAPIKey turns on Novu for email (with SMTP as the fallback when SMTP is configured). NovuAPIURL defaults
+	// to Novu's cloud and NovuWorkflowID names the workflow that renders the message.
+	NovuAPIKey      string
+	NovuAPIURL      string
+	NovuWorkflowID  string
+	SMTPSender      string
+	SlackWebhookURL string
+	TeamsWebhookURL string
 	// SMSGateway selects how texts leave the service: "" (off), "mock", "http" or "sns".
 	SMSGateway     string
 	SMSRecipients  []string
@@ -98,6 +105,17 @@ type Config struct {
 	AttentionModel string
 	// AttentionTimeout bounds one model call.
 	AttentionTimeout time.Duration
+	// AttentionAsync makes the attention step (classification, preferences, budget, delivery) run in a background
+	// worker instead of while an event is ingested. Critical events are never deferred.
+	AttentionAsync bool
+	// AttentionWorkerInterval is how often the worker polls for pending and delayed events.
+	AttentionWorkerInterval time.Duration
+	// AttentionBudgetPerHour caps standard interruptions per rolling hour for the workspace; 0 turns the budget off.
+	AttentionBudgetPerHour int
+	// LearningMinSignals is how many dismissed or never signals (with no positive one) justify a suggestion.
+	LearningMinSignals int
+	// LearningLookback is how far back feedback is read for suggestions.
+	LearningLookback time.Duration
 	// AttentionMaxCallsPerMin caps model calls per minute.
 	AttentionMaxCallsPerMin int
 	// DigestChannels lists the channels a digest is delivered to; empty means digests are only stored.
@@ -179,6 +197,19 @@ func LoadConfig() (*Config, error) {
 	cfg.DefaultNotifyEmail = os.Getenv("DEFAULT_NOTIFY_EMAIL")
 	cfg.SMTPHost = os.Getenv("SMTP_HOST")
 	cfg.SMTPUsername = os.Getenv("SMTP_USERNAME")
+	cfg.NovuAPIKey = os.Getenv("NOVU_API_KEY")
+	cfg.NovuAPIURL = strings.TrimSpace(os.Getenv("NOVU_API_URL"))
+	cfg.NovuWorkflowID = strings.TrimSpace(os.Getenv("NOVU_WORKFLOW_ID"))
+	if cfg.NovuAPIURL != "" {
+		if u, perr := url.Parse(cfg.NovuAPIURL); perr != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
+			return nil, errors.New("invalid NOVU_API_URL: use an http or https address")
+		}
+	}
+	if v := os.Getenv("SMTP_REQUIRE_STARTTLS"); v != "" {
+		if cfg.SMTPRequireSTARTTLS, err = envBool("SMTP_REQUIRE_STARTTLS"); err != nil {
+			return nil, err
+		}
+	}
 	cfg.SMTPPassword = os.Getenv("SMTP_PASSWORD")
 	cfg.SMTPSender = os.Getenv("SMTP_SENDER")
 	cfg.SlackWebhookURL = os.Getenv("SLACK_WEBHOOK_URL")
@@ -261,6 +292,23 @@ func LoadConfig() (*Config, error) {
 		return nil, errors.New("ATTENTION_PROVIDER=claude requires ANTHROPIC_API_KEY")
 	}
 	if cfg.AttentionTimeout, err = envDuration("ATTENTION_TIMEOUT", defaultAttentionTimeout, false); err != nil {
+		return nil, err
+	}
+	if v := os.Getenv("ATTENTION_ASYNC"); v != "" {
+		if cfg.AttentionAsync, err = envBool("ATTENTION_ASYNC"); err != nil {
+			return nil, err
+		}
+	}
+	if cfg.AttentionWorkerInterval, err = envDuration("ATTENTION_WORKER_INTERVAL", defaultAttentionWorkerInterval, false); err != nil {
+		return nil, err
+	}
+	if cfg.AttentionBudgetPerHour, err = envInt("ATTENTION_BUDGET_PER_HOUR", defaultAttentionBudgetPerHour, 0, 100000); err != nil {
+		return nil, err
+	}
+	if cfg.LearningMinSignals, err = envInt("LEARNING_MIN_SIGNALS", defaultLearningMinSignals, 1, 10000); err != nil {
+		return nil, err
+	}
+	if cfg.LearningLookback, err = envDuration("LEARNING_LOOKBACK", defaultLearningLookback, false); err != nil {
 		return nil, err
 	}
 	if cfg.AttentionMaxCallsPerMin, err = envInt("ATTENTION_MAX_CALLS_PER_MIN", defaultAttentionMaxCalls, 1, 100000); err != nil {
@@ -395,6 +443,10 @@ const (
 )
 
 const (
-	defaultAttentionTimeout  = 5 * time.Second
-	defaultAttentionMaxCalls = 60
+	defaultAttentionTimeout        = 5 * time.Second
+	defaultAttentionMaxCalls       = 60
+	defaultAttentionWorkerInterval = 2 * time.Second
+	defaultAttentionBudgetPerHour  = 10
+	defaultLearningMinSignals      = 5
+	defaultLearningLookback        = 30 * 24 * time.Hour
 )

@@ -22,6 +22,10 @@ export interface EventSummary {
   decisionState?: DecisionState
   threadId?: string
   mergedInto?: string
+  /** Set on the steps of an agent run (AgentPulse). */
+  traceId?: string
+  parentEventId?: string
+  agentName?: string
   createdAt: string
 }
 

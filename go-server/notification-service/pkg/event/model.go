@@ -11,18 +11,29 @@ type DecisionState struct {
 }
 
 type Event struct {
-	ID             string                 `json:"id"`
-	Source         string                 `json:"source"`
-	EventType      string                 `json:"eventType"`
-	Repository     string                 `json:"repository,omitempty"`
-	AttentionClass string                 `json:"attentionClass"`
-	DecisionState  *DecisionState         `json:"decisionState,omitempty"`
-	DedupKey       string                 `json:"dedupKey,omitempty"`
-	ThreadID       string                 `json:"threadId,omitempty"`
-	MergedInto     string                 `json:"mergedInto,omitempty"`
-	Payload        map[string]interface{} `json:"payload"`
+	ID             string         `json:"id"`
+	Source         string         `json:"source"`
+	EventType      string         `json:"eventType"`
+	Repository     string         `json:"repository,omitempty"`
+	AttentionClass string         `json:"attentionClass"`
+	DecisionState  *DecisionState `json:"decisionState,omitempty"`
+	DedupKey       string         `json:"dedupKey,omitempty"`
+	ThreadID       string         `json:"threadId,omitempty"`
+	MergedInto     string         `json:"mergedInto,omitempty"`
+	// TraceID groups the steps of one agent run; ParentEventID is the step that led to this one;
+	// AgentName says which agent produced it. All three are optional and empty for webhooks.
+	TraceID       string                 `json:"traceId,omitempty"`
+	ParentEventID string                 `json:"parentEventId,omitempty"`
+	AgentName     string                 `json:"agentName,omitempty"`
+	Payload       map[string]interface{} `json:"payload"`
 	// CreatedAt is when the event was stored. Set by the repository.
 	CreatedAt time.Time `json:"createdAt,omitempty"`
+	// AttentionPending is set by the pipeline when it saves a non-critical event that the
+	// asynchronous attention worker must still decide on. It is not part of the API.
+	AttentionPending bool `json:"-"`
+	// RouteChannels is the channel override of the rule that matched, set while the pipeline
+	// decides. It is not stored: the worker reads it again from the current rule.
+	RouteChannels []string `json:"-"`
 }
 
 const (

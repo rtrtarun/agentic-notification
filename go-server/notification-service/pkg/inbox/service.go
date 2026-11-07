@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/example/notification-service/pkg/event"
+	"github.com/example/notification-service/pkg/pagination"
 )
 
 const (
@@ -121,6 +122,29 @@ func (s *Service) List(ctx context.Context, q Query) (Page, error) {
 		}
 	}
 	sortItems(matched, q.Sort)
+	newestFirst := q.Sort == "" || q.Sort == SortNewest
+	var after *pagination.Cursor
+	if q.Cursor != "" {
+		if !newestFirst {
+			return Page{}, fmt.Errorf("%w: cursor paging needs the newest-first sort", ErrInvalid)
+		}
+		c, err := pagination.Decode(q.Cursor)
+		if err != nil {
+			return Page{}, fmt.Errorf("%w: the cursor is not valid", ErrInvalid)
+		}
+		after = &c
+		// A cursor names one position, so equal times are ordered by ID.
+		sort.SliceStable(matched, func(i, j int) bool {
+			return pagination.Newer(matched[i].CreatedAt, matched[i].ID, matched[j].CreatedAt, matched[j].ID)
+		})
+		kept := matched[:0:0]
+		for _, it := range matched {
+			if after.Before(it.CreatedAt, it.ID) {
+				kept = append(kept, it)
+			}
+		}
+		matched = kept
+	}
 
 	size := q.PageSize
 	if size < 1 {
@@ -143,6 +167,13 @@ func (s *Service) List(ctx context.Context, q Query) (Page, error) {
 	}
 	if to > len(matched) {
 		to = len(matched)
+	}
+	if after != nil {
+		n, from, to = 1, 0, min(size, len(matched))
+	}
+	if newestFirst && to < len(matched) && to > 0 {
+		last := matched[to-1]
+		page.NextCursor = pagination.Encode(pagination.Cursor{At: last.CreatedAt, ID: last.ID})
 	}
 	page.Items = matched[from:to]
 	if page.Items == nil {
@@ -215,7 +246,9 @@ func containsOutcome(os []Outcome, o Outcome) bool {
 }
 
 func sortItems(items []Item, order string) {
-	newest := func(i, j int) bool { return items[i].CreatedAt.After(items[j].CreatedAt) }
+	newest := func(i, j int) bool {
+		return pagination.Newer(items[i].CreatedAt, items[i].ID, items[j].CreatedAt, items[j].ID)
+	}
 	sort.SliceStable(items, func(i, j int) bool {
 		switch order {
 		case SortOldest:

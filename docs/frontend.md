@@ -1,14 +1,14 @@
 # Frontend: the Attention console
 
-The web app in [`apps/web`](../apps/web) is an operator console. It answers two questions for the person running the platform: **what did the system decide about each event, and why?** and **was that right?** It reads from `GET /events` and writes to `POST /feedback`.
+The web app in [`apps/web`](../apps/web) is an operator console. It answers two questions for the person running the platform: **what did the system decide about each event, and why?** and **was that right?** It reads the platform's read APIs (inbox, rules, channels, digests, traces and more) and writes feedback, rules, preferences and overrides back. A complete demo mode runs the whole console on sample data with no service.
 
-Component-level detail, design tokens, wireframes and the skills audit: [ui-architecture.md](ui-architecture.md). Architecture context: [architecture.md](architecture.md) (sections 9, 10.6, 19). Milestone record: [milestone-14.md](milestone-14.md).
+Component-level detail, design tokens, wireframes and the skills audit: [ui-architecture.md](ui-architecture.md). Architecture context: [architecture.md](architecture.md) (sections 9, 10.6, 19). Milestone record: [milestones/milestone-14.md](milestones/milestone-14.md).
 
 ## Audience and job
 
 - **Audience:** engineers on call who run the service and tune what interrupts people.
 - **Primary job:** see recent decisions at a glance, open one to see the reason, and correct it.
-- **Not the job (yet):** managing rules, preferences or digests. Those need backend work (architecture section 13).
+- **Also the job, since milestones 15 to 33:** managing rules, channels, preferences and digests, reviewing suggestions from feedback, and following AI agent runs. Newer screens are described in "Screens as of milestone 33" below; the sections after it describe the inbox core.
 
 ## Design language
 
@@ -73,6 +73,30 @@ Each row has a **coloured chip** for what kind of event it is (Security, Code, I
 ## First use and orientation
 
 A first visit shows a **welcome screen** rather than an error: one sentence on what Attention does, the three classes in plain words, and two choices, **Try the demo** and **Connect your service**. **Demo mode** uses built-in sample events (`lib/demo.ts`), sends nothing and saves nothing; a banner and the header's "Sample data" status make that clear, and "Connect your service" leaves it. The hosted build starts in demo mode (`VITE_DEFAULT_DEMO=true`). Above the list, a short key explains Critical, Standard and Background, and a line says to select an event. In the sheet, the heading is **Was this right?** and each choice has a sentence under it saying what it does.
+
+## Screens as of milestone 33
+
+Fifteen screens, all in the navigation map (`src/lib/nav.ts`), all working in demo mode. Each new screen has a typed client in `src/lib/<area>.ts` with a demo and an HTTP variant, loads through `useLoad` and `LoadGate`, and keeps every `fetch` inside `lib/api.ts`.
+
+| Screen | Route | Milestone | What it is for |
+|---|---|---|---|
+| Overview | `/overview` | 17 | What needs attention now, and a summary of decisions |
+| Inbox | `/inbox` | 15 | Notifications with state, filters, bulk actions and a detail drawer |
+| All notifications | `/all` | 16 | A sortable, filterable table with CSV export |
+| Activity | `/activity` | 17 | A feed of what the platform did |
+| Digests | `/digests` | 25 | What was held back, written by rules or a model (labelled) |
+| Traces | `/traces` | 31 | AI agent runs: timeline, retries, tokens, cost and decisions per step |
+| Rules | `/rules` | 18 | Create, order, dry-run rules; suggestions from feedback (28) |
+| Policies | `/policies` | 18 | What the rules enforce, including the locked critical rules |
+| Channels | `/channels` | 19, 22 | Where messages go, test sends, the delivery queue |
+| Integrations | `/integrations` | 19 | Sources and their status |
+| Users and access | `/users` | 23 | Accounts, roles, audit trail |
+| Analytics | `/analytics` | 17 | Charts of volume and outcomes |
+| Preferences | `/preferences` | 20, 24 | Quiet hours, mutes, always and never choices |
+| Settings | `/settings` | 14 onward | Connection, theme and language |
+| Help | `/help` | 21 | Get started, glossary, FAQ, a copyable diagnostics summary |
+
+Not yet in the console (API only): rule payload predicates and per-rule channels (milestone 30), personal preferences and "my digest" (30). Themes: Harbour, Violet, Forest, Sunset and Night. Languages: English, Spanish, French, German, Portuguese, Hindi, Arabic, Chinese and Japanese; screens added from milestone 16 on are English only.
 
 ## Screens and states
 
@@ -140,7 +164,7 @@ Visible keyboard focus (3px Signal blue ring), native `<dialog>` for settings (f
 cd apps/web
 npm install
 npm run dev        # http://localhost:3000
-npm test           # 34 unit tests (api client, language helpers, settings)
+npm test           # 230 unit tests (clients, helpers, demo data, translations)
 npm run build      # type-check and production build
 ```
 
@@ -148,7 +172,7 @@ Point it at a service with `VITE_BACKEND_URL` (default `http://localhost:8080`).
 
 ## Known limits
 
-- Only the newest 200 events load; there is no pagination or search yet.
-- Polling every 15 seconds, not push.
-- Feedback is accepted but nothing consumes it yet (architecture section 3).
+- The inbox, All notifications and `GET /events` page by cursor or page number; the Traces screen has no filters or search yet.
+- Live updates use server-sent events; the screens that poll refresh every 15 to 60 seconds as a fallback.
+- Feedback is stored, becomes overrides, and feeds the suggestions on the Rules screen (architecture section 3).
 - Component rendering is not unit-tested (no DOM test runner); behaviour is covered at the `lib/` level and was checked in a browser at desktop and mobile widths.

@@ -30,12 +30,28 @@ func (p *PostgresDigestStore) Add(ctx context.Context, d Digest) error {
 	return err
 }
 
-// List implements DigestStore.
+// List implements DigestStore: workspace digests only, newest first.
 func (p *PostgresDigestStore) List(ctx context.Context, limit int) ([]Digest, error) {
-	if limit <= 0 {
-		limit = 100
+	return p.query(ctx, `SELECT body FROM digests WHERE COALESCE(body->>'userId','') = '' ORDER BY created_at DESC LIMIT $1`, normaliseLimit(limit))
+}
+
+// ListFor implements DigestStore.
+func (p *PostgresDigestStore) ListFor(ctx context.Context, userID string, limit int) ([]Digest, error) {
+	if userID == "" {
+		return nil, errors.New("a person is required")
 	}
-	rows, err := p.db.QueryContext(ctx, `SELECT body FROM digests ORDER BY created_at DESC LIMIT $1`, limit)
+	return p.query(ctx, `SELECT body FROM digests WHERE body->>'userId' = $2 ORDER BY created_at DESC LIMIT $1`, normaliseLimit(limit), userID)
+}
+
+func normaliseLimit(limit int) int {
+	if limit <= 0 {
+		return 100
+	}
+	return limit
+}
+
+func (p *PostgresDigestStore) query(ctx context.Context, q string, args ...any) ([]Digest, error) {
+	rows, err := p.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
 	}

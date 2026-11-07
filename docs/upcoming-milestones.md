@@ -1,10 +1,12 @@
 # Upcoming milestones
 
+> **Historical.** This was the first proposal for milestones 27 onward. Milestones 27 to 33 were built as `PROMPT_SPEC.md` defined them (they differ from the list below); see [implementation-sync.md](implementation-sync.md) for what was built and what is still open.
+
 Planned work after milestone 26, taken from the "known limits" of milestones 22 to 26 and from the original plan. Each is a proposal: per [AGENTS.md](../AGENTS.md), a milestone gets a full plan (goals, decisions, database, APIs, folders, risks, tests, acceptance) and an approval before any code is written, and the work stops after each one.
 
 ## Milestone 27: Verify against real services
 **Why:** Every adapter so far is tested against fakes. Real behaviour is unproven.
-- Run the Ollama and Claude adapters against live endpoints; record fallback rate and latency in `milestone-27.md`.
+- Run the Ollama and Claude adapters against live endpoints; record fallback rate and latency in `milestones/milestone-27.md`.
 - Run the PostgreSQL stores (digests, feedback, overrides, delivery jobs) against a real database in CI via Docker Compose.
 - Run SNS and Entra ID sign-in once end to end.
 - Acceptance: a CI job that starts Compose and passes integration tests; a written results table.
