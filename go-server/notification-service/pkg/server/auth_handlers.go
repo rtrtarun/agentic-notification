@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/notification-service/pkg/auth"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/auth"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 const (

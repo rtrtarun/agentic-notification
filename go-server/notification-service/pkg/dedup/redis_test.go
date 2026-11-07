@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // fakeStore is an in-memory KeyStore that can be told to fail.

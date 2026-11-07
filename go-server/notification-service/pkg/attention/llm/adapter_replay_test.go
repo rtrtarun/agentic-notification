@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/attention"
-	"github.com/example/notification-service/pkg/attention/llm"
-	"github.com/example/notification-service/pkg/claude"
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/ollama"
+	"github.com/agentpulse/notification-service/pkg/attention"
+	"github.com/agentpulse/notification-service/pkg/attention/llm"
+	"github.com/agentpulse/notification-service/pkg/claude"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/ollama"
 )
 
 // These tests send real traffic through the real Ollama and Claude clients to a

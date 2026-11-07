@@ -7,12 +7,12 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/example/notification-service/pkg/agentevents"
-	"github.com/example/notification-service/pkg/attention"
-	"github.com/example/notification-service/pkg/mcp"
-	"github.com/example/notification-service/pkg/notification"
-	"github.com/example/notification-service/pkg/pipeline"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/agentevents"
+	"github.com/agentpulse/notification-service/pkg/attention"
+	"github.com/agentpulse/notification-service/pkg/mcp"
+	"github.com/agentpulse/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/pipeline"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 const mcpPath = "/api/mcp"

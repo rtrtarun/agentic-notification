@@ -11,7 +11,7 @@ Not here yet (Go only): `/notify`, metrics, rules and policies API, inbox, chann
 
 ## Layout
 ```
-com.example.notification
+com.agentpulse.notification
   domain/           Event, Rule, DecisionState (no I/O)
   application/      Pipeline, PolicyEngine, Dedup, RulesLoader, GitHubNormalizer, Ports (interfaces)
   infrastructure/   PostgresEventRepository, Database, Providers (SMTP, Slack), Config
@@ -37,4 +37,4 @@ docker run --rm -v "$(pwd):/app" -v m2cache:/root/.m2 -w /app/java-server/notifi
   maven:3.9-eclipse-temurin-17 mvn clean verify
 ```
 
-Set `TEST_DATABASE_URL` (a PostgreSQL the Go migrations have run on: `go run ./cmd/migrate` in the Go module) to include the database test. The build fails below 80 percent line coverage. The shared HTTP contract in [docs/contract](../../docs/contract/README.md) runs as part of the suite.
+Set `TEST_DATABASE_URL` (a PostgreSQL the Go migrations have run on: `go run ./cmd/migrate` in the Go module) to include the database test. **The 80 percent line-coverage gate assumes that test runs** (CI always provides PostgreSQL); without it the 3 database tests are skipped and `mvn verify` fails the gate, while `mvn test` still passes. The shared HTTP contract in [docs/contract](../../docs/contract/README.md) runs as part of the suite.

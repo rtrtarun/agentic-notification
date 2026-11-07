@@ -16,7 +16,7 @@ import (
 	"time"
 	_ "time/tzdata" // embed the zone database so quiet hours work in minimal containers
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // ErrInvalid is returned for preferences that cannot be stored. The message is safe to show.

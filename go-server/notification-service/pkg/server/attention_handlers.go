@@ -7,14 +7,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/example/notification-service/pkg/attention"
-	"github.com/example/notification-service/pkg/attention/llm"
-	"github.com/example/notification-service/pkg/claude"
-	"github.com/example/notification-service/pkg/config"
-	"github.com/example/notification-service/pkg/delivery"
-	"github.com/example/notification-service/pkg/feedback"
-	"github.com/example/notification-service/pkg/ollama"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/attention"
+	"github.com/agentpulse/notification-service/pkg/attention/llm"
+	"github.com/agentpulse/notification-service/pkg/claude"
+	"github.com/agentpulse/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/delivery"
+	"github.com/agentpulse/notification-service/pkg/feedback"
+	"github.com/agentpulse/notification-service/pkg/ollama"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 const (

@@ -18,8 +18,8 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/policy"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/policy"
 )
 
 // Errors the HTTP layer maps to status codes.

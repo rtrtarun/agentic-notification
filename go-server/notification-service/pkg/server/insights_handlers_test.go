@@ -5,7 +5,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/example/notification-service/pkg/insights"
+	"github.com/agentpulse/notification-service/pkg/insights"
 )
 
 func newInsightsServer(t *testing.T) *Server {

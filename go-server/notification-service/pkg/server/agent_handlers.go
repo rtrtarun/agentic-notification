@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/example/notification-service/pkg/agentevents"
-	"github.com/example/notification-service/pkg/pipeline"
-	"github.com/example/notification-service/pkg/traces"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/agentevents"
+	"github.com/agentpulse/notification-service/pkg/pipeline"
+	"github.com/agentpulse/notification-service/pkg/traces"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 const (

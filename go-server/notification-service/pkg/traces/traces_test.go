@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 var base = time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)

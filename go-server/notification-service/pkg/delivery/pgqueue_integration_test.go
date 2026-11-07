@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/db"
+	"github.com/agentpulse/notification-service/pkg/db"
 )
 
 // TestPostgresStoreContract runs the same checks as the memory store against a real database.

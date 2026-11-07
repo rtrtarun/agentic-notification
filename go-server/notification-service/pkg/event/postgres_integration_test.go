@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/db"
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/db"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // These tests run against a real PostgreSQL. Start one and point TEST_DATABASE_URL at it:

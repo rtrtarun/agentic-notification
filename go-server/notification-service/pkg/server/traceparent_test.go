@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/notification-service/pkg/telemetry"
+	"github.com/agentpulse/notification-service/pkg/telemetry"
 )
 
 func TestEveryResponseCarriesATraceparentThatContinuesTheCallersTrace(t *testing.T) {

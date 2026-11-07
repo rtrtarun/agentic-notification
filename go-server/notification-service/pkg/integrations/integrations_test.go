@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/integrations"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/integrations"
 )
 
 func TestStatusFollowsTheWebhookAuthRules(t *testing.T) {

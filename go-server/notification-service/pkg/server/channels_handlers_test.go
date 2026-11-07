@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/channels"
-	"github.com/example/notification-service/pkg/integrations"
-	"github.com/example/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/channels"
+	"github.com/agentpulse/notification-service/pkg/integrations"
+	"github.com/agentpulse/notification-service/pkg/notification"
 )
 
 type captureSender struct {

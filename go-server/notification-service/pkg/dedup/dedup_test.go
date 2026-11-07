@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // check runs Check with a background context and fails the test on error.

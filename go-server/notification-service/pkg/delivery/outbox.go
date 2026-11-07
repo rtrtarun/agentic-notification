@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/notification"
 )
 
 // Targets are where each channel delivers. A channel with no targets is not

@@ -5,7 +5,7 @@ package attention
 import (
 	"testing"
 
-	"github.com/example/notification-service/pkg/db/dbtest"
+	"github.com/agentpulse/notification-service/pkg/db/dbtest"
 )
 
 // TestPostgresDigestStoreContract runs the same checks as the memory store against a real database.

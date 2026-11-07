@@ -1,4 +1,4 @@
-module github.com/example/notification-service
+module github.com/agentpulse/notification-service
 
 go 1.21
 

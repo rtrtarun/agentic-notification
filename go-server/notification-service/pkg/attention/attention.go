@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // ModelHeuristic names the built-in classifier in an event's decision.

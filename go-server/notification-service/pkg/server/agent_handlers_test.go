@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/config"
 )
 
 const retryRule = `{

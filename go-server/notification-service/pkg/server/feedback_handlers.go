@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/feedback"
-	"github.com/example/notification-service/pkg/overrides"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/feedback"
+	"github.com/agentpulse/notification-service/pkg/overrides"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 const overridesPrefix = "/api/overrides"

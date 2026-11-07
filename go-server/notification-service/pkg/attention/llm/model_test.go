@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/attention"
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/attention"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // fake is a scripted Completer that records what it was sent.

@@ -8,11 +8,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/example/notification-service/pkg/config"
-	"github.com/example/notification-service/pkg/delivery"
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/pipeline"
-	"github.com/example/notification-service/pkg/policy"
+	"github.com/agentpulse/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/delivery"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/pipeline"
+	"github.com/agentpulse/notification-service/pkg/policy"
 )
 
 func TestNormalizeGitHubEvent(t *testing.T) {

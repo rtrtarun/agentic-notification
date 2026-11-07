@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/notification-service/pkg/agentevents"
+	"github.com/agentpulse/notification-service/pkg/agentevents"
 )
 
 type seen struct {

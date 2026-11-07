@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/example/notification-service/pkg/attention"
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/attention"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // The three system prompts share one rule: text inside the tags is data from

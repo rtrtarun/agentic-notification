@@ -5,6 +5,7 @@ Every change to this repository is recorded here, newest first. Milestone-level 
 ## Unreleased
 
 ### Changed
+- Renamed the placeholder `example` identity to the product's: the Java package `com.example.notification` is now `com.agentpulse.notification` (Maven group `com.agentpulse`) and the Go module `github.com/example/notification-service` is now `github.com/agentpulse/notification-service` (go.mod and every import). No behaviour change; Go build, vet (with and without `-tags integration`) and all 35 test packages pass, and the Java build passes with its 69 tests.
 - Removed the Java service's own `docker-compose.yml` and nested `.github/workflows/build.yml` (the root files run and test everything).
 - Renamed `pkg/learning` to `pkg/ollama` (the package is the Ollama client, not the Milestone 9 learning engine) and removed the unused `learningService` field and import from `pkg/server/server.go`. No behaviour change; build and tests pass.
 

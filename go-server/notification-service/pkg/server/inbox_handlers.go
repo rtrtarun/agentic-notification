@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/notification-service/pkg/inbox"
-	"github.com/example/notification-service/pkg/stream"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/inbox"
+	"github.com/agentpulse/notification-service/pkg/stream"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 const inboxPrefix = "/api/notifications"

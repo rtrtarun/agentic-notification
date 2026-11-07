@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/notification-service/pkg/delivery"
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/overrides"
-	"github.com/example/notification-service/pkg/preferences"
+	"github.com/agentpulse/notification-service/pkg/delivery"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/overrides"
+	"github.com/agentpulse/notification-service/pkg/preferences"
 )
 
 func overridePipeline(t *testing.T) (*Pipeline, *overrides.Service, *delivery.MemoryStore, *recordingProvider) {

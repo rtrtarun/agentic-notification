@@ -8,9 +8,9 @@ import (
 	"net/smtp"
 	"strings"
 
-	"github.com/example/notification-service/pkg/config"
-	mailer "github.com/example/notification-service/pkg/mail"
-	"github.com/example/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/config"
+	mailer "github.com/agentpulse/notification-service/pkg/mail"
+	"github.com/agentpulse/notification-service/pkg/notification"
 )
 
 // SMTPProvider delivers email through an SMTP server.

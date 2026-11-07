@@ -8,17 +8,17 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/notification-service/pkg/attention"
-	"github.com/example/notification-service/pkg/budget"
-	"github.com/example/notification-service/pkg/dedup"
-	"github.com/example/notification-service/pkg/delivery"
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/notification"
-	"github.com/example/notification-service/pkg/overrides"
-	"github.com/example/notification-service/pkg/policy"
-	"github.com/example/notification-service/pkg/preferences"
-	"github.com/example/notification-service/pkg/stream"
-	"github.com/example/notification-service/pkg/telemetry"
+	"github.com/agentpulse/notification-service/pkg/attention"
+	"github.com/agentpulse/notification-service/pkg/budget"
+	"github.com/agentpulse/notification-service/pkg/dedup"
+	"github.com/agentpulse/notification-service/pkg/delivery"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/overrides"
+	"github.com/agentpulse/notification-service/pkg/policy"
+	"github.com/agentpulse/notification-service/pkg/preferences"
+	"github.com/agentpulse/notification-service/pkg/stream"
+	"github.com/agentpulse/notification-service/pkg/telemetry"
 )
 
 // ErrDuplicateDelivery means an event with the same ID was already processed,

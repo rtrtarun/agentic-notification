@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/notification-service/pkg/config"
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/inbox"
+	"github.com/agentpulse/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/inbox"
 )
 
 func newInboxServer(t *testing.T) *Server {

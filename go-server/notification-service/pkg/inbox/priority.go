@@ -1,6 +1,6 @@
 package inbox
 
-import "github.com/example/notification-service/pkg/event"
+import "github.com/agentpulse/notification-service/pkg/event"
 
 // LevelOf maps the stored attention class to the four levels people see.
 //

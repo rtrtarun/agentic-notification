@@ -9,7 +9,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/example/notification-service/pkg/db"
+	"github.com/agentpulse/notification-service/pkg/db"
 )
 
 const timeout = 60 * time.Second

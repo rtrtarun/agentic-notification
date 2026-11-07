@@ -5,7 +5,7 @@ package preferences
 import (
 	"testing"
 
-	"github.com/example/notification-service/pkg/db/dbtest"
+	"github.com/agentpulse/notification-service/pkg/db/dbtest"
 )
 
 // TestPostgresPersonalStoreContract runs the contract against a real database.

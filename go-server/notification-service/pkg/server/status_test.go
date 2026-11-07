@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/notification-service/pkg/config"
-	"github.com/example/notification-service/pkg/metrics"
+	"github.com/agentpulse/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/metrics"
 )
 
 // Logs and metrics must report the real status, not a hardcoded 200.

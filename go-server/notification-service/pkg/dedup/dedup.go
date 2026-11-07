@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // DefaultWindow is how long an identical event is treated as a duplicate.

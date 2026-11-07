@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/example/notification-service/pkg/config"
-	"github.com/example/notification-service/pkg/delivery"
-	"github.com/example/notification-service/pkg/sms"
+	"github.com/agentpulse/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/delivery"
+	"github.com/agentpulse/notification-service/pkg/sms"
 )
 
 // buildSMSGateway chooses the SMS gateway from configuration. It returns nil

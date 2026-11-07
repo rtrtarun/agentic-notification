@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/example/notification-service/pkg/policy"
-	"github.com/example/notification-service/pkg/rules"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/policy"
+	"github.com/agentpulse/notification-service/pkg/rules"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 const rulesPrefix = "/api/rules"

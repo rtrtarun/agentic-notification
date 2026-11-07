@@ -34,6 +34,8 @@ Not in Java yet: `/notify`, `/metrics`, rules and policies APIs, inbox, channels
 - `docker-compose.yml`: Java build context fixed; Postgres health check; Go and Java wait for it; `sslmode=disable` on both database URLs (the Go driver otherwise demands TLS, which the Compose Postgres does not have, so the Go service could not start against the database).
 - `.github/workflows/ci.yml`: the `java-service` job starts PostgreSQL, runs the Go migration and the full `mvn verify`.
 
+**Naming (owner decision after review).** The placeholder `example` identity was replaced in both services: Java package `com.agentpulse.notification` (Maven group `com.agentpulse`) and Go module `github.com/agentpulse/notification-service`. Mechanical only; both suites were re-run afterwards.
+
 ## 6. Risks
 - **Behaviour drift.** Mitigated by the contract, but the contract covers only what is written in it. It grows with every parity milestone.
 - **Rules features not in Java yet** (`payloadMatch`, `channels`): a shared `rules.yaml` that uses them fails to load in Java. Deliberate; documented above.
@@ -74,5 +76,5 @@ docker run --rm -v "$(pwd):/app" -v m2cache:/root/.m2 \
 ## 9. Review checklist
 - [ ] `java-service` CI job is green on GitHub (not yet seen).
 - [ ] Java `rules.yaml` limits (no `payloadMatch` or `channels` yet) are acceptable for milestone 34.
-- [ ] Keep `com.example` as the Java package name, or rename (mechanical).
+- [x] Package renamed from `com.example.notification` to `com.agentpulse.notification` (decided by the project owner).
 - [ ] Next milestone: which Go features first (suggested: `/notify`, rules and policies API, then durable delivery and Redis dedup).

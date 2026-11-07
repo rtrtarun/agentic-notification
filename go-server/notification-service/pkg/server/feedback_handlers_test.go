@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/notification-service/pkg/config"
-	"github.com/example/notification-service/pkg/feedback"
+	"github.com/agentpulse/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/feedback"
 )
 
 const securityPayload = `{"action":"published","repository":{"full_name":"acme/web"}}`

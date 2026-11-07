@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/notification-service/pkg/config"
-	"github.com/example/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/notification"
 )
 
 func TestSMTPProviderRejectsUnconfiguredState(t *testing.T) {

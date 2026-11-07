@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/channels"
-	"github.com/example/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/channels"
+	"github.com/agentpulse/notification-service/pkg/notification"
 )
 
 const slackURL = "https://hooks.slack.com/services/T000/B000/SECRETSECRET"

@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/example/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/config"
 )
 
 func TestHealthHandlerReturnsStructuredStatus(t *testing.T) {

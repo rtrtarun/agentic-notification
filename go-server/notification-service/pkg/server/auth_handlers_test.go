@@ -16,8 +16,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/auth"
-	"github.com/example/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/auth"
+	"github.com/agentpulse/notification-service/pkg/config"
 )
 
 const (

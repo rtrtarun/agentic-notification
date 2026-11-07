@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/notification-service/pkg/auth"
-	"github.com/example/notification-service/pkg/config"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/auth"
+	"github.com/agentpulse/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 // statusRecorder remembers the first status code written. A handler that writes

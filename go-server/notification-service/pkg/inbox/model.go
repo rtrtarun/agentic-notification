@@ -7,7 +7,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // Level is the priority shown to people. Four levels are a display layer over

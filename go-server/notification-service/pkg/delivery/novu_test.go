@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/example/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/notification"
 )
 
 type triggerLog struct {

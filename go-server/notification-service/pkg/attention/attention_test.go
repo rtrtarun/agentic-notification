@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 var ctx = context.Background()

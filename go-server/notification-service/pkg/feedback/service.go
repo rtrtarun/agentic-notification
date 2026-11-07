@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/overrides"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/overrides"
 )
 
 // Overrides is the part of pkg/overrides the service needs.

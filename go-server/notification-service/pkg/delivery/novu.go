@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/notification"
 )
 
 const (

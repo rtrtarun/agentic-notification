@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/example/notification-service/pkg/attention"
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/attention"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // Completer sends one prompt to a language model and returns its text.

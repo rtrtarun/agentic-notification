@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/inbox"
-	"github.com/example/notification-service/pkg/insights"
+	"github.com/agentpulse/notification-service/pkg/inbox"
+	"github.com/agentpulse/notification-service/pkg/insights"
 )
 
 var now = time.Date(2026, 6, 10, 12, 0, 0, 0, time.UTC)

@@ -1,7 +1,7 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
-    <groupId>com.example</groupId>
+    <groupId>com.agentpulse</groupId>
     <artifactId>notification-service</artifactId>
     <version>0.2.0</version>
     <packaging>jar</packaging>
@@ -83,7 +83,7 @@
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                             <transformers>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                                    <mainClass>com.example.notification.Main</mainClass>
+                                    <mainClass>com.agentpulse.notification.Main</mainClass>
                                 </transformer>
                                 <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                             </transformers>
@@ -117,7 +117,7 @@
                         <phase>verify</phase>
                         <goals><goal>report</goal></goals>
                         <configuration>
-                            <excludes><exclude>com/example/notification/Main.class</exclude></excludes>
+                            <excludes><exclude>com/agentpulse/notification/Main.class</exclude></excludes>
                         </configuration>
                     </execution>
                     <execution>
@@ -125,7 +125,7 @@
                         <phase>verify</phase>
                         <goals><goal>check</goal></goals>
                         <configuration>
-                            <excludes><exclude>com/example/notification/Main.class</exclude></excludes>
+                            <excludes><exclude>com/agentpulse/notification/Main.class</exclude></excludes>
                             <rules>
                                 <rule>
                                     <element>BUNDLE</element>

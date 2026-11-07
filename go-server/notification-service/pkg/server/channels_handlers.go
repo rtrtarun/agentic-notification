@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/notification-service/pkg/channels"
-	"github.com/example/notification-service/pkg/integrations"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/channels"
+	"github.com/agentpulse/notification-service/pkg/integrations"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 const (
