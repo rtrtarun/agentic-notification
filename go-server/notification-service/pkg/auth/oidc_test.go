@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"math/big"
 	"net/http"
 	"net/http/httptest"
@@ -228,18 +229,18 @@ func TestCompleteRejectsBadStateAndExpiredTransactions(t *testing.T) {
 	f.claims = map[string]any{"nonce": tx.Nonce}
 	ctx := context.Background()
 
-	if _, err := o.Complete(ctx, tx, "other-state", "code"); err != ErrOIDCState {
+	if _, err := o.Complete(ctx, tx, "other-state", "code"); !errors.Is(err, ErrOIDCState) {
 		t.Fatalf("wrong state = %v", err)
 	}
-	if _, err := o.Complete(ctx, tx, tx.State, ""); err != ErrOIDCState {
+	if _, err := o.Complete(ctx, tx, tx.State, ""); !errors.Is(err, ErrOIDCState) {
 		t.Fatalf("no code = %v", err)
 	}
-	if _, err := o.Complete(ctx, Transaction{}, "", "code"); err != ErrOIDCState {
+	if _, err := o.Complete(ctx, Transaction{}, "", "code"); !errors.Is(err, ErrOIDCState) {
 		t.Fatalf("empty transaction = %v", err)
 	}
 	old := tx
 	old.Expires = time.Now().Add(-time.Minute).Unix()
-	if _, err := o.Complete(ctx, old, tx.State, "code"); err != ErrOIDCState {
+	if _, err := o.Complete(ctx, old, tx.State, "code"); !errors.Is(err, ErrOIDCState) {
 		t.Fatalf("expired = %v", err)
 	}
 	f.tokenCode = http.StatusBadRequest

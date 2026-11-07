@@ -46,7 +46,7 @@ func Open(t testing.TB) *sql.DB {
 func Clear(t testing.TB, conn *sql.DB, tables ...string) {
 	t.Helper()
 	for _, table := range tables {
-		if _, err := conn.ExecContext(context.Background(), `DELETE FROM `+table); err != nil {
+		if _, err := conn.ExecContext(context.Background(), `DELETE FROM `+table); err != nil { //nolint:gosec // table names come from test code, never from input
 			t.Fatalf("clear %s: %v", table, err)
 		}
 	}
