@@ -168,7 +168,7 @@ One concrete path through "Order of work". Dashboard labels change; match by mea
 |---|---|
 | `PORT` | `8080` |
 | `API_KEY`, `GITHUB_WEBHOOK_SECRET` | the two secrets |
-| `DATABASE_URL` | the Neon string |
+| `DATABASE_URL` | the Neon **direct** string (host without `-pooler`) with `?sslmode=require&binary_parameters=yes` (see the Neon note below) |
 | `CORS_ALLOWED_ORIGINS` | `https://rtrtarun.github.io` |
 | `AUTH_BOOTSTRAP_EMAIL`, `AUTH_BOOTSTRAP_PASSWORD` | creates the first admin once |
 | `SLACK_WEBHOOK_URL`, `NOTIFY_STANDARD_CHANNELS=slack` | recommended, so alerts have somewhere to go |
@@ -177,6 +177,8 @@ One concrete path through "Order of work". Dashboard labels change; match by mea
 4. **Check:** `/health` returns 200; `/events` without a key returns 401 and with `X-API-Key` returns 200; `/api/attention/status` shows the provider.
 5. **Console:** add the repository variable `BACKEND_URL` (the Render address) and re-run "Deploy console to GitHub Pages"; choose Connect your service and enter the key, or sign in with the bootstrap account.
 6. **Webhook:** in the monitored repository add `https://<service>/webhooks/github`, `application/json`, the same secret. The ping shows 202; Redeliver answers 200 `duplicate`.
+
+**Neon note (found deploying 2026-11-07).** With a `-pooler` host the service logged `bind message has 15 result formats but query has 18 columns` (the delivery dispatcher) and `bind message supplies 1 parameters, but prepared statement "" requires 3` (the retention purge) every few seconds. Neon's pooler is PgBouncer in transaction mode: the Go driver's two-step queries from two background workers (the dispatcher's 15-column job query and the attention worker's 18-column event query) landed on one backend connection and clashed. The fix that worked: the direct host and `binary_parameters=yes` on `DATABASE_URL`; after the redeploy the start-up log was clean. Not tested: the direct host alone, or `binary_parameters=yes` alone. The service also takes a lock while migrating, which a pooler can break.
 
 If Slack is not configured a critical delivery can fail and answer 500; that is the designed behaviour (the sender retries). The ingestion endpoints have no rate limiting yet (finding F1 in [implementation-sync.md](implementation-sync.md)), so keep `API_KEY` private. Fly.io, Railway or a VM with Docker take the same image and variables.
 
