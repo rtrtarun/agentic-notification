@@ -81,7 +81,7 @@ func TestMigrateCreatesEveryStoreTableAndItsLookupIndexes(t *testing.T) {
 		t.Fatalf("migrate: %v", err)
 	}
 	all := strings.Join(exec.statements, "\n")
-	for _, table := range []string{"delivery_jobs", "users", "user_identities", "sessions", "audit_log", "feedback", "overrides", "digests", "learning_suggestions"} {
+	for _, table := range []string{"delivery_jobs", "users", "user_identities", "sessions", "audit_log", "feedback", "overrides", "digests", "learning_suggestions", "user_preferences"} {
 		if !strings.Contains(all, "CREATE TABLE IF NOT EXISTS "+table+" (") {
 			t.Errorf("migration does not create table %s", table)
 		}

@@ -1,6 +1,6 @@
-# Milestone 30: Strict rules, payload predicates and per-rule channels (part 1 of 2)
+# Milestone 30: Strict rules, payload predicates, per-rule channels and per-person digests
 
-**Status: part 1 is done. Part 2 (per-person preferences, overrides and digests) is not started and is waiting on a design decision; see "Not done" below.**
+**Status: both parts are done, with part 2 built as the proposal below (approved by the project owner with "sure do everything"). Per-person email delivery and per-person schedules are deliberately not included.**
 
 ## Goals
 - A misspelt key in a rules file must fail at load time instead of quietly widening a rule.
@@ -40,17 +40,21 @@ None. Rules are stored as JSON, so the new fields travel in the rule body.
 - [x] `RuleCondition.PayloadMatch` with exact and numeric predicates on payload and `metadata.*` fields.
 - [x] Per-rule `channels` override that cannot apply to critical rules.
 - [x] `gofmt`, `go vet`, `go test ./...` pass locally.
-- [ ] **Per-person preferences, overrides and digests: not done.**
+- [x] Per-person preferences and digests (built as filtered views; no per-person delivery or schedule).
 
-## Not done (and why)
-Part 2 asked for preferences, overrides and digests scoped to `user_id`, with per-person digests on a schedule or on request. It was not started because it rests on a decision the spec does not make:
+## Part 2: per-person preferences and digests
 
-- **Events have no recipient.** Every event, rule, override and delivery target is workspace-wide. "A person's digest" needs a definition: is it the workspace digest filtered by that person's own mutes and overrides? Or events addressed to them? The answer changes the data model.
-- **Delivery targets are configuration, not users.** Jobs deliberately store no address. Sending a digest to a person means resolving their email at send time, which is a change to the delivery design and to the rule that no target reaches the database.
-- **Scheduling per person** needs each person's time zone and quiet hours.
+Events, rules and delivery targets are workspace-wide and jobs store no address, so "a person's digest" needed a definition. The model built:
 
-A proposal for the design side: (1) per-user preferences stored by `user_id` with workspace fallback; (2) a per-person digest is the workspace digest filtered by that person's mutes and "never" choices, stored and readable in the app, generated on request first and on a schedule later; (3) per-person email delivery is a separate milestone that adds recipient resolution to delivery. This is recorded as an open question in `docs/implementation-sync.md`.
+- **Per-user preferences with a workspace fallback.** Table `user_preferences` (user ID, JSON body). `GET /api/me/preferences` returns the person's own, or the workspace's flagged `personal:false`; `PUT` saves their own after the same validation as the workspace's. They shape only that person's digest; the pipeline and everyone else are unaffected.
+- **A personal digest is the workspace digest filtered for that person.** `POST /api/digests/generate?scope=me` (any signed-in person) covers what was held since *that person's* previous digest, minus events matched by their muted sources and repositories and by the "never notify" choices they made themselves (`overrides.NeverFor`, which only looks at their own choices). `GET /api/digests?scope=me` lists their own. Digests carry `userId`; the workspace list never includes personal ones, and the workspace digest is unchanged, still admin only and still delivered.
+- **Not delivered.** A personal digest is stored and readable in the app only; a message to one person would need their address resolved at send time, which is a separate change to delivery.
+- **On request only for now.** There is no per-person schedule: each person would need their own time zone and quiet-hours handling in a scheduler.
+- **Critical events are never in a digest** (held events exclude them), so a personal filter cannot hide one, and a mute never applies to one (`Preferences.Muted` returns false for critical). A service holding only the API key is not a person: personal views answer 400 and say to sign in.
+- Budgets keep the `workspace` scope; the `attention:budget:<scope>` key is ready for `user:<id>` when per-person delivery exists.
+
+Database: new table `user_preferences`. Stores: `DigestStore.ListFor`, `preferences.PersonalStore`, each with a contract test on memory and PostgreSQL. Tests: personal preferences fall back and never leak to others, validation, a digest omits what a person does not want, windows are independent per person and for the workspace, personal digests are not delivered, one person's "never" does not change another's digest, a critical event is never hidden or included, and the access and validation table.
 
 ## Known limits
-- The Rules screen in the console does not yet have fields for predicates or channels; they can be set through the API and the YAML file, and they show in the rule JSON.
+- The console has no screens yet for predicates, channels, personal preferences or "my digest"; they are API-only. The Rules screen does not yet have fields for predicates or channels; they can be set through the API and the YAML file, and they show in the rule JSON.
 - Predicates read the stored payload as received, so agent telemetry gets first-class fields only in Milestone 31.

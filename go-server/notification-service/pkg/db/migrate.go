@@ -129,6 +129,12 @@ func Migrate(ctx context.Context, db Execer) error {
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 		// Editable policy rules, kept in evaluation order. See pkg/rules.
+		// Per-person preferences, keyed by user ID; a person with no row uses the workspace row above.
+		`CREATE TABLE IF NOT EXISTS user_preferences (
+			user_id    TEXT PRIMARY KEY,
+			body       JSONB NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
 		`CREATE TABLE IF NOT EXISTS policy_rules (
 			position INT  NOT NULL,
 			id       TEXT PRIMARY KEY,

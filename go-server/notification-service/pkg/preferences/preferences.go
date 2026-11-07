@@ -210,10 +210,11 @@ type Store interface {
 // Service reads and updates preferences. The pipeline reads them on every
 // event, so the current value is cached and replaced atomically on update.
 type Service struct {
-	store Store
-	now   func() time.Time
-	mu    sync.RWMutex
-	cur   Preferences
+	store    Store
+	personal PersonalStore
+	now      func() time.Time
+	mu       sync.RWMutex
+	cur      Preferences
 }
 
 // NewService loads the stored preferences, or the defaults when there are none.

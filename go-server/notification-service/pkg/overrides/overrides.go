@@ -276,3 +276,20 @@ func (m *MemoryStore) Delete(_ context.Context, id string) error {
 // scopeSep separates the parts of a scope key. It must be valid text: PostgreSQL
 // rejects a NUL byte, which an earlier version used, so no override could be saved there.
 const scopeSep = "\x1f"
+
+// NeverFor reports whether a particular person asked never to be notified about a
+// non-critical event. It looks only at "never" choices that person made, so one
+// person's choice never changes another's digest. A critical event is never covered.
+func (s *Service) NeverFor(createdBy string, evt event.Event) bool {
+	if evt.AttentionClass == event.AttentionCritical || createdBy == "" {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	for _, o := range s.list {
+		if o.CreatedBy == createdBy && o.Mode == ModeNever && matches(o, evt) {
+			return true
+		}
+	}
+	return false
+}

@@ -165,6 +165,9 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 		WithDailyCap(delivery.ChannelSMS, cfg.SMSDailyLimit)
 	s.channelTester = channels.NewTester(deliverySvc, s.channelSettings(), channelTestGap)
 	prefService, err := preferences.NewService(ctx, s.initPreferencesStore())
+	if prefService != nil {
+		prefService.WithPersonal(s.initPersonalPreferencesStore())
+	}
 	if err != nil {
 		s.releaseOnStartupFailure()
 		return nil, fmt.Errorf("init preferences: %w", err)
@@ -398,4 +401,11 @@ func loadPolicyRules(cfg *config.Config, logger *slog.Logger) ([]policy.Rule, er
 	rules := policy.DefaultRules()
 	logger.Info("using built-in default policy rules", "count", len(rules))
 	return rules, nil
+}
+
+func (s *Server) initPersonalPreferencesStore() preferences.PersonalStore {
+	if s.sqlDB == nil {
+		return preferences.NewMemoryPersonalStore()
+	}
+	return preferences.NewPostgresPersonalStore(s.sqlDB)
 }

@@ -60,6 +60,43 @@ func digestStoreContract(t *testing.T, s DigestStore) {
 			t.Fatalf("limit = %+v", one)
 		}
 	})
+
+	t.Run("personal digests are kept apart from the workspace's", func(t *testing.T) {
+		for i, id := range []string{"a1", "a2"} {
+			at := contractNow.Add(time.Duration(10+i) * time.Hour)
+			if err := s.Add(ctx, Digest{ID: id, UserID: "alice", From: at.Add(-time.Hour), To: at, Count: 1, Title: "mine " + id, CreatedBy: "alice@corp.com", CreatedAt: at}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := s.Add(ctx, Digest{ID: "b1", UserID: "bob", To: contractNow, Title: "his", CreatedAt: contractNow.Add(20 * time.Hour)}); err != nil {
+			t.Fatal(err)
+		}
+		work, _ := s.List(ctx, 50)
+		for _, d := range work {
+			if d.UserID != "" {
+				t.Fatalf("the workspace list must not include a personal digest: %+v", d)
+			}
+		}
+		if len(work) != 3 {
+			t.Fatalf("workspace digests = %d, want 3", len(work))
+		}
+		mine, err := s.ListFor(ctx, "alice", 50)
+		if err != nil || len(mine) != 2 || mine[0].ID != "a2" || mine[1].ID != "a1" || mine[0].UserID != "alice" {
+			t.Fatalf("alice's digests = %+v %v", mine, err)
+		}
+		if one, _ := s.ListFor(ctx, "alice", 1); len(one) != 1 || one[0].ID != "a2" {
+			t.Fatalf("limit = %+v", one)
+		}
+		if none, _ := s.ListFor(ctx, "carol", 50); len(none) != 0 {
+			t.Fatalf("carol has none: %+v", none)
+		}
+		if _, err := s.ListFor(ctx, "", 5); err == nil {
+			t.Fatal("a person is required")
+		}
+		if got, err := s.Get(ctx, "b1"); err != nil || got.UserID != "bob" {
+			t.Fatalf("Get must find a personal digest by id: %+v %v", got, err)
+		}
+	})
 }
 
 func TestMemoryDigestStoreContract(t *testing.T) { digestStoreContract(t, NewMemoryDigestStore()) }
