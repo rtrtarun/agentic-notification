@@ -56,12 +56,12 @@ Milestones 1 to 33 (Go, console, SDK) are recorded in [archived/milestones/](arc
 |---|---|
 | `gofmt`, `go vet`, `go test -cover ./...` | Pass locally (35 packages) |
 | `go test -race -tags integration`, `golangci-lint`, `govulncheck`, PostgreSQL 16, Redis 7 | Not runnable locally; **green in CI** |
-| `npm test -- --run`, `npm run build` | Pass locally (230 Vitest tests) |
+| `npm test -- --run`, `npm run build` | Pass locally (238 Vitest tests, milestone 36) |
 | `mvn verify` (Maven container) | Pass: 156 tests with no database (95.2 percent in gate scope), 170 with PostgreSQL (3 Redis tests skipped) |
 | Go integration tests (`-tags integration`: `pkg/auth`, `pkg/db`, `pkg/server`) against local PostgreSQL 16 | Pass (milestone 36, local) |
 | Both images built locally with the release version; `/health` returned `0.36.0` | Pass (milestone 36, local) |
 | Shared HTTP contract (10 files) | Pass on Go (`TestContract`) and Java (`ContractTest`) |
-| Latest recorded CI | Run 42370422148 on acc8b8c: `java-service`, `go-service`, `web`, `python-sdk` all green. **Milestone 36 has not run in CI yet**, and the "Publish service images" workflow has not run |
+| Latest recorded CI | Run 42370422148 on acc8b8c: `java-service`, `go-service`, `web`, `python-sdk` all green. **Milestone 36, first CI run (pull request 11):** `web`, `python-sdk`, `java-service` passed; `go-service` failed on one lint finding (staticcheck QF1001 at `pkg/auth/service.go`), fixed in `ef6433f` and re-checked locally (all packages with integration tests, 87 percent total coverage); the re-run is pending. The "Publish service images" workflow has not run |
 | Sign-up, approval and sign-in in a browser against the live service | **Not verified** |
 | Real Ollama, Claude, Novu, SNS, OpenID provider, MCP client | **Not verified.** Fakes and replay tests only |
 

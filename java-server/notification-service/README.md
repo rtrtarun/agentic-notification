@@ -1,6 +1,6 @@
 # Java notification service
 
-The Java implementation of the Attention Orchestration core. It is being brought to parity with the Go service milestone by milestone; milestone 34 delivered the deterministic core. See [docs/milestones/milestone-34.md](../../docs/milestones/milestone-34.md).
+The Java implementation of the Attention Orchestration core. It is being brought to parity with the Go service milestone by milestone; milestone 34 delivered the deterministic core, 35 the rules API and durable queue, and 36 the accounts. See [docs/java-service.md](../../docs/java-service.md) and [docs/milestones/milestone-36.md](../../docs/milestones/milestone-36.md).
 
 ## What it does
 `POST /webhooks/github` verifies the signature, normalises the event, evaluates the rules, deduplicates, delivers critical events inline, and stores everything in the PostgreSQL schema the Go service migrates. `GET /events` lists what was stored. `GET /health` is open.
@@ -9,7 +9,9 @@ The Java implementation of the Attention Orchestration core. It is being brought
 
 Also: `POST /notify` (agents ask the service to notify people, with the Go service's validation), the rules API (`/api/rules`, `/api/policies`, stored in the shared `policy_rules` table and reloaded at run time), the durable delivery queue (`/api/deliveries`; retry with backoff, dead letters, manual retry) and Redis deduplication shared across replicas and with the Go service.
 
-Not here yet (Go only): metrics, inbox, channels API, SMS, Novu, accounts, Attention Intelligence, feedback, learning, traces, MCP, rule `payloadMatch` and `channels` (refused, not ignored), event retention.
+Accounts (milestone 36): `POST /api/auth/signup` (off unless `AUTH_SIGNUP=approval`; the account is pending until an admin approves it), `/api/auth/login`, `logout`, `me`, `status`, and `/api/users` (admin). Sessions use an `HttpOnly` cookie and a CSRF token, and the API key still works; settings `AUTH_BOOTSTRAP_EMAIL`, `AUTH_BOOTSTRAP_PASSWORD`, `AUTH_SESSION_TTL`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`, `AUTH_SIGNUP`; `GET /health` returns `version` (`APP_VERSION`). No CORS and no single sign-on.
+
+Not here yet (Go only): metrics, inbox, channels API, SMS, Novu, single sign-on, Attention Intelligence, feedback, learning, traces, MCP, rule `payloadMatch` and `channels` (refused, not ignored), event retention.
 
 **Two services on one database must be configured alike**: both run a dispatcher against `delivery_jobs`, and a queued job goes to whichever claims it first.
 

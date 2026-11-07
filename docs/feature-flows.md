@@ -1,6 +1,6 @@
 # Feature flows and reverse-engineering report
 
-Written for: you (the project owner) and me, so we share one picture of **what the repository does today, how each feature flows, what is risky, and what we might add**. Everything below was read from the code and configuration on branch `feature/java-parity` (after milestone 35, 2026-11-07); file paths are relative to the repository root. Where I did not run or read something, I say so. The HTML version of this file is [feature-flows.html](feature-flows.html), generated from this file by `scripts/build_feature_flows_html.py`.
+Written for: you (the project owner) and me, so we share one picture of **what the repository does today, how each feature flows, what is risky, and what we might add**. Everything below was read from the code and configuration on branch `feature/signup-and-sign-in` (after milestone 36, 2026-11-07); file paths are relative to the repository root. Where I did not run or read something, I say so. The HTML version of this file is [feature-flows.html](feature-flows.html), generated from this file by `scripts/build_feature_flows_html.py`.
 
 **Contents**
 1. [What has been done: the sync summary](#1-what-has-been-done-the-sync-summary)
@@ -22,6 +22,8 @@ Written for: you (the project owner) and me, so we share one picture of **what t
 | Service completion | 22 to 26 | Durable delivery queue, SMS, accounts and OpenID Connect, feedback and overrides, Attention Intelligence, Ollama and Claude adapters | `pkg/delivery`, `pkg/auth`, `pkg/feedback`, `pkg/overrides`, `pkg/attention` |
 | Verification and depth | 27 to 33 | Store contract tests, learning engine, attention budget and async worker, payload predicates, AgentPulse traces and MCP, Novu, cursor pagination, tracing, Python SDK | `pkg/learning`, `pkg/budget`, `pkg/traces`, `pkg/mcp`, `sdk/python` |
 | Java parity | 34 and 35 | Java service with the same core, `/notify`, rules API, durable queue, Redis dedup, and a shared HTTP contract | `java-server/notification-service/`, `docs/contract/` |
+| Sign-in and sign-up | 36 | Sign-in first console, sign-up with admin approval, real sign-out, accounts in Java, two versioned images, `/health` version | `pkg/auth`, `apps/web/src`, `java-server/`, `VERSION`, [milestones/milestone-36.md](milestones/milestone-36.md) |
+| Deployment | 2026-11-07 | Console on GitHub Pages, Go service on Render with Neon, public images on GitHub Container Registry | [deployment.md](deployment.md#where-we-have-deployed) |
 | Documentation | cleanup | Current docs focused, history in `docs/archived/` | `docs/` |
 
 **Proven versus only built** (details in [implementation-sync.md](implementation-sync.md)): CI is green on commit `acc8b8c` for the Go, Java, web and Python SDK jobs, including PostgreSQL 16 and Redis 7 integration tests. Ollama, Claude, Novu, SNS, OpenID Connect and a real MCP client have run only against fakes.
@@ -338,8 +340,8 @@ flowchart TD
     AD -->|dismiss| NO["Nothing changes"]
 ```
 
-### 5.8 Accounts and sign-in (Go)
-Entry: `/api/auth/*`, `/api/users`, `/api/audit`. The API key still works for services.
+### 5.8 Accounts, sign-in and sign-up (Go, Java)
+Entry: `/api/auth/*`, `/api/users`, `/api/audit` (single sign-on is Go only). The API key still works for services; people use accounts. Sign-up is off unless `AUTH_SIGNUP=approval`, and a new account is pending until an admin approves it, so it sees nothing and has no session.
 
 ```mermaid
 flowchart TD
@@ -353,6 +355,29 @@ flowchart TD
     RL -->|member| MB["Read and give feedback"]
     AD --> AU[("audit_log")]
 ```
+
+```mermaid
+flowchart TD
+    SU["POST /api/auth/signup"] --> ON{"AUTH_SIGNUP=approval?"}
+    ON -->|no| NF["404 sign-up not available"]
+    ON -->|yes| TH{"Under 20 requests per hour from this address?"}
+    TH -->|no| TM["429 too many requests"]
+    TH -->|yes| VA{"Valid email and 12+ character password?"}
+    VA -->|no| BR["400 with the reason"]
+    VA -->|yes| EX{"Email already has an account?"}
+    EX -->|yes| SAME["202 pending, nothing changes"]
+    EX -->|no| PEND["Create member with status pending"]
+    PEND --> SAME
+    SAME --> LOGIN["Later: login with the right password"]
+    LOGIN --> ST{"Status"}
+    ST -->|pending| P403["403 code pending, no session"]
+    ST -->|rejected| R403["403 code rejected, no session"]
+    ST -->|active| OK["Session cookie plus CSRF token"]
+    ADM["Admin: PATCH /api/users/id with status"] -->|active| ST
+    ADM -->|rejected| ST
+```
+
+The console starts at the sign-in page (the API key is under "Advanced"), shows **Ask for access** when the service allows it, lists pending requests on the Users screen with Approve and Reject, and forgets an API key when you sign out. If sign-in works but the browser does not keep the session cookie (console and service on different sites), it says so.
 
 ### 5.9 Console and live updates (Go, console)
 Entry: the React console (`apps/web`), in demo mode or connected to the service. Reads the API, sends feedback and edits, listens to server-sent events.
@@ -391,7 +416,7 @@ flowchart LR
 
 ## 6. Latency bottlenecks and critical findings
 
-Every finding below has an ID (F1 to F9, L1 to L5) and is logged in [implementation-sync.md](implementation-sync.md) section 6, with the open questions and the work in [roadmap.md](roadmap.md) ("Hardening backlog").
+Every finding below has an ID (F1 to F14, L1 to L5; F11 to F14 came from milestone 36: shared per-address limits behind a proxy, sessions across sites, one workspace, and CI not running on `master`) and is logged in [implementation-sync.md](implementation-sync.md) section 6, with the open questions and the work in [roadmap.md](roadmap.md) ("Hardening backlog").
 
 Method: I read the routing, middleware, pipeline, delivery, migration and configuration code and searched for timeouts, limiters, loops with queries, and secrets. I did **not** read every line or run load tests; each item says what I saw and what I did not verify. No finding rises to CRITICAL in what I inspected.
 
@@ -429,7 +454,9 @@ None of these is started. Each needs its AGENTS.md plan and your approval first;
 
 | Candidate | What it would add | How it would flow (sketch) | Depends on |
 |---|---|---|---|
-| **Milestone 36: Java parity part 3** | Accounts, Attention Intelligence, feedback in Java; rule `payloadMatch` and `channels` | Same flows as 5.3, 5.7, 5.8 implemented in Java, with new contract files replayed by both services | Owner plan and approval |
+| **Milestone 37: Java parity part 3** | Attention Intelligence, feedback and learning in Java; rule `payloadMatch` and `channels` (accounts and sign-up were milestone 36) | Same flows as 5.3 and 5.7 implemented in Java, with new contract files replayed by both services | Owner plan and approval |
+| **Email verification and password reset** | Verify an address at sign-up and reset a forgotten password without an admin | After 5.8's sign-up, send a link through SMTP or Novu, then activate or reset | An email provider configured on the service |
+| **Trusted proxy and tenants** | Per-person limits behind a proxy; separate workspaces so sign-up can be open | Read `X-Forwarded-For` only from the proxy; add `tenant_id` and row-level security | Owner decisions on open questions 11 and 13 |
 | **SDKs for other languages** | TypeScript, Go, Java (then .NET, Ruby) clients | Agent code, then SDK (chains `traceId` and `parentEventId`, times tools, never throws), then `POST /api/events`, then flow 5.5 | Decision: hand-written or generated; a shared SDK test contract |
 | **Per-person delivery** | Deliver personal digests and per-person budgets and schedules | Resolve a person's address at send time (never stored in jobs), then flow 5.4 | Recipient model; its own milestone |
 | **Inbound rate limiting** | Per-key limits on ingestion | Request, then limiter middleware, then flow 5.1 or 5.5, with 429 on excess | Closes the HIGH finding above |

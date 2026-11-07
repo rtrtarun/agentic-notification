@@ -2,7 +2,7 @@
 
 > **Status after Milestone 36** (accounts with sign-up, versioned images for both services; the live service may still run an earlier release, see "Where we have deployed").
 >
-> **Earlier status (milestone 35).** Two services exist: the Go service (everything below) and the Java service (milestones 34 and 35; see "The Java service" at the end). The Go service has accounts and single sign-on, a delivery retry queue, optional Ollama or Claude and Novu, and an MCP server. The service now has accounts and single sign-on, a delivery retry queue, optional Ollama or Claude and Novu, and an MCP server. The environment variables for all of it are in "Production reference" at the end of this document, and each milestone document lists its own settings.
+> Two services exist: the Go service (the one the console talks to) and the Java service (milestones 34 to 36; see "The Java service" at the end). Both have accounts, sessions and sign-up with admin approval; the Go service also has single sign-on, a delivery retry queue, optional Ollama or Claude and Novu, and an MCP server. The environment variables for all of it are in "Production reference" at the end of this document, and each milestone document lists its own settings.
 
 The platform has two deployable parts. They are hosted differently.
 
