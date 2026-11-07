@@ -272,3 +272,7 @@ func (m *MemoryStore) Delete(_ context.Context, id string) error {
 	}
 	return ErrNotFound
 }
+
+// scopeSep separates the parts of a scope key. It must be valid text: PostgreSQL
+// rejects a NUL byte, which an earlier version used, so no override could be saved there.
+const scopeSep = "\x1f"

@@ -37,7 +37,7 @@ func connect(t *testing.T) *sql.DB {
 	if err := db.MigrateLocked(ctx, conn); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	if _, err := conn.ExecContext(ctx, `TRUNCATE events`); err != nil {
+	if _, err := conn.ExecContext(ctx, `TRUNCATE events CASCADE`); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return conn
