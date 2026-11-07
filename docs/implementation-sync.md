@@ -113,6 +113,7 @@ From the reverse-engineering report in [feature-flows.md](feature-flows.md) sect
 - **2026-11-07, milestone 35:** approved and built (`/notify`, rules API, durable queue, Redis dedup, contract files 07 to 09). Milestone 36 is next and still needs a plan.
 - **2026-11-07, after milestone 34:** push and read the Java CI job before milestone 35 (done, green); rename `example` to `agentpulse` (done); milestone 35 scope approved.
 - **2026-11-07, Java parity:** implement the Java service like the Go service, milestone by milestone, with the same guarantees, API, tests and documentation, and a shared contract extended each time. Branch `feature/java-parity`, Maven built through Docker.
+- **2026-11-07, repository secret:** `API_KEY` was added to the GitHub repository secrets so automation can use it; documented, with where every secret lives and how to rotate them, in [deployment.md](deployment.md#secrets-and-variables). No workflow uses it yet.
 - **2026-11-07, sign-up and sign-in (milestone 36):** the console starts at sign-in, the API key is "Advanced", people can ask for an account and an admin approves it (default off, nothing to see until approved), Java gets the same accounts, and both services are published as versioned images starting at `0.36.0`. Approved in conversation; built on `feature/signup-and-sign-in`.
 - **2026-11-07, documentation cleanup:** keep a few focused, detailed current documents; move superseded ones to [archived/](archived/README.md).
 

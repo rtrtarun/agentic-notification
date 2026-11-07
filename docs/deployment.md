@@ -27,6 +27,41 @@ What is running, where, and how to check it. No secrets here: values live in the
 
 **What the live service is running.** `GET https://agentpulse-rpyb.onrender.com/health` returns the release in `version` once it runs `0.36.0` or later. Before that it returns no `version` field, which means a release older than milestone 36 (the one deployed on 2026-11-07 predates it). Webhooks are not connected to a repository yet.
 
+## Secrets and variables
+Names only; values are never written in this repository. Where each one lives, so a change or a rotation touches every place.
+
+| Name | Render service (environment) | GitHub repository | Local `env.txt` (git-ignored) | Used for |
+|---|---|---|---|---|
+| `API_KEY` | yes | **secret** `API_KEY` (set 2026-11-07, no workflow uses it yet) | yes | Services and scripts calling the API; the console hides it under "Advanced" |
+| `GITHUB_WEBHOOK_SECRET` | yes | no (it is also typed into the GitHub webhook settings of each monitored repository) | yes | Verifying `X-Hub-Signature-256` on webhooks |
+| `DATABASE_URL` | yes (Neon **direct** host, `sslmode=require`, `binary_parameters=yes`) | no | yes (the old pooler string, to be updated) | PostgreSQL |
+| `CORS_ALLOWED_ORIGINS` | yes (`https://rtrtarun.github.io`, a public value) | no | yes | Letting the console call the service |
+| `AUTH_BOOTSTRAP_EMAIL`, `AUTH_BOOTSTRAP_PASSWORD` | yes | no | yes | Creating the first admin once, when no account exists |
+| `SLACK_WEBHOOK_URL`, `NOTIFY_STANDARD_CHANNELS` | **not yet** | no | yes | Delivering alerts to Slack |
+| `AUTH_SIGNUP`, `AUTH_COOKIE_SAMESITE` | **not yet** (needed for milestone 36 features) | no | no | Sign-up with admin approval; sessions across sites |
+| `BACKEND_URL` | no | **variable** `BACKEND_URL` (the service address, public) | no | Building the console with the service address |
+
+- **A GitHub secret can be used by a workflow**, for example a post-deploy smoke check (`/health` for the version, then an authenticated call). Nothing does that yet.
+- **Never put a secret in the console build.** Anything in a built bundle is public; the API key is typed in or, better, people sign in with an account.
+- **Rotating the API key:** generate a new one (`openssl rand -hex 32`), then update Render, the GitHub secret (`gh secret set API_KEY --repo rtrtarun/agentic-notification`) and `env.txt`, and redeploy. Anything else calling the API with the old key must be updated too.
+- **Rotating the database password:** reset the role's password in Neon, update `DATABASE_URL` on Render, redeploy.
+- **Secrets pasted into a chat or a log are exposed**: the Neon password and the Slack webhook were shared in conversation on 2026-11-07 and should be rotated.
+
+## Deployment log
+What was done to get here, newest first. Dates are 2026-11-07 unless stated.
+
+1. **Milestone 36 built, not deployed.** Sign-in first, sign-up with admin approval, Java accounts, two versioned images, `VERSION` `0.36.0`, CI on `master`. On branch `feature/signup-and-sign-in`; merging it will run the publish workflow and redeploy the console.
+2. **Repository secret `API_KEY` added** (from the local `env.txt`) with the GitHub CLI after signing in as the repository owner.
+3. **Test events sent to the live service** (a push, a star, a security advisory, a repeat delivery and an agent step) through the signed webhook endpoint and `POST /api/events`: all decided correctly, the repeat answered `duplicate`. They are stored in the Neon database under the repository `acme/billing` and show in the Inbox and Traces.
+4. **Console connected to the service:** repository variable `BACKEND_URL` set and "Deploy console to GitHub Pages" re-run; the live site was built without demo mode.
+5. **CORS fixed:** the first preflight from the console origin had no `Access-Control-Allow-Origin`; after `CORS_ALLOWED_ORIGINS=https://rtrtarun.github.io` was corrected and the service redeployed, it returned the exact origin.
+6. **Neon pooler problem found and fixed:** with a `-pooler` host the delivery dispatcher and the retention purge failed every few seconds with prepared-statement errors. Using the direct host with `binary_parameters=yes` gave a clean start (see the Neon note in the worked example).
+7. **Service created on Render** from the public image `notification-service:latest`, with Neon as the database (`/health` 200, unsigned requests 401 as designed).
+8. **Pull requests #9 and #10 merged to `master`:** the Pages workflow and the image workflow ran green; the Go image was published and made public.
+9. **Earlier, in the same project:** the console on GitHub Pages in demo mode; CI green for the Go, Java, web and SDK jobs on the feature branch.
+
+Not done yet: webhooks from a real repository, Slack on the live service, `AUTH_SIGNUP` and `AUTH_COOKIE_SAMESITE` on Render, deploying a versioned tag, a post-deploy smoke check, and running the Java service anywhere.
+
 ## Releases and images
 Every release publishes **two images** to GitHub Container Registry, built by [publish-image.yml](../.github/workflows/publish-image.yml):
 
