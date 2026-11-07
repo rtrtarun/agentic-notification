@@ -1,6 +1,6 @@
 # Deployment and hosting
 
-> **Status after Milestone 33.** The service now has accounts and single sign-on, a delivery retry queue, optional Ollama or Claude and Novu, and an MCP server. The environment variables for all of it are in "Production reference" at the end of this document, and each milestone document lists its own settings.
+> **Status after Milestone 35.** Two services exist: the Go service (everything below) and the Java service (milestones 34 and 35; see "The Java service" at the end). The Go service has accounts and single sign-on, a delivery retry queue, optional Ollama or Claude and Novu, and an MCP server. The service now has accounts and single sign-on, a delivery retry queue, optional Ollama or Claude and Novu, and an MCP server. The environment variables for all of it are in "Production reference" at the end of this document, and each milestone document lists its own settings.
 
 The platform has two deployable parts. They are hosted differently.
 
@@ -138,8 +138,8 @@ Everything in the earlier steps, as one checklist for going live at `https://rtr
 
 The budget, the worker, agent traces and the Novu provider are implemented. Their PostgreSQL, Redis and real-service parts have only run in CI or against local fakes; try Novu with one test recipient before relying on it. 
 
-### Claude Desktop or Cursor (planned, milestone 31)
-The MCP server binary does not exist yet. When milestone 31 ships, it is configured like this (names may change; the milestone doc is the reference):
+### Claude Desktop or Cursor (built in milestone 31)
+Build the MCP server once with `go build -o bin/mcp-server ./cmd/mcp-server` in `go-server/notification-service`, then configure the client (the same tools are also served over HTTP at `POST /api/mcp`). It has not been tried with a real MCP client yet:
 
 ```json
 {
@@ -156,3 +156,36 @@ The MCP server binary does not exist yet. When milestone 31 ships, it is configu
 - `GET https://<service>/health` returns 200.
 - Redeliver a ping from the GitHub webhook page to `https://<service>/webhooks/github`: first delivery is accepted (202), a redelivery of the same event answers `{"status":"duplicate"}` with 200.
 - `GET https://<service>/api/attention/status` with the API key shows the provider and a closed breaker.
+
+## Worked example: Render and Neon
+One concrete path through "Order of work". Dashboard labels change; match by meaning. Not tested on these providers.
+
+1. **Secrets:** run `openssl rand -hex 32` twice: the first is `API_KEY`, the second `GITHUB_WEBHOOK_SECRET`. Keep them in a password manager; never commit them.
+2. **Database (Neon):** create a project and copy the connection string (`postgres://user:pass@host/db?sslmode=require`) as `DATABASE_URL`. The service creates its tables at start-up.
+3. **Service (Render):** New, Web Service, deploy an existing image: `ghcr.io/rtrtarun/agentic-notification/notification-service:latest` (public). Use a plan that stays running (a sleeping service can miss GitHub's webhook timeout). Health check path `/health`. Variables:
+
+| Variable | Value |
+|---|---|
+| `PORT` | `8080` |
+| `API_KEY`, `GITHUB_WEBHOOK_SECRET` | the two secrets |
+| `DATABASE_URL` | the Neon string |
+| `CORS_ALLOWED_ORIGINS` | `https://rtrtarun.github.io` |
+| `AUTH_BOOTSTRAP_EMAIL`, `AUTH_BOOTSTRAP_PASSWORD` | creates the first admin once |
+| `SLACK_WEBHOOK_URL`, `NOTIFY_STANDARD_CHANNELS=slack` | recommended, so alerts have somewhere to go |
+
+   Leave `ALLOW_UNAUTHENTICATED_API` and `ALLOW_UNSIGNED_WEBHOOKS` unset.
+4. **Check:** `/health` returns 200; `/events` without a key returns 401 and with `X-API-Key` returns 200; `/api/attention/status` shows the provider.
+5. **Console:** add the repository variable `BACKEND_URL` (the Render address) and re-run "Deploy console to GitHub Pages"; choose Connect your service and enter the key, or sign in with the bootstrap account.
+6. **Webhook:** in the monitored repository add `https://<service>/webhooks/github`, `application/json`, the same secret. The ping shows 202; Redeliver answers 200 `duplicate`.
+
+If Slack is not configured a critical delivery can fail and answer 500; that is the designed behaviour (the sender retries). The ingestion endpoints have no rate limiting yet (finding F1 in [implementation-sync.md](implementation-sync.md)), so keep `API_KEY` private. Fly.io, Railway or a VM with Docker take the same image and variables.
+
+## The Java service
+Image: built from `java-server/notification-service/Dockerfile`; Compose service `java-notification-service` on port 8081. It is **not** published to a registry by any workflow (only the Go image is).
+
+- **Run:** `docker compose up --build postgres redis go-notification-service java-notification-service`, then `curl localhost:8081/health`. The Go service must start first because it creates the schema (Java never migrates; it waits up to 60 seconds for the `events` table). `go run ./cmd/migrate` in the Go module can create the schema on its own.
+- **Settings:** the Go service's names: `PORT`, `API_KEY`, `GITHUB_WEBHOOK_SECRET`, `DATABASE_URL`, `REDIS_URL`, `RULES_PATH`, `DEDUP_WINDOW`, `SMTP_*`, `SLACK_WEBHOOK_URL`, `TEAMS_WEBHOOK_URL`, `NOTIFY_*`, `EVENT_RETENTION`, `LOG_LEVEL`. With `REDIS_URL` set it refuses to start if Redis is unreachable.
+- **Rules:** it refuses rules that use `payloadMatch` or per-rule `channels` (Go only). Do not share a `rules.yaml` that uses them.
+- **Do not run both services against one database with different delivery settings.** Both run a dispatcher on `delivery_jobs`; a queued job goes to whichever claims it first and can be dead-lettered by a service that lacks the channel. Run one implementation per database, or configure both alike.
+- **Not in Java:** accounts (the API key is the only gate), Attention Intelligence, feedback, learning, traces, MCP, SMS, Novu, metrics, retention. See [java-service.md](java-service.md).
+- **Smoke checks:** same as the Go service for `/health`, `/events`, `/webhooks/github` and `/notify`; the shared contract in [contract/](contract/README.md) is the reference for behaviour.
