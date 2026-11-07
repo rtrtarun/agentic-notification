@@ -28,7 +28,7 @@ Last updated: milestone 33 complete. All milestones 27 to 33 are committed on br
 | 31 | AgentPulse traces, agent telemetry, MCP server | Done, committed | `docs/milestones/milestone-31.md`. Not tried with a real MCP client; the PostgreSQL trace round trip left to CI. Dedup bug fixed along the way 
 | 32 | Novu provider, cursor pagination, OpenTelemetry, strict STARTTLS | Done, committed | `docs/milestones/milestone-32.md`. Tracing is context propagation and span logs, not an OpenTelemetry exporter; Novu not run against the real service 
 | 33 | Documentation reconciliation, Python SDK | Done, committed | `docs/milestones/milestone-33.md`. SDK verified against the real service and MCP binaries; older architecture sections 6 to 11 and 15 to 18 are marked, not rechecked line by line 
-| 34 | Java foundation (core parity): build fixed, Layer 1 in Java, shared HTTP contract | Done locally, GitHub CI run not yet seen | `docs/milestones/milestone-34.md`. `mvn verify` passes in the Maven container (69 tests, 94.8 percent coverage); the contract passes on Go and Java. Milestones 35+ continue the parity work, in an order still to be chosen |
+| 34 | Java foundation (core parity): build fixed, Layer 1 in Java, shared HTTP contract | Done, CI green (run 42368107261 on commit b562715) | `docs/milestones/milestone-34.md`. `mvn verify` passes in the Maven container (69 tests, 94.8 percent coverage); the contract passes on Go and Java. Milestones 35+ continue the parity work, in an order still to be chosen |
 
 Numbering note: `docs/upcoming-milestones.md` proposed 27 to 31 and `PROMPT_SPEC.md` supersedes it with 27 to 33. Where they differ, `PROMPT_SPEC.md` wins and `upcoming-milestones.md` will be updated in milestone 33.
 
@@ -98,7 +98,7 @@ The environment variables, ordering and smoke checks for going live are in [depl
 
 ## 9. CI findings so far (read from the public GitHub API)
 - CI had never run on this branch before milestone 29. Its first runs failed at **Lint**; about 25 findings across four rounds (gosec, errorlint, staticcheck, bodyclose, unused, ineffassign) were fixed. The next failure was the integration tests, which found two real defects (overrides could not be saved in PostgreSQL; a `TRUNCATE` across a foreign key). **After those fixes the whole `go-service` job passed** on commit 367d735 (run 42356002884): format, vet, lint, vulnerability scan, `go test -race -tags integration` against PostgreSQL 16 and Redis 7, and the 80 percent coverage gate. `web` and `python-sdk` pass too.
-- The `java-service` job (`mvn verify`) failed in `Build and test` before milestone 34 (the old code used the wrong mail package for its library). Milestone 34 rewrote the service; it now passes locally in the Maven container, and the job now starts PostgreSQL and runs the Go migration. **Its first GitHub run is still to be read.**
+- The `java-service` job (`mvn verify`) failed in `Build and test` before milestone 34 (the old code used the wrong mail package for its library). Milestone 34 rewrote the service; it now passes locally in the Maven container, and the job now starts PostgreSQL and runs the Go migration. **Its first GitHub run passed (run 42368107261 on commit b562715): `java-service`, `go-service`, `web`, `python-sdk` all green.**
 - `golangci-lint` could not be run locally (building it from source was blocked by the tool-use policy), so every lint finding came from CI, one round trip at a time.
 
 ## 10. Decisions from the project owner

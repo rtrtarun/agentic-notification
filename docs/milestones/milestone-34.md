@@ -66,7 +66,7 @@ docker run --rm -v "$(pwd):/app" -v m2cache:/root/.m2 \
 ## 8. Acceptance criteria and result
 | Criterion | Result |
 | --- | --- |
-| `mvn verify` passes | **Yes, locally** in the Maven container: 69 tests, coverage gate met. The CI run on GitHub has not been seen yet. |
+| `mvn verify` passes | **Yes, locally** in the Maven container: 69 tests, coverage gate met. **GitHub CI: green** (run 42368107261 on commit b562715): `java-service`, `go-service`, `web` and `python-sdk` all passed. |
 | Compose builds and starts the Java service healthy | **Yes**: `docker compose up --build postgres redis go-notification-service java-notification-service`; both `/health` answered. |
 | Contract passes on both services | **Yes**: `TestContract` (Go) and `ContractTest` (Java), six files each. |
 | Same schema, both directions | **Yes, by hand**: the same pull request sent to each service produced identical rows (class, status, rule, thread id) in one `events` table, and each service listed the other's rows. |
@@ -74,7 +74,7 @@ docker run --rm -v "$(pwd):/app" -v m2cache:/root/.m2 \
 | Critical delivery failure | Same in both: with the Compose SMTP host unreachable, a security advisory returned 500 in Go and in Java and was not stored, so GitHub's retry is processed. The success path (critical sent) is proved by the contract and unit tests, not by a real channel. |
 
 ## 9. Review checklist
-- [ ] `java-service` CI job is green on GitHub (not yet seen).
+- [x] `java-service` CI job is green on GitHub (run 42368107261 on commit b562715).
 - [ ] Java `rules.yaml` limits (no `payloadMatch` or `channels` yet) are acceptable for milestone 34.
 - [x] Package renamed from `com.example.notification` to `com.agentpulse.notification` (decided by the project owner).
 - [ ] Next milestone: which Go features first (suggested: `/notify`, rules and policies API, then durable delivery and Redis dedup).

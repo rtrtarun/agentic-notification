@@ -379,7 +379,7 @@ Everything lives in [`docs/`](docs/), grouped by what you want to do. **[docs/RE
 
 **Known issues**
 
-- The Java service covers the core only (webhook, rules, dedup, critical delivery, persistence, `/events`); its CI job passes locally but the first GitHub run has not been seen. See [milestone 34](docs/milestones/milestone-34.md).
+- The Java service covers the core only (webhook, rules, dedup, critical delivery, persistence, `/events`); its CI job passes on GitHub (run 42368107261 on commit b562715, read from the public API). See [milestone 34](docs/milestones/milestone-34.md).
 - NATS is part of the intended stack but is not used; the worker and delivery poll PostgreSQL.
 - Personal digests are stored and readable but not delivered.
 - Parts that have run only against fakes: PostgreSQL stores (CI only), the Redis budget script (CI only), Ollama, Claude, Novu, SNS, OpenID Connect, the MCP server.

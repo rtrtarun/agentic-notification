@@ -762,7 +762,7 @@ What was **verified locally** (Windows, after each milestone) and what was **con
 | `golangci-lint` v2.15 | Not available locally | Found about 25 issues over four rounds, all fixed; **lint and the vulnerability scan pass** |
 | `-race`, PostgreSQL and Redis integration tests, 80 percent coverage gate | Not runnable locally (no C compiler, no Docker) | **Pass** (run 42356002884, commit 367d735, PostgreSQL 16 and Redis 7). The first real run had failed on two bugs the in-memory tests could not see (overrides could not be saved in PostgreSQL; an integration test used `TRUNCATE` across a foreign key); both were fixed |
 | Web: `npm test`, `npm run build` | 230 tests pass, build succeeds | The web job passes |
-| Java service | Rewritten in milestone 34 (core) | Passes locally in the Maven container; first GitHub run not yet seen |
+| Java service | Rewritten in milestone 34 (core) | Passes locally and on GitHub (run 42368107261 on commit b562715) |
 
 Local statement coverage by package is in [implementation-sync.md](implementation-sync.md); several packages are below the 80 percent target when integration tests do not run.
 
@@ -1164,7 +1164,7 @@ Unit tests use in-memory fakes behind the same interfaces as production. Real-in
 | Docker, compose, Kubernetes, CI | **Done** | The Go and web CI jobs pass the steps that have run; see section 12.2 |
 | Per-person delivery | Not built | Personal digests are stored, not delivered |
 | NATS | Not used | Named in the intended stack only |
-| Java service | Core parity built; the rest planned | First GitHub CI run of the rewritten job not yet seen |
+| Java service | Core parity built; the rest planned | `java-service` job green on GitHub (run 42368107261 on commit b562715) |
 | Event replay, agent registry | Not planned | Vision documents only |
 
 **One-line summary:** the four layers are built end to end and the critical invariant is tested at every layer; the remaining work is proving the parts that have only run against fakes, per-person delivery, and the console screens that are still API-only.
