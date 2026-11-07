@@ -356,23 +356,24 @@ Everything lives in [`docs/`](docs/), grouped by what you want to do. **[docs/RE
 
 | I want to… | Read |
 |---|---|
-| Understand what this is and how it works | [Architecture](docs/architecture.md), [Orchestration overview](docs/orchestration-platform.md) |
+| Understand what this is and how it works | [Architecture](docs/architecture.md), [Roadmap](docs/roadmap.md) |
 | Run it, deploy it, or run it in production | [Deployment](docs/deployment.md), [Runbook](docs/runbook.md) |
-| Know what is built and what is proven | [Implementation sync](docs/implementation-sync.md), [Changelog](docs/CHANGELOG.md) |
-| See how a feature was designed and tested | The matching `docs/milestones/milestone-N.md` ([index](docs/README.md#milestones)) |
-| Work on the console | [Frontend](docs/frontend.md), [UI architecture](docs/ui-architecture.md) |
-| Build an AI agent integration | [AgentPulse](docs/agentpulse.md), [Python SDK](sdk/python/README.md), [Milestone 31](docs/milestones/milestone-31.md) |
+| Know what is built and what is proven | [Implementation status](docs/implementation-sync.md), [Changelog](docs/CHANGELOG.md) |
+| See how a feature was designed and tested | The milestone record: [current](docs/milestones/README.md) (34, 35) or [archived](docs/archived/milestones/) (1 to 33) |
+| Work on the console | [Frontend](docs/frontend.md) |
+| Work on the Java service | [Java service](docs/java-service.md), [HTTP contract](docs/contract/README.md) |
+| Build an AI agent integration | [AgentPulse](docs/agentpulse.md), [Python SDK](sdk/python/README.md), [Milestone 31](docs/archived/milestones/milestone-31.md) |
 | Contribute code | [CONTRIBUTING](CONTRIBUTING.md), [Coding standards](docs/rules/coding-standards.md) |
 
 ---
 
 ## Roadmap and known issues
 
-**Next** (details in [architecture.md section 13](docs/architecture.md#13-forward-roadmap)):
+**Next** (details in [roadmap.md](docs/roadmap.md)):
 
 1. **Prove it against real services**: PostgreSQL, Redis, Ollama, Claude, Novu, SNS, an OpenID provider and a real MCP client; get CI green end to end.
 2. **Java parity, continued**: milestones 34 and 35 built the core, `/notify`, the rules API, the durable delivery queue and Redis dedup in Java, with a nine-file shared contract in `docs/contract`; the rest of the Go service (accounts, Attention Intelligence, feedback, learning, traces, MCP) follows milestone by milestone.
-3. **SDKs for other languages** (documented, not started): TypeScript/JavaScript, Go and Java first, modelled on the Python SDK; see [upcoming-milestones.md](docs/upcoming-milestones.md).
+3. **SDKs for other languages** (documented, not started): TypeScript/JavaScript, Go and Java first, modelled on the Python SDK; see [roadmap.md](docs/roadmap.md).
 4. **Per-person delivery**: resolve a person's address at send time and deliver personal digests, schedules and budgets.
 5. **Console completeness**: screens for rule predicates, per-rule channels and personal preferences; translations for the newer screens.
 6. **Scale**: a real queue instead of polling if needed; a shared circuit breaker; an OpenTelemetry exporter.

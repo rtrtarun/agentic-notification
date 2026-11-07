@@ -128,4 +128,4 @@ Roughly 5–7 weeks to something real, versus 14–18 weeks for the full platfor
 - Final name — AgentPulse vs. the other two
 - Which framework to demo against first — a raw agent loop is simplest to fake convincingly; LangGraph/CrewAI look more "real" but add setup weight
 - Where to host the live demo
-Implemented (milestone 31): see [milestones/milestone-31.md](milestones/milestone-31.md) for `POST /api/events`, `GET /api/traces`, the MCP server and the Traces screen. The Python SDK helper described here is milestone 33.
+Implemented (milestone 31): see [milestones/milestone-31.md](archived/milestones/milestone-31.md) for `POST /api/events`, `GET /api/traces`, the MCP server and the Traces screen. The Python SDK helper described here is milestone 33.

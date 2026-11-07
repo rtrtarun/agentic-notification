@@ -1,8 +1,10 @@
+> **Archived 2026-11-07.** Historical; it does not describe the current system. Current documents: [docs/README.md](../../README.md).
+
 # UI architecture and design: the Attention console
 
-Written for engineers who will change or extend `apps/web`. It explains how the console is built, why it looks the way it does, which component owns what, and where it falls short of the three UI skills in [`skills/`](../skills/README.md). The shorter product-level summary is [frontend.md](frontend.md); the backend contract is in [architecture.md](architecture.md) section 11.4a.
+Written for engineers who will change or extend `apps/web`. It explains how the console is built, why it looks the way it does, which component owns what, and where it falls short of the three UI skills in [`skills/`](../../../skills/README.md). The shorter product-level summary is [frontend.md](../../frontend.md); the backend contract is in [architecture.md](../../architecture.md) section 11.4a.
 
-This document describes the console core after the inbox redesign (sidebar, search, unread, themes and languages). **Status after Milestone 33:** the console has 15 screens ([frontend.md](frontend.md) lists them). The screens added from milestone 15 on follow the same patterns, so the rules here still apply: a typed client in `src/lib/<area>.ts` with a demo and an HTTP variant, loading through `useLoad` and `LoadGate`, strings in `lib/i18n/en.ts` (English first for the newer namespaces), no new runtime UI dependencies, and every `fetch` inside `lib/api.ts`. Sections 15 and 16 record the earlier skills audit, which still applies.
+This document describes the console core after the inbox redesign (sidebar, search, unread, themes and languages). **Status after Milestone 33:** the console has 15 screens ([frontend.md](../../frontend.md) lists them). The screens added from milestone 15 on follow the same patterns, so the rules here still apply: a typed client in `src/lib/<area>.ts` with a demo and an HTTP variant, loading through `useLoad` and `LoadGate`, strings in `lib/i18n/en.ts` (English first for the newer namespaces), no new runtime UI dependencies, and every `fetch` inside `lib/api.ts`. Sections 15 and 16 record the earlier skills audit, which still applies.
 
 All statements here were checked against the code at the commit that added this file. Line references are to `apps/web/src`.
 
@@ -168,7 +170,7 @@ There is no global store. Three pieces of shared state do not justify one.
 
 ## 6. Design tokens
 
-All tokens are CSS custom properties on `:root` ([styles.css](../apps/web/src/styles.css) lines 12 to 38).
+All tokens are CSS custom properties on `:root` ([styles.css](../../../apps/web/src/styles.css) lines 12 to 38).
 
 ### Colour
 
@@ -359,7 +361,7 @@ English, Spanish and Hindi. `lib/i18n/en.ts` is the source of truth; `es.ts` and
 
 Not translated: decision reasons from the service that this console does not know. Known reasons (security, dependency, social signal, standard hold-back, duplicate of ...) are mapped; anything else is shown as the service wrote it. Translations were written by the assistant and should be reviewed by native speakers before release.
 
-To add a language (nine are supported; Arabic is right to left, see [milestones/milestone-15.md](milestones/milestone-15.md) commit 4): copy `en.ts` to `<code>.ts` and translate the values, add it to `Locale`, `LOCALES` and `CATALOGS` in `lib/i18n/index.ts`, and update the locale-count test. If its script is missing from Bricolage Grotesque (Devanagari, Telugu, Arabic and others), add a fallback font to `--font`.
+To add a language (nine are supported; Arabic is right to left, see [milestones/milestone-15.md](../milestones/milestone-15.md) commit 4): copy `en.ts` to `<code>.ts` and translate the values, add it to `Locale`, `LOCALES` and `CATALOGS` in `lib/i18n/index.ts`, and update the locale-count test. If its script is missing from Bricolage Grotesque (Devanagari, Telugu, Arabic and others), add a fallback font to `--font`.
 
 ### Colour themes
 
@@ -383,7 +385,7 @@ All of it works on the events already loaded (the newest 200). The sidebar views
 
 ## 15. Skills conformance audit
 
-Three skills were added to [`skills/`](../skills/README.md). This section checks the console against each. "Verified" means read in the code or CSS. Nothing was tested on a physical phone.
+Three skills were added to [`skills/`](../../../skills/README.md). This section checks the console against each. "Verified" means read in the code or CSS. Nothing was tested on a physical phone.
 
 **Result: the console meets the checkable rules of all three skills.** The first audit found 11 `mobile-native` failures and missing press feedback; they were fixed in the follow-up change recorded in [section 16](#16-gaps-and-recommended-order-of-work). What remains is verification on a physical phone.
 

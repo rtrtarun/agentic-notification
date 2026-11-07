@@ -37,4 +37,4 @@ AGENTPULSE_URL=http://localhost:8080 AGENTPULSE_API_KEY=dev-key python example.p
 python -m unittest        # the tests; no service needed
 ```
 
-See [docs/milestones/milestone-31.md](../../docs/milestones/milestone-31.md) for the API this uses and [docs/milestones/milestone-33.md](../../docs/milestones/milestone-33.md) for what was verified.
+See [docs/milestones/milestone-31.md](../../docs/archived/milestones/milestone-31.md) for the API this uses and [docs/milestones/milestone-33.md](../../docs/archived/milestones/milestone-33.md) for what was verified.

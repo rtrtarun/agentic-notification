@@ -1,6 +1,8 @@
+> **Archived 2026-11-07.** Historical; it does not describe the current system. Current documents: [docs/README.md](../../README.md).
+
 # Attention Orchestration Platform Architecture
 
-> **Status after Milestone 33.** This document is the design narrative. [architecture.md](architecture.md) is the checked reference for what is built, and [implementation-sync.md](implementation-sync.md) records what has and has not been proven.
+> **Status after Milestone 33.** This document is the design narrative. [architecture.md](../../architecture.md) is the checked reference for what is built, and [implementation-sync.md](../../implementation-sync.md) records what has and has not been proven.
 
 Modern notification systems must *respect user attention* rather than simply broadcasting alerts. Early work by Horvitz et al. described a "notification platform" that sits as an **attention-savvy layer** between incoming messages and the user, weighing the value of information against the cost of interruption. In our design, we take this further: instead of a pure "notification delivery platform," we build an **Attention Orchestration Platform** that uses AI only in the middle layer.
 
@@ -214,7 +216,7 @@ Implementations: `StubProvider` (dev), `SMTPProvider` and `NovuProvider` (email,
 
 ## Implementation Status
 
-Status after Milestone 33. The detailed, checked reference is [architecture.md](architecture.md); this table is the short version. "Built" means built and tested; the last column says what has only run against fakes.
+Status after Milestone 33. The detailed, checked reference is [architecture.md](../../architecture.md); this table is the short version. "Built" means built and tested; the last column says what has only run against fakes.
 
 | Component | Status | Notes |
 |---|---|---|
