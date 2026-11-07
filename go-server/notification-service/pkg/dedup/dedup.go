@@ -108,8 +108,12 @@ func (d *MemoryDeduper) sweep(now time.Time) {
 	d.nextSweep = now.Add(d.window / 2)
 }
 
-// ThreadID groups related events about the same subject (e.g. one pull request).
+// ThreadID groups related events about the same subject (e.g. one pull request),
+// or all the steps of one agent run.
 func ThreadID(evt event.Event) string {
+	if evt.TraceID != "" {
+		return evt.Source + ":trace:" + evt.TraceID
+	}
 	parts := []string{evt.Source, evt.Repository}
 	if subject := subjectOf(evt.Payload); subject != "" {
 		parts = append(parts, subject)
@@ -120,7 +124,16 @@ func ThreadID(evt event.Event) string {
 // DedupKey identifies a repeat of the same thing: same thread, event type, action
 // and, for pushes, the same head commit. Without the commit, every push to a
 // repository inside the window would collapse into the first.
+//
+// Steps of an agent run are different: a retry or a repeated failure is a new fact,
+// not a repeat, so two steps merge only when they share the run, the type, the parent
+// step, the step kind and the attempt number.
 func DedupKey(evt event.Event) string {
+	if evt.TraceID != "" {
+		md, _ := evt.Payload["metadata"].(map[string]interface{})
+		kind, _ := md["step_kind"].(string)
+		return strings.Join([]string{ThreadID(evt), evt.EventType, evt.ParentEventID, kind, fmt.Sprint(md["attempt"])}, "|")
+	}
 	action, _ := evt.Payload["action"].(string)
 	head, _ := evt.Payload["after"].(string)
 	return strings.Join([]string{ThreadID(evt), evt.EventType, action, head}, "|")

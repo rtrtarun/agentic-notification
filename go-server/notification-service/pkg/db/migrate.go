@@ -99,6 +99,11 @@ func Migrate(ctx context.Context, db Execer) error {
 		`ALTER TABLE events ADD COLUMN IF NOT EXISTS attention_attempts INTEGER NOT NULL DEFAULT 0`,
 		`CREATE INDEX IF NOT EXISTS events_attention_work_idx ON events (created_at) WHERE attention_state IN ('pending','processing')`,
 		`CREATE INDEX IF NOT EXISTS events_delayed_idx ON events (created_at) WHERE decision_status = 'delayed'`,
+		// Agent traces (milestone 31): one run of an agent is a trace; each step may name its parent.
+		`ALTER TABLE events ADD COLUMN IF NOT EXISTS trace_id TEXT`,
+		`ALTER TABLE events ADD COLUMN IF NOT EXISTS parent_event_id TEXT`,
+		`ALTER TABLE events ADD COLUMN IF NOT EXISTS agent_name TEXT`,
+		`CREATE INDEX IF NOT EXISTS events_trace_id_idx ON events (trace_id) WHERE trace_id IS NOT NULL`,
 		`CREATE INDEX IF NOT EXISTS events_thread_id_idx ON events (thread_id)`,
 		`CREATE INDEX IF NOT EXISTS events_created_at_idx ON events (created_at)`,
 		`CREATE INDEX IF NOT EXISTS events_dedup_key_idx ON events (dedup_key)`,

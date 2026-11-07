@@ -3,6 +3,7 @@
 // list always looks current.
 
 import type { EventSummary } from './api'
+import { demoAgentEvents } from './traces'
 
 const MINUTE = 60_000
 
@@ -11,7 +12,7 @@ function at(now: Date, minutesAgo: number): string {
 }
 
 /** Newest first, like GET /events. Covers every class and a merged thread. */
-export function demoEvents(now: Date = new Date()): EventSummary[] {
+function sampleEvents(now: Date): EventSummary[] {
   return [
     {
       id: 'demo-advisory',
@@ -179,4 +180,9 @@ export function demoEvents(now: Date = new Date()): EventSummary[] {
       createdAt: at(now, 7000),
     },
   ]
+}
+
+/** Newest first, like GET /events: the sample notifications plus the steps of the demo agent runs. */
+export function demoEvents(now: Date = new Date()): EventSummary[] {
+  return [...sampleEvents(now), ...demoAgentEvents(now)].sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }

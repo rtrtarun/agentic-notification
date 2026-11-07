@@ -147,3 +147,45 @@ func TestInMemoryClaimDoesNotShareDecisionState(t *testing.T) {
 		t.Fatal("a claimed event must be a copy")
 	}
 }
+
+// traceFieldsContract checks that the agent-trace fields survive storage.
+func traceFieldsContract(t *testing.T, r Repository) {
+	t.Helper()
+	ctx := context.Background()
+	step := Event{
+		ID: "trace-step-2", Source: "agent", EventType: "tool.call.failed", AttentionClass: AttentionStandard,
+		TraceID: "run-42", ParentEventID: "trace-step-1", AgentName: "researcher",
+		Payload: map[string]any{"metadata": map[string]any{"attempt": float64(3), "tool_name": "search"}},
+	}
+	plain := Event{ID: "trace-none", Source: "github", EventType: "push", AttentionClass: AttentionStandard, Payload: map[string]any{}}
+	for _, e := range []Event{step, plain} {
+		if err := r.Save(ctx, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	all, err := r.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := 0
+	for _, e := range all {
+		switch e.ID {
+		case "trace-step-2":
+			found++
+			md, _ := e.Payload["metadata"].(map[string]any)
+			if e.TraceID != "run-42" || e.ParentEventID != "trace-step-1" || e.AgentName != "researcher" || md["tool_name"] != "search" {
+				t.Fatalf("trace fields lost: %+v", e)
+			}
+		case "trace-none":
+			found++
+			if e.TraceID != "" || e.ParentEventID != "" || e.AgentName != "" {
+				t.Fatalf("a webhook event must have no trace fields: %+v", e)
+			}
+		}
+	}
+	if found != 2 {
+		t.Fatalf("found %d of 2 events", found)
+	}
+}
+
+func TestInMemoryTraceFields(t *testing.T) { traceFieldsContract(t, NewInMemoryRepository()) }

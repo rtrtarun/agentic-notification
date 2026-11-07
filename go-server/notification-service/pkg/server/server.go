@@ -26,6 +26,7 @@ import (
 	"github.com/example/notification-service/pkg/inbox"
 	"github.com/example/notification-service/pkg/insights"
 	"github.com/example/notification-service/pkg/learning"
+	"github.com/example/notification-service/pkg/mcp"
 	"github.com/example/notification-service/pkg/metrics"
 	"github.com/example/notification-service/pkg/notification"
 	"github.com/example/notification-service/pkg/notification/impl"
@@ -88,6 +89,7 @@ type Server struct {
 	explainer       attention.Explainer
 	classifier      attention.Classifier
 	attentionWorker *attention.Worker
+	mcp             *mcp.Server
 	redisClient     *redis.Client
 	attentionLLM    *llm.Model
 	overrides       *overrides.Service
@@ -182,6 +184,7 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 		return nil, fmt.Errorf("init feedback: %w", err)
 	}
 	s.initLearning()
+	s.mcp = mcp.New(mcpBackend{s}, "service")
 	s.service = notification.NewValidatingService(
 		impl.NewNotificationServiceWith(provider),
 		notification.Limits{

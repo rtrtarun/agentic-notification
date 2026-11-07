@@ -88,7 +88,7 @@ func TestMigrateCreatesEveryStoreTableAndItsLookupIndexes(t *testing.T) {
 	}
 	for _, index := range []string{
 		"delivery_jobs_due_idx", "delivery_jobs_created_idx", "sessions_user_idx",
-		"feedback_event_idx", "feedback_created_idx", "digests_created_idx", "learning_suggestions_status_idx",
+		"feedback_event_idx", "feedback_created_idx", "events_trace_id_idx", "digests_created_idx", "learning_suggestions_status_idx",
 	} {
 		if !strings.Contains(all, "CREATE INDEX IF NOT EXISTS "+index+" ") {
 			t.Errorf("migration does not create index %s", index)

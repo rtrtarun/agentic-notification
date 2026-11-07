@@ -55,8 +55,9 @@ func (r *PostgresRepository) Save(ctx context.Context, evt Event) error {
 			id, source, event_type, repository,
 			attention_class, decision_status, decision_reason,
 			decision_model_version, decision_confidence, decision_matched_rule,
-			payload, dedup_key, thread_id, merged_into, attention_state
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			payload, dedup_key, thread_id, merged_into, attention_state,
+			trace_id, parent_event_id, agent_name
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 		ON CONFLICT (id) DO NOTHING`,
 		evt.ID,
 		evt.Source,
@@ -73,6 +74,9 @@ func (r *PostgresRepository) Save(ctx context.Context, evt Event) error {
 		nullString(evt.ThreadID),
 		nullString(evt.MergedInto),
 		workState,
+		nullString(evt.TraceID),
+		nullString(evt.ParentEventID),
+		nullString(evt.AgentName),
 	)
 	return err
 }
@@ -81,7 +85,7 @@ func (r *PostgresRepository) Save(ctx context.Context, evt Event) error {
 const eventColumns = `id, source, event_type, repository,
 	attention_class, decision_status, decision_reason,
 	decision_model_version, decision_confidence, decision_matched_rule,
-	payload, dedup_key, thread_id, merged_into, created_at`
+	payload, dedup_key, thread_id, merged_into, created_at, trace_id, parent_event_id, agent_name`
 
 func (r *PostgresRepository) List(ctx context.Context) ([]Event, error) {
 	rows, err := r.queryer.QueryContext(ctx, `SELECT `+eventColumns+` FROM events ORDER BY created_at DESC LIMIT $1`, DefaultListLimit)
@@ -108,13 +112,13 @@ func scanEvents(rows *sql.Rows) ([]Event, error) {
 		var payload string
 		var decisionStatus, decisionReason, decisionModelVersion, decisionMatchedRule sql.NullString
 		var decisionConfidence sql.NullFloat64
-		var repository, dedupKey, threadID, mergedInto sql.NullString
+		var repository, dedupKey, threadID, mergedInto, traceID, parentEventID, agentName sql.NullString
 
 		if err := rows.Scan(
 			&evt.ID, &evt.Source, &evt.EventType, &repository,
 			&evt.AttentionClass, &decisionStatus, &decisionReason,
 			&decisionModelVersion, &decisionConfidence, &decisionMatchedRule,
-			&payload, &dedupKey, &threadID, &mergedInto, &evt.CreatedAt,
+			&payload, &dedupKey, &threadID, &mergedInto, &evt.CreatedAt, &traceID, &parentEventID, &agentName,
 		); err != nil {
 			return nil, err
 		}
@@ -125,6 +129,7 @@ func scanEvents(rows *sql.Rows) ([]Event, error) {
 
 		evt.Repository = repository.String
 		evt.DedupKey, evt.ThreadID, evt.MergedInto = dedupKey.String, threadID.String, mergedInto.String
+		evt.TraceID, evt.ParentEventID, evt.AgentName = traceID.String, parentEventID.String, agentName.String
 
 		if decisionStatus.Valid || decisionReason.Valid {
 			evt.DecisionState = &DecisionState{

@@ -7,7 +7,7 @@ This file is the handshake between two roles:
 
 Rule: **the code and the tests are the truth about what exists; this file says what is built, what is in progress and where the implementation differs from the spec.** The designer should read this before proposing the next milestone; the implementer updates it in the same commit as any milestone work. Never mark something done here that has not been run.
 
-Last updated: milestone 30 complete; milestones 31 to 33 NOT started, on branch `feature/attention-models`.
+Last updated: milestone 31 complete; milestones 32 and 33 NOT started, on branch `feature/attention-models`.
 
 ## 1. Ground rules both sides follow
 1. Critical events never touch AI, are never merged, are never muted, budgeted or delayed, and are delivered inline. Every milestone adds a test proving it.
@@ -25,7 +25,7 @@ Last updated: milestone 30 complete; milestones 31 to 33 NOT started, on branch 
 | 28 | Learning engine (`pkg/learning`) | Done, committed | `docs/milestone-28.md`. Guardrail tested at suggest and apply time; PostgreSQL repository left to CI |
 | 29 | Async worker and attention budgets | Done, committed | `docs/milestone-29.md`. PostgreSQL queue and Redis script left to CI; default budget of 10 per hour flagged in section 5 |
 | 30 | Per-person digests, scoped routing, rich predicates | Done, committed | `docs/milestone-30.md`. Per-person digests built as filtered views (approved); personal email delivery, schedules and console screens are not included |
-| 31 | AgentPulse traces, agent telemetry, MCP server | **Not started** | Shared `pkg/mcp` handler backing both `cmd/mcp-server` (stdio) and `/api/mcp` (HTTP); Trace Explorer UI |
+| 31 | AgentPulse traces, agent telemetry, MCP server | Done, committed | `docs/milestone-31.md`. Not tried with a real MCP client; the PostgreSQL trace round trip left to CI. Dedup bug fixed along the way 
 | 32 | Novu provider, cursor pagination, OpenTelemetry, strict STARTTLS | **Not started** | `NOVU_API_KEY`, `NOVU_API_URL`, `SMTP_REQUIRE_STARTTLS`, `?cursor=`, trace spans |
 | 33 | Documentation reconciliation, Python SDK | **Not started** | Reconcile `architecture.md`, `orchestration-platform.md`, `upcoming-milestones.md`, `deployment.md`; add `sdk/python/agentpulse.py` |
 

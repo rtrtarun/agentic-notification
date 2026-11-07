@@ -66,3 +66,10 @@ func TestPostgresCompetingWorkersNeverClaimTheSameEvent(t *testing.T) {
 		}
 	}
 }
+
+// TestPostgresTraceFields runs the trace-field contract against a real database.
+func TestPostgresTraceFields(t *testing.T) {
+	conn := dbtest.Open(t)
+	dbtest.Clear(t, conn, "events")
+	traceFieldsContract(t, NewPostgresRepository(conn))
+}

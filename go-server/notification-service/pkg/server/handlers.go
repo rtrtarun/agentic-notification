@@ -43,6 +43,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle(explainPrefix, protected(s.explainHandler))
 	mux.Handle(attentionStatusPath, protected(s.attentionStatusHandler))
 	mux.Handle(mePreferencesPath, protected(s.mePreferencesHandler))
+	mux.Handle(apiEventsPath, protected(s.apiEventsHandler))
+	mux.Handle(mcpPath, protected(s.mcpHandler))
+	mux.Handle(tracesPrefix, protected(s.tracesHandler))
+	mux.Handle(tracesPrefix+"/", protected(s.tracesHandler))
 	mux.Handle(learningPrefix, protected(s.learningHandler))
 	mux.Handle(learningPrefix+"/", protected(s.learningHandler))
 	mux.Handle(overridesPrefix, protected(s.overridesHandler))
@@ -310,6 +314,9 @@ type eventSummary struct {
 	DecisionState  *event.DecisionState `json:"decisionState,omitempty"`
 	ThreadID       string               `json:"threadId,omitempty"`
 	MergedInto     string               `json:"mergedInto,omitempty"`
+	TraceID        string               `json:"traceId,omitempty"`
+	ParentEventID  string               `json:"parentEventId,omitempty"`
+	AgentName      string               `json:"agentName,omitempty"`
 	CreatedAt      time.Time            `json:"createdAt"`
 }
 
@@ -331,6 +338,7 @@ func (s *Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 		limit = n
 	}
 
+	traceID := r.URL.Query().Get("traceId")
 	stored, err := s.eventRepo.List(r.Context())
 	if err != nil {
 		s.logFor(r.Context()).Error("list events failed", "error", err)
@@ -342,10 +350,14 @@ func (s *Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 	summaries := make([]eventSummary, 0, min(limit, len(stored)))
 	for i := len(stored) - 1; i >= 0 && len(summaries) < limit; i-- {
 		e := stored[i]
+		if traceID != "" && e.TraceID != traceID {
+			continue
+		}
 		summaries = append(summaries, eventSummary{
 			ID: e.ID, Source: e.Source, EventType: e.EventType, Repository: e.Repository,
 			AttentionClass: e.AttentionClass, DecisionState: e.DecisionState,
 			ThreadID: e.ThreadID, MergedInto: e.MergedInto, CreatedAt: e.CreatedAt,
+			TraceID: e.TraceID, ParentEventID: e.ParentEventID, AgentName: e.AgentName,
 		})
 	}
 	util.WriteJSON(w, http.StatusOK, map[string]interface{}{"events": summaries})
