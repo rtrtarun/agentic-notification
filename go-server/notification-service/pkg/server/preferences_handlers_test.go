@@ -157,9 +157,9 @@ func TestStreamRequiresKeyAndRespectsTheCap(t *testing.T) {
 	if res, _ := openStream(t, ts, "wrong"); res.StatusCode != http.StatusUnauthorized { //nolint:bodyclose // openStream closes the body in a test cleanup
 		t.Fatalf("wrong key = %d", res.StatusCode)
 	}
-	a, _ := openStream(t, ts, testAPIKey)
-	b, _ := openStream(t, ts, testAPIKey)
-	c, _ := openStream(t, ts, testAPIKey)
+	a, _ := openStream(t, ts, testAPIKey) //nolint:bodyclose // openStream closes the body in a test cleanup
+	b, _ := openStream(t, ts, testAPIKey) //nolint:bodyclose // openStream closes the body in a test cleanup
+	c, _ := openStream(t, ts, testAPIKey) //nolint:bodyclose // openStream closes the body in a test cleanup
 	if a.StatusCode != 200 || b.StatusCode != 200 || c.StatusCode != http.StatusServiceUnavailable || c.Header.Get("Retry-After") == "" {
 		t.Fatalf("statuses = %d %d %d", a.StatusCode, b.StatusCode, c.StatusCode)
 	}

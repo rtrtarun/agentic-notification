@@ -164,7 +164,7 @@ func (g *Generator) Generate(ctx context.Context, actor string) (Digest, bool, e
 		Highlights: g.highlights(ctx, held), Model: model, Source: SourceOf(model), CreatedBy: actor, CreatedAt: g.now().UTC(),
 	}
 	for _, grp := range sum.Groups {
-		d.Groups = append(d.Groups, DigestGroup{Key: grp.Key, Title: grp.Title, Summary: grp.Summary, Count: grp.Count, EventIDs: grp.EventIDs})
+		d.Groups = append(d.Groups, DigestGroup(grp))
 	}
 	if err := g.store.Add(ctx, d); err != nil {
 		return Digest{}, false, fmt.Errorf("store digest: %w", err)
