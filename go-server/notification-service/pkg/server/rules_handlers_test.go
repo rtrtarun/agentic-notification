@@ -6,10 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/pipeline"
-	"github.com/example/notification-service/pkg/policy"
-	"github.com/example/notification-service/pkg/rules"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/pipeline"
+	"github.com/agentpulse/notification-service/pkg/policy"
+	"github.com/agentpulse/notification-service/pkg/rules"
 )
 
 type ruleList struct {

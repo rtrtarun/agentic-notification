@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/preferences"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/preferences"
 )
 
 func at(h, m int) time.Time { return time.Date(2026, 6, 10, h, m, 0, 0, time.UTC) }

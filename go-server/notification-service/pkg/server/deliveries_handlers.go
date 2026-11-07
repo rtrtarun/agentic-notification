@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/notification-service/pkg/delivery"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/delivery"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 const (

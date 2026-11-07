@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/example/notification-service/pkg/insights"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/insights"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 // analyticsHandler serves GET /api/analytics?range=24h|7d|30d (default 7d).

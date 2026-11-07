@@ -1,0 +1,35 @@
+{
+  "name": "the webhook fails closed and validates its input",
+  "steps": [
+    {
+      "name": "no signature is refused",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "push" }, "body": { "ref": "main" } },
+      "expect": { "status": 401, "json": { "error": "invalid signature" } }
+    },
+    {
+      "name": "a wrong signature is refused",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "push", "X-Hub-Signature-256": "sha256=00" }, "body": { "ref": "main" } },
+      "expect": { "status": 401, "json": { "error": "invalid signature" } }
+    },
+    {
+      "name": "a signed GET is not allowed",
+      "request": { "method": "GET", "path": "/webhooks/github", "rawBody": "", "sign": true },
+      "expect": { "status": 405, "json": { "error": "method not allowed" } }
+    },
+    {
+      "name": "a missing event header is refused",
+      "request": { "method": "POST", "path": "/webhooks/github", "body": { "ref": "main" }, "sign": true },
+      "expect": { "status": 400, "json": { "error": "missing or invalid github event header" } }
+    },
+    {
+      "name": "an invalid event name is refused",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "Bad-Type" }, "body": { "ref": "main" }, "sign": true },
+      "expect": { "status": 400, "json": { "error": "missing or invalid github event header" } }
+    },
+    {
+      "name": "a body that is not JSON is refused",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "push" }, "rawBody": "not json", "sign": true },
+      "expect": { "status": 400, "json": { "error": "invalid request payload" } }
+    }
+  ]
+}

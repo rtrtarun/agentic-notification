@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/example/notification-service/pkg/inbox"
+	"github.com/agentpulse/notification-service/pkg/inbox"
 )
 
 // ErrInvalidRange is returned for a range other than 24h, 7d or 30d.

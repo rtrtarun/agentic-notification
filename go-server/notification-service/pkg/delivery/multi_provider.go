@@ -6,7 +6,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/example/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/notification"
 )
 
 // MultiProvider fans a request out to every provider concurrently. One provider

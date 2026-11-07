@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/example/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/config"
 )
 
 // fakeOllama answers like a model would and records whether it ever saw a critical event.

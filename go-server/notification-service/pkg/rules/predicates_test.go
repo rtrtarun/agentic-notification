@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/policy"
-	"github.com/example/notification-service/pkg/rules"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/policy"
+	"github.com/agentpulse/notification-service/pkg/rules"
 )
 
 func agentRule() policy.Rule {

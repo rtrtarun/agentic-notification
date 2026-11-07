@@ -4,10 +4,10 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/example/notification-service/pkg/attention"
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/preferences"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/attention"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/preferences"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 const (

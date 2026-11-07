@@ -5,11 +5,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/delivery"
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/policy"
-	"github.com/example/notification-service/pkg/preferences"
-	"github.com/example/notification-service/pkg/stream"
+	"github.com/agentpulse/notification-service/pkg/delivery"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/policy"
+	"github.com/agentpulse/notification-service/pkg/preferences"
+	"github.com/agentpulse/notification-service/pkg/stream"
 )
 
 type capturePublisher struct{ got []stream.Message }

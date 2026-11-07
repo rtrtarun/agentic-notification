@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/example/notification-service/pkg/preferences"
-	"github.com/example/notification-service/pkg/stream"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/preferences"
+	"github.com/agentpulse/notification-service/pkg/stream"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 const (

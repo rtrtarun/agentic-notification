@@ -4,7 +4,7 @@ import (
 	"path"
 	"sync"
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // Engine evaluates rules in order. It is safe for concurrent use, and its rules

@@ -3,7 +3,7 @@ package delivery
 import (
 	"context"
 
-	"github.com/example/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/notification"
 )
 
 // Provider delivers a notification through one channel or vendor.

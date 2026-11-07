@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/example/notification-service/pkg/policy"
+	"github.com/agentpulse/notification-service/pkg/policy"
 )
 
 // MemoryStore keeps rules in process. Used without a database and in tests.

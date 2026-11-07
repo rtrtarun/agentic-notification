@@ -1,0 +1,65 @@
+{
+  "name": "/notify needs the API key, validates what a caller may ask the service to contact, and accepts a valid request",
+  "steps": [
+    {
+      "name": "no key is refused",
+      "request": { "method": "POST", "path": "/notify", "body": { "agent": { "name": "bot" }, "title": "hi" } },
+      "expect": { "status": 401, "json": { "error": "missing or invalid api key" } }
+    },
+    {
+      "name": "GET is not allowed",
+      "request": { "method": "GET", "path": "/notify", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 405, "json": { "error": "method not allowed" } }
+    },
+    {
+      "name": "a body that is not JSON is refused",
+      "request": { "method": "POST", "path": "/notify", "headers": { "X-API-Key": "contract-key" }, "rawBody": "not json" },
+      "expect": { "status": 400, "json": { "error": "invalid request payload" } }
+    },
+    {
+      "name": "an agent name is required",
+      "request": { "method": "POST", "path": "/notify", "headers": { "X-API-Key": "contract-key" }, "body": { "title": "hi" } },
+      "expect": { "status": 400, "json": { "error": "invalid notification request: agent name required" } }
+    },
+    {
+      "name": "a title is required",
+      "request": { "method": "POST", "path": "/notify", "headers": { "X-API-Key": "contract-key" }, "body": { "agent": { "name": "bot" } } },
+      "expect": { "status": 400, "json": { "error": "invalid notification request: title required" } }
+    },
+    {
+      "name": "a title is one short line",
+      "request": { "method": "POST", "path": "/notify", "headers": { "X-API-Key": "contract-key" }, "body": { "agent": { "name": "bot" }, "title": "two\nlines" } },
+      "expect": { "status": 400, "json": { "error": "invalid notification request: title must be a single line of at most 200 characters" } }
+    },
+    {
+      "name": "callers cannot choose SMS numbers",
+      "request": { "method": "POST", "path": "/notify", "headers": { "X-API-Key": "contract-key" }, "body": { "agent": { "name": "bot" }, "title": "hi", "smsRecipients": ["+15551234567"] } },
+      "expect": { "status": 400, "json": { "error": "invalid notification request: sms recipients are configured on the server and cannot be supplied" } }
+    },
+    {
+      "name": "an email address must be a plain address",
+      "request": { "method": "POST", "path": "/notify", "headers": { "X-API-Key": "contract-key" }, "body": { "agent": { "name": "bot" }, "title": "hi", "emailRecipients": ["not an address"] } },
+      "expect": { "status": 400, "json": { "error": "invalid notification request: invalid email recipient" } }
+    },
+    {
+      "name": "a webhook must be https",
+      "request": { "method": "POST", "path": "/notify", "headers": { "X-API-Key": "contract-key" }, "body": { "agent": { "name": "bot" }, "title": "hi", "slackWebhookUrls": ["http://hooks.slack.com/services/x"] } },
+      "expect": { "status": 400, "json": { "error": "invalid notification request: webhook url must be an https url without credentials" } }
+    },
+    {
+      "name": "a webhook must use the default port",
+      "request": { "method": "POST", "path": "/notify", "headers": { "X-API-Key": "contract-key" }, "body": { "agent": { "name": "bot" }, "title": "hi", "slackWebhookUrls": ["https://hooks.slack.com:8443/services/x"] } },
+      "expect": { "status": 400, "json": { "error": "invalid notification request: webhook url must use the default https port" } }
+    },
+    {
+      "name": "a webhook host must be on the allow-list (no internal addresses)",
+      "request": { "method": "POST", "path": "/notify", "headers": { "X-API-Key": "contract-key" }, "body": { "agent": { "name": "bot" }, "title": "hi", "teamsWebhookUrls": ["https://169.254.169.254/latest/meta-data"] } },
+      "expect": { "status": 400, "json": { "error": "invalid notification request: webhook host not allowed" } }
+    },
+    {
+      "name": "a valid request is accepted",
+      "request": { "method": "POST", "path": "/notify", "headers": { "X-API-Key": "contract-key" }, "body": { "agent": { "name": "bot", "group": "ops" }, "title": "Deploy finished", "message": "all green" } },
+      "expect": { "status": 202, "json": { "status": "accepted" } }
+    }
+  ]
+}

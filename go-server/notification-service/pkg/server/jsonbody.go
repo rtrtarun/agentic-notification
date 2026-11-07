@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/example/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/config"
 )
 
 // readJSON decodes at most limit bytes of the request body into dst. A

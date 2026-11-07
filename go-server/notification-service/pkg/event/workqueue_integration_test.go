@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/db/dbtest"
+	"github.com/agentpulse/notification-service/pkg/db/dbtest"
 )
 
 // TestPostgresWorkQueue runs the work-queue contract against a real database.

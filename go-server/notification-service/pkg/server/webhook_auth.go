@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 const (

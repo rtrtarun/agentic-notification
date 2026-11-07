@@ -1,0 +1,63 @@
+{
+  "name": "a critical delivery is logged next to the queue, never queued, and the delivery endpoints behave the same",
+  "steps": [
+    {
+      "name": "the deliveries API needs the key",
+      "request": { "method": "GET", "path": "/api/deliveries" },
+      "expect": { "status": 401, "json": { "error": "missing or invalid api key" } }
+    },
+    {
+      "name": "nothing is queued at the start",
+      "request": { "method": "GET", "path": "/api/deliveries", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "deliveries": [], "counts": {} } }
+    },
+    {
+      "name": "a critical event is delivered inline",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "security_advisory", "X-GitHub-Delivery": "dl-1" }, "body": { "action": "published", "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "critical", "decisionState": { "status": "sent" } } }
+    },
+    {
+      "name": "a standard event is not queued either, because no channel is routed",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "dl-2" }, "body": { "action": "opened", "number": 1, "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "decisionState": { "status": "queued" } } }
+    },
+    {
+      "name": "the log holds only the inline critical delivery",
+      "request": { "method": "GET", "path": "/api/deliveries", "headers": { "X-API-Key": "contract-key" } },
+      "expect": {
+        "status": 200,
+        "json": {
+          "deliveries": [ { "eventId": "github-security_advisory-dl-1", "class": "critical", "title": "[CRITICAL] github/security_advisory", "group": "github", "status": "sent", "attempts": 1, "direct": true } ],
+          "counts": { "sent": 1 }
+        },
+        "absentInEach": { "deliveries": ["message"] }
+      },
+      "save": { "logged": "deliveries.0.id" }
+    },
+    {
+      "name": "a delivery that was sent cannot be retried",
+      "request": { "method": "POST", "path": "/api/deliveries/{{logged}}/retry", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 409, "json": { "error": "only a dead delivery can be retried" } }
+    },
+    {
+      "name": "an unknown delivery is not found",
+      "request": { "method": "POST", "path": "/api/deliveries/missing/retry", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 404, "json": { "error": "delivery not found" } }
+    },
+    {
+      "name": "the limit is checked",
+      "request": { "method": "GET", "path": "/api/deliveries?limit=0", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 400, "json": { "error": "limit must be between 1 and 200" } }
+    },
+    {
+      "name": "only GET lists",
+      "request": { "method": "POST", "path": "/api/deliveries", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 405, "json": { "error": "method not allowed" } }
+    },
+    {
+      "name": "an unknown action is not found",
+      "request": { "method": "POST", "path": "/api/deliveries/{{logged}}/nope", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 404, "json": { "error": "not found" } }
+    }
+  ]
+}

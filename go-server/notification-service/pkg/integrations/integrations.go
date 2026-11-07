@@ -7,7 +7,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // Statuses.

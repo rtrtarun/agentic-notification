@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/example/notification-service/pkg/config"
-	"github.com/example/notification-service/pkg/sms"
+	"github.com/agentpulse/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/sms"
 )
 
 func starEvents(s *Server, n int) {

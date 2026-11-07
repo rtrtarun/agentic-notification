@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/preferences"
-	"github.com/example/notification-service/pkg/stream"
+	"github.com/agentpulse/notification-service/pkg/preferences"
+	"github.com/agentpulse/notification-service/pkg/stream"
 )
 
 func newPrefsServer(t *testing.T) *Server {

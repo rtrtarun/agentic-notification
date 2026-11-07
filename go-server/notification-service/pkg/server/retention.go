@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 const retentionInterval = time.Hour

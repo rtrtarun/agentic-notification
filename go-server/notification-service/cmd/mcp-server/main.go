@@ -16,7 +16,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/example/notification-service/pkg/mcp"
+	"github.com/agentpulse/notification-service/pkg/mcp"
 )
 
 // maxLine bounds one incoming message.

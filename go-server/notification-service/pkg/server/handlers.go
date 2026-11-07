@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/notification"
-	"github.com/example/notification-service/pkg/pagination"
-	"github.com/example/notification-service/pkg/pipeline"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/pagination"
+	"github.com/agentpulse/notification-service/pkg/pipeline"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 // Handler returns the HTTP handler with all routes and middleware attached.

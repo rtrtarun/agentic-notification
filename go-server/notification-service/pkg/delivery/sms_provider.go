@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/example/notification-service/pkg/notification"
-	"github.com/example/notification-service/pkg/sms"
+	"github.com/agentpulse/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/sms"
 )
 
 // maxSMSChars keeps one alert to a few segments; a text is a nudge, not a report.

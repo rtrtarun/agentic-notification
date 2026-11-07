@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/config"
-	"github.com/example/notification-service/pkg/delivery"
-	"github.com/example/notification-service/pkg/sms"
+	"github.com/agentpulse/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/delivery"
+	"github.com/agentpulse/notification-service/pkg/sms"
 )
 
 func newDeliveryServer(t *testing.T, mutate func(*config.Config)) *Server {

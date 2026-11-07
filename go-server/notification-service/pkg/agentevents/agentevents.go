@@ -17,8 +17,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/traces"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/traces"
 )
 
 // DefaultSource is used when an agent does not name one.

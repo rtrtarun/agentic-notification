@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/db"
+	"github.com/agentpulse/notification-service/pkg/db"
 )
 
 // EnvURL is the environment variable that holds the test database address.

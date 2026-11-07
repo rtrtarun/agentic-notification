@@ -1,0 +1,25 @@
+{
+  "name": "standard events are queued and merged when repeated; background events wait for the digest",
+  "steps": [
+    {
+      "name": "a pull request is standard and queued",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "std-1" }, "body": { "action": "opened", "number": 42, "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "standard", "decisionState": { "status": "queued", "reason": "default routing", "matchedRule": "default-github" } } }
+    },
+    {
+      "name": "the same pull request and action again is merged into the first",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "std-2" }, "body": { "action": "opened", "number": 42, "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "standard", "decisionState": { "status": "merged", "reason": "duplicate of github-pull_request-std-1" } } }
+    },
+    {
+      "name": "a different pull request is not merged",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "std-3" }, "body": { "action": "opened", "number": 43, "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "decisionState": { "status": "queued" } } }
+    },
+    {
+      "name": "a star is background and held for the digest",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "star", "X-GitHub-Delivery": "bg-1" }, "body": { "action": "created", "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "background", "decisionState": { "status": "digest", "matchedRule": "github-star" } } }
+    }
+  ]
+}

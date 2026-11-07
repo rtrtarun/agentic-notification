@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/example/notification-service/pkg/notification"
-	"github.com/example/notification-service/pkg/sms"
+	"github.com/agentpulse/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/sms"
 )
 
 // Channel IDs.

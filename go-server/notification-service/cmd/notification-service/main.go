@@ -8,8 +8,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/example/notification-service/pkg/config"
-	"github.com/example/notification-service/pkg/server"
+	"github.com/agentpulse/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/server"
 )
 
 func main() {

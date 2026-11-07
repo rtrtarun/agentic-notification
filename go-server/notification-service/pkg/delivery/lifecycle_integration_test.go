@@ -5,7 +5,7 @@ package delivery
 import (
 	"testing"
 
-	"github.com/example/notification-service/pkg/db/dbtest"
+	"github.com/agentpulse/notification-service/pkg/db/dbtest"
 )
 
 // TestPostgresStoreLifecycle runs the retry, dead-letter, lease and competing-worker

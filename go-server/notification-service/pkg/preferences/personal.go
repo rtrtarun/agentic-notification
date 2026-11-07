@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // ErrNoUser is returned when personal preferences are asked for without a person.

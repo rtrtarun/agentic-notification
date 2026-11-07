@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/example/notification-service/pkg/auth"
+	"github.com/agentpulse/notification-service/pkg/auth"
 )
 
 // initAuth builds the account service, creates the first admin when asked to,

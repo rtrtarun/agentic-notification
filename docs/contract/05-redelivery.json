@@ -1,0 +1,20 @@
+{
+  "name": "a redelivered webhook is acknowledged and not processed twice",
+  "steps": [
+    {
+      "name": "first delivery",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "issues", "X-GitHub-Delivery": "re-1" }, "body": { "action": "opened", "issue": { "number": 7 }, "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "status": "accepted", "eventId": "github-issues-re-1" } }
+    },
+    {
+      "name": "same delivery id again",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "issues", "X-GitHub-Delivery": "re-1" }, "body": { "action": "opened", "issue": { "number": 7 }, "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 200, "json": { "status": "duplicate", "eventId": "github-issues-re-1" } }
+    },
+    {
+      "name": "an unusable delivery id gets a generated id",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "release", "X-GitHub-Delivery": "bad id here" }, "body": { "action": "published", "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "status": "accepted", "attentionClass": "standard" } }
+    }
+  ]
+}

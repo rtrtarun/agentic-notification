@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // Heuristic is the built-in, offline implementation of Classifier, Summarizer

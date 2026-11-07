@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/example/notification-service/pkg/agentevents"
+	"github.com/agentpulse/notification-service/pkg/agentevents"
 )
 
 // ProtocolVersion is the MCP revision this server speaks.

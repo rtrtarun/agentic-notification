@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/stream"
+	"github.com/agentpulse/notification-service/pkg/stream"
 )
 
 func recv(t *testing.T, s *stream.Subscription) stream.Message {

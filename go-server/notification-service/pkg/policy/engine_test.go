@@ -3,7 +3,7 @@ package policy
 import (
 	"testing"
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 func TestEngineEvaluatesMatchingRule(t *testing.T) {

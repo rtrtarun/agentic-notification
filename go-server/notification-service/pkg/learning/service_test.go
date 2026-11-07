@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/feedback"
-	"github.com/example/notification-service/pkg/overrides"
-	"github.com/example/notification-service/pkg/policy"
+	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/feedback"
+	"github.com/agentpulse/notification-service/pkg/overrides"
+	"github.com/agentpulse/notification-service/pkg/policy"
 )
 
 var now = time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)

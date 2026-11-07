@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/example/notification-service/pkg/learning"
-	"github.com/example/notification-service/pkg/overrides"
-	"github.com/example/notification-service/pkg/util"
+	"github.com/agentpulse/notification-service/pkg/learning"
+	"github.com/agentpulse/notification-service/pkg/overrides"
+	"github.com/agentpulse/notification-service/pkg/util"
 )
 
 const learningPrefix = "/api/learning/suggestions"

@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/example/notification-service/pkg/notification"
+	"github.com/agentpulse/notification-service/pkg/notification"
 )
 
 func webhookRequest(slack, teams []string) notification.NotificationRequest {

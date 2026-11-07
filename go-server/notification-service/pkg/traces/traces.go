@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/example/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/event"
 )
 
 // Step kinds an agent may report.

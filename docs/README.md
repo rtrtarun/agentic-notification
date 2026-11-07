@@ -13,7 +13,7 @@ docs/
 ├── frontend.md  ui-architecture.md   the console
 ├── agentpulse.md              AI agent observability
 ├── implementation-sync.md  CHANGELOG.md  status and history
-├── milestones/                one document per milestone, milestone-1.md to milestone-33.md
+├── milestones/                one document per milestone, milestone-1.md to milestone-35.md
 └── rules/                     the rules every change follows (coding-standards.md)
 ```
 
@@ -93,6 +93,7 @@ Each milestone has one document: goals, decisions, database and API changes, ris
 | | [24](milestones/milestone-24.md), [25](milestones/milestone-25.md), [26](milestones/milestone-26.md) | Feedback and overrides; Attention Intelligence; Ollama and Claude adapters |
 | **Verification and depth** | [27](milestones/milestone-27.md), [28](milestones/milestone-28.md), [29](milestones/milestone-29.md) | PostgreSQL contract tests; the learning engine; the async worker and attention budgets |
 | | [30](milestones/milestone-30.md), [31](milestones/milestone-31.md), [32](milestones/milestone-32.md), [33](milestones/milestone-33.md) | Predicates, channels and per-person digests; AgentPulse and MCP; Novu, cursors, tracing and STARTTLS; this reconciliation and the SDK |
+| | [34](milestones/milestone-34.md), [35](milestones/milestone-35.md) | Java foundation (core pipeline, shared contract in [contract/](contract/README.md)); Java parity part 2 (`/notify`, rules API, durable queue, Redis dedup) |
 
 ## 7. Standards and process
 

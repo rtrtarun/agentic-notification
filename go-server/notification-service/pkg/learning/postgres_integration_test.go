@@ -5,7 +5,7 @@ package learning
 import (
 	"testing"
 
-	"github.com/example/notification-service/pkg/db/dbtest"
+	"github.com/agentpulse/notification-service/pkg/db/dbtest"
 )
 
 // TestPostgresRepositoryContract runs the same checks as the memory repository against a real database.
