@@ -71,7 +71,7 @@ npx vite preview     # serves dist/
 On one machine, with Docker:
 
 ```bash
-docker compose up --build        # service on :8080, PostgreSQL, Redis
+docker compose up --build postgres redis go-notification-service   # service on :8080, PostgreSQL, Redis
 cd apps/web && npm install && npm run dev      # console on :3000
 ```
 
