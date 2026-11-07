@@ -2,7 +2,7 @@
 
 The files in this folder are the shared contract for the Go service and the Java service. Each service has a test that reads these files, starts itself, replays the requests and checks the answers. If a service disagrees with a file, that service's build fails, so "the two services behave the same" is checked by tests rather than by reading code.
 
-The contract covers milestone 34 (the core pipeline): `/health`, `/webhooks/github` and `/events`. It grows with each parity milestone.
+The contract covers milestones 34 and 35: `/health`, `/webhooks/github`, `/events`, `/notify`, `/api/rules`, `/api/policies` and `/api/deliveries`. It grows with each parity milestone. Not covered because the Java service does not have them yet: rule `payloadMatch` and `channels`.
 
 ## Environment both services run with
 
@@ -49,7 +49,7 @@ Every file starts a fresh service, so files do not depend on each other. Steps i
 
 - `sign: true` adds `X-Hub-Signature-256`, the HMAC-SHA256 of the exact body bytes with `contract-secret`.
 - `json` is a **subset** match: every key written must be present and equal; extra keys in the answer are fine. Arrays must have the same length, and each element is a subset match of the same position.
-- `save` keeps a top-level value of the answer; later `path` values may use `{{variable}}`.
+- `save` keeps a value of the answer by dotted path (`"rules.0.id"`; a number selects an array element); later `path` values and request bodies may use `{{variable}}`.
 - Fields that vary between runs (`createdAt`, generated ids) are never compared.
 
 ## Running

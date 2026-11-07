@@ -1,14 +1,18 @@
 package com.agentpulse.notification.application;
 
 import com.agentpulse.notification.domain.Event;
+import com.agentpulse.notification.domain.Rule;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
- * The ports the pipeline depends on. Infrastructure implements them; nothing here knows about SQL, SMTP or HTTP.
- * Every port may only be consulted for events that are not critical, except {@link EventRepository} and
- * {@link NotificationProvider}, which critical events do use.
+ * The ports the application depends on. Infrastructure implements them; nothing here knows about SQL, SMTP, Redis
+ * or HTTP. A critical event only ever uses {@link EventRepository}, {@link NotificationProvider} and the logging
+ * half of {@link Outbox}; the classifier, preferences, budget and the queue are never consulted for it.
  */
 public final class Ports {
     private Ports() {}
@@ -30,10 +34,11 @@ public final class Ports {
         List<Event> listRecent(int limit);
     }
 
-    /** What a provider is asked to deliver. */
-    public record Notification(String title, String message, String group) {}
+    /** What a provider is asked to deliver, and to whom. */
+    public record Notification(String title, String message, String agentName, String agentOwner, String agentGroup,
+                               Targets targets) {}
 
-    /** Delivers a notification to people. Implementations throw {@link PortException} on failure. */
+    /** Delivers a notification to the targets it carries. Implementations throw {@link PortException} on failure. */
     public interface NotificationProvider {
         void send(Notification notification);
 
@@ -64,11 +69,48 @@ public final class Ports {
         BudgetResult take();
     }
 
-    /** Queues non-critical deliveries. Critical events never go through it. */
+    /** Queues non-critical deliveries and logs critical ones. A routing table plus a queue; nothing decides by model. */
     public interface Outbox {
-        /** Reports whether a class has a channel to be delivered to. */
+        /** Reports whether a class has a configured channel to be delivered to. */
         boolean routed(String attentionClass);
 
+        /** Queues the event for the channels its class is routed to. Never called for a critical event. */
         void enqueue(Event event);
+
+        /** Logs an inline (critical) delivery next to the queued ones. It decides nothing; its failure is only logged. */
+        void recordDirect(Event event, String channels, RuntimeException sendError);
+    }
+
+    /** Keeps the ordered rule list. */
+    public interface RuleStore {
+        List<Rule> list();
+
+        /** Stores exactly this list, in this order, all or nothing. */
+        void replace(List<Rule> rules);
+    }
+
+    /** Keeps the delivery queue. */
+    public interface DeliveryStore {
+        /** Adds a pending job; false, and nothing changes, when a job for the same event and channel exists. */
+        boolean enqueue(Delivery.Job job);
+
+        /** Stores or replaces the log entry of an inline delivery. */
+        void record(Delivery.Job job);
+
+        /** Leases up to {@code limit} due jobs and counts the attempt. Several instances may claim at once. */
+        List<Delivery.Job> claim(Instant now, Duration lease, int limit);
+
+        void complete(String id, Instant now);
+
+        /** Records an error. A null {@code retryAt} moves the job to dead. */
+        void fail(String id, String error, Instant retryAt, Instant now);
+
+        /** Moves a dead job back to pending, due now, with its attempts reset. */
+        void requeue(String id, Instant now);
+
+        /** Newest first. */
+        List<Delivery.Job> list(int limit);
+
+        Map<String, Integer> counts();
     }
 }

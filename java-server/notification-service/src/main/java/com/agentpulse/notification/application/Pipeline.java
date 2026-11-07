@@ -53,6 +53,7 @@ public final class Pipeline {
     private Preferences preferences;
     private Budget budget;
     private Outbox outbox;
+    private Targets criticalTargets = Targets.none();
 
     public Pipeline(PolicyEngine policy, NotificationProvider provider, EventRepository repository) {
         this.policy = policy;
@@ -84,6 +85,12 @@ public final class Pipeline {
         return this;
     }
 
+    /** Where critical events are delivered inline: every configured channel. */
+    public Pipeline withCriticalTargets(Targets targets) {
+        this.criticalTargets = targets;
+        return this;
+    }
+
     /** Queues standard and background deliveries. Without it they are only recorded. */
     public Pipeline withOutbox(Outbox outbox) {
         this.outbox = outbox;
@@ -106,11 +113,16 @@ public final class Pipeline {
         boolean duplicate = applyDedup(event);
 
         if (event.isCritical()) {
+            RuntimeException sendError = null;
             try {
                 deliverCritical(event);
             } catch (RuntimeException e) {
+                sendError = e;
+            }
+            logDirect(event, sendError);
+            if (sendError != null) {
                 forgetDedup(event);
-                throw new PipelineException("deliver critical event: " + e.getMessage(), e);
+                throw new PipelineException("deliver critical event: " + sendError.getMessage(), sendError);
             }
             event.getDecisionState().setStatus(Status.SENT);
         } else {
@@ -174,8 +186,10 @@ public final class Pipeline {
         try {
             result = deduper.check(event);
         } catch (RuntimeException e) {
-            // Fail open: an unavailable dedup store must never suppress an event.
+            // Fail open: an unavailable dedup store must never suppress an event. It is still threaded and keyed.
             LOG.warn("dedup check failed; treating event as unique event_id={} error={}", event.getId(), e.getMessage());
+            event.setDedupKey(Dedup.dedupKey(event));
+            event.setThreadId(Dedup.threadId(event));
             return false;
         }
         event.setDedupKey(result.dedupKey());
@@ -268,12 +282,24 @@ public final class Pipeline {
         return Status.QUEUED;
     }
 
+    /** Logs a critical delivery next to the queued ones. It decides nothing and never fails the event. */
+    private void logDirect(Event event, RuntimeException sendError) {
+        if (outbox == null) {
+            return;
+        }
+        try {
+            outbox.recordDirect(event, provider.name(), sendError);
+        } catch (RuntimeException e) {
+            LOG.warn("log critical delivery failed event_id={} error={}", event.getId(), Delivery.redact(e.getMessage()));
+        }
+    }
+
     private void deliverCritical(Event event) {
         String title = "[CRITICAL] " + event.getSource() + "/" + event.getEventType();
         String message = "Critical alert\nSource: " + event.getSource()
                 + "\nEvent: " + event.getEventType()
                 + "\nRepository: " + event.getRepository()
                 + "\nReason: " + event.getDecisionState().getReason();
-        provider.send(new Notification(title, message, event.getSource()));
+        provider.send(new Notification(title, message, "attention-orchestration", "", event.getSource(), criticalTargets));
     }
 }

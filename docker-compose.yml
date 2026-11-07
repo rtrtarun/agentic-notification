@@ -64,6 +64,8 @@ services:
       # Same database as the Go service. The Go service owns and migrates the schema, so it starts first;
       # the Java service waits up to a minute for the tables.
       DATABASE_URL: postgres://attention:attention@postgres:5432/attention?sslmode=disable
+      # Shared with the Go service: an event seen by one service is a duplicate for the other.
+      REDIS_URL: redis://redis:6379/0
       # The same rules file as the Go service (mounted read-only from its config folder).
       RULES_PATH: /app/config/rules.yaml
       DEFAULT_NOTIFY_EMAIL: ops@example.com
@@ -74,5 +76,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
       go-notification-service:
         condition: service_started

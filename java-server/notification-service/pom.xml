@@ -36,6 +36,11 @@
             <version>5.1.0</version>
         </dependency>
         <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>5.1.4</version>
+        </dependency>
+        <dependency>
             <groupId>org.eclipse.angus</groupId>
             <artifactId>angus-mail</artifactId>
             <version>2.0.3</version>
@@ -117,7 +122,11 @@
                         <phase>verify</phase>
                         <goals><goal>report</goal></goals>
                         <configuration>
-                            <excludes><exclude>com/agentpulse/notification/Main.class</exclude></excludes>
+                            <excludes>
+                                <exclude>com/agentpulse/notification/Main.class</exclude>
+                                <exclude>com/agentpulse/notification/infrastructure/Postgres*.class</exclude>
+                                <exclude>com/agentpulse/notification/infrastructure/JedisKeyStore*.class</exclude>
+                            </excludes>
                         </configuration>
                     </execution>
                     <execution>
@@ -125,7 +134,11 @@
                         <phase>verify</phase>
                         <goals><goal>check</goal></goals>
                         <configuration>
-                            <excludes><exclude>com/agentpulse/notification/Main.class</exclude></excludes>
+                            <excludes>
+                                <exclude>com/agentpulse/notification/Main.class</exclude>
+                                <exclude>com/agentpulse/notification/infrastructure/Postgres*.class</exclude>
+                                <exclude>com/agentpulse/notification/infrastructure/JedisKeyStore*.class</exclude>
+                            </excludes>
                             <rules>
                                 <rule>
                                     <element>BUNDLE</element>

@@ -371,15 +371,16 @@ Everything lives in [`docs/`](docs/), grouped by what you want to do. **[docs/RE
 **Next** (details in [architecture.md section 13](docs/architecture.md#13-forward-roadmap)):
 
 1. **Prove it against real services**: PostgreSQL, Redis, Ollama, Claude, Novu, SNS, an OpenID provider and a real MCP client; get CI green end to end.
-2. **Java parity, continued**: milestone 34 built the core (rules, dedup, critical delivery, persistence) and a shared contract in `docs/contract`; the rest of the Go service (accounts, Attention Intelligence, feedback, learning, traces, MCP) follows milestone by milestone.
-3. **Per-person delivery**: resolve a person's address at send time and deliver personal digests, schedules and budgets.
-4. **Console completeness**: screens for rule predicates, per-rule channels and personal preferences; translations for the newer screens.
-5. **Scale**: a real queue instead of polling if needed; a shared circuit breaker; an OpenTelemetry exporter.
-6. **Product**: event replay, an agent registry, multi-tenancy and billing for a hosted offering.
+2. **Java parity, continued**: milestones 34 and 35 built the core, `/notify`, the rules API, the durable delivery queue and Redis dedup in Java, with a nine-file shared contract in `docs/contract`; the rest of the Go service (accounts, Attention Intelligence, feedback, learning, traces, MCP) follows milestone by milestone.
+3. **SDKs for other languages** (documented, not started): TypeScript/JavaScript, Go and Java first, modelled on the Python SDK; see [upcoming-milestones.md](docs/upcoming-milestones.md).
+4. **Per-person delivery**: resolve a person's address at send time and deliver personal digests, schedules and budgets.
+5. **Console completeness**: screens for rule predicates, per-rule channels and personal preferences; translations for the newer screens.
+6. **Scale**: a real queue instead of polling if needed; a shared circuit breaker; an OpenTelemetry exporter.
+7. **Product**: event replay, an agent registry, multi-tenancy and billing for a hosted offering.
 
 **Known issues**
 
-- The Java service covers the core only (webhook, rules, dedup, critical delivery, persistence, `/events`); its CI job passes on GitHub (run 42368107261 on commit b562715, read from the public API). See [milestone 34](docs/milestones/milestone-34.md).
+- The Java service covers the core, `/notify`, the rules API, the delivery queue and Redis dedup (milestones 34 and 35), not accounts, AI, feedback, learning, traces or MCP; two services sharing one database must be configured alike because both dispatch queued jobs; its CI job passes on GitHub (run 42368107261 on commit b562715, read from the public API). See [milestone 34](docs/milestones/milestone-34.md).
 - NATS is part of the intended stack but is not used; the worker and delivery poll PostgreSQL.
 - Personal digests are stored and readable but not delivered.
 - Parts that have run only against fakes: PostgreSQL stores (CI only), the Redis budget script (CI only), Ollama, Claude, Novu, SNS, OpenID Connect, the MCP server.

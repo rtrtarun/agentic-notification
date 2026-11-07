@@ -87,6 +87,15 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_URL: postgres://attention:attention@localhost:5432/attention?sslmode=disable
     steps:
@@ -105,10 +114,11 @@ jobs:
       - name: Create the schema with the Go migrations
         working-directory: go-server/notification-service
         run: go run ./cmd/migrate
-      - name: Build and test (unit, contract, PostgreSQL, 80 percent line coverage)
+      - name: Build and test (unit, contract, PostgreSQL, Redis, 80 percent line coverage)
         working-directory: java-server/notification-service
         env:
           TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+          TEST_REDIS_URL: redis://localhost:6379/0
         run: mvn -B verify
 
   web:

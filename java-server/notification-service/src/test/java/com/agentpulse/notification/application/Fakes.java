@@ -148,6 +148,7 @@ final class Fakes {
 
     static final class CountingOutbox implements Outbox {
         int enqueued;
+        int direct;
         boolean routedStandard = true;
         boolean routedBackground = true;
         boolean fail;
@@ -163,6 +164,14 @@ final class Fakes {
                 throw new PortException("queue down", null);
             }
             enqueued++;
+        }
+
+        @Override
+        public void recordDirect(Event event, String channels, RuntimeException sendError) {
+            if (fail) {
+                throw new PortException("log down", null);
+            }
+            direct++;
         }
     }
 }

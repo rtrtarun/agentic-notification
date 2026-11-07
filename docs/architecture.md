@@ -780,7 +780,7 @@ Local statement coverage by package is in [implementation-sync.md](implementatio
 | Tracing | `traceparent` and span logs only; no collector export |
 | Event window | Digests, traces and learning read the newest 1000 events |
 | Console | Newer screens English only; no screens yet for rule predicates, per-rule channels or personal preferences |
-| Java service | Core parity built (milestone 34, 69 tests, shared contract); **the rest to be brought to parity** (planned) |
+| Java service | Core, `/notify`, rules API, durable queue and Redis dedup built (milestones 34 and 35, 132 tests, nine-file shared contract); **the rest to be brought to parity** (planned) |
 | NATS | In the intended stack only; not in Compose and not used |
 | At-least-once critical delivery | If an alert is delivered but saving fails, the redelivery notifies again. Deliberate: a duplicate beats a lost critical alert |
 
@@ -791,12 +791,13 @@ Local statement coverage by package is in [implementation-sync.md](implementatio
 | Step | Goal |
 |---|---|
 | **Verify against real services** | Run PostgreSQL, Redis, Ollama, Claude, Novu, SNS, an OpenID provider and a real MCP client against the code; record results; fix what they find. Get the CI run green end to end, including `-race` and the coverage gate |
+| **SDKs for other languages** | Documented only (2026-11-07): TypeScript/JavaScript, Go and Java first, modelled on the Python SDK (never breaks the agent, never decides severity, tested against a fake server and the real binary). No language order or build approach chosen; see `upcoming-milestones.md` |
 | **Per-person delivery** | Resolve a person's address at send time without storing it in jobs; deliver personal digests; per-person schedules and budgets |
 | **Console completeness** | Screens for predicates, per-rule channels, personal preferences and "my digest"; translations for the newer screens; component-level tests |
 | **Queue and scale** | Move the worker and delivery from polling to NATS (or another queue) if polling stops being enough; share the circuit breaker across replicas |
 | **Observability** | An OpenTelemetry exporter for the spans already recorded |
 | **Product** | Event replay, an agent registry, multi-tenancy and billing for the hosted offering |
-| **Java parity** | Milestone 34 built the core and the shared contract suite (`docs/contract`, replayed by both services). Next: bring the remaining Go features to Java in an order the project owner chooses, extending the contract each time |
+| **Java parity** | Milestones 34 and 35 built the core, `/notify`, the rules API, the durable queue and Redis dedup, and the shared contract suite (`docs/contract`, replayed by both services). Next: bring the remaining Go features to Java in an order the project owner chooses, extending the contract each time |
 | **Housekeeping** | Reconcile the two `k8s/` directories; raise packages below 80 percent coverage |
 
 ---

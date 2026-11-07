@@ -1,6 +1,9 @@
 package com.agentpulse.notification.interfaces;
 
+import com.agentpulse.notification.application.Notify;
 import com.agentpulse.notification.application.Pipeline;
+import com.agentpulse.notification.application.RulesService;
+import com.agentpulse.notification.infrastructure.MemoryStores;
 import com.agentpulse.notification.application.PolicyEngine;
 import com.agentpulse.notification.application.Ports.EventRepository;
 import com.agentpulse.notification.application.Ports.Notification;
@@ -57,8 +60,11 @@ class HttpApiTest {
 
     private String start(Map<String, String> env, NotificationProvider provider, EventRepository repo) throws Exception {
         Config config = Config.load(env);
-        Pipeline pipeline = new Pipeline(new PolicyEngine(RULES), provider, repo);
-        server = new HttpApi(config, pipeline, repo).start(0);
+        PolicyEngine engine = new PolicyEngine(List.of());
+        RulesService rules = new RulesService(new MemoryStores.Rules(), engine, RULES);
+        Pipeline pipeline = new Pipeline(engine, provider, repo);
+        server = new HttpApi(config, pipeline, repo, new Notify.Service(config.notifyLimits(), provider), rules,
+                new MemoryStores.Deliveries(), Clock.systemUTC()).start(0);
         return "http://localhost:" + server.getAddress().getPort();
     }
 

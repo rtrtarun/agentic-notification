@@ -93,6 +93,7 @@ class SacredInvariantTest {
         Event result = pipeline.handle(Fakes.event("c1", "security_advisory"));
 
         assertEquals(0, outbox.enqueued, "a critical event never waits in a queue");
+        assertEquals(1, outbox.direct, "it is only logged next to the queued ones, after the inline delivery");
         assertEquals(1, provider.sent.size());
         assertEquals(List.of("deliver", "save"), order, "delivered before it is stored, in the same call");
         assertEquals(Status.SENT, result.getDecisionState().getStatus());
@@ -102,4 +103,111 @@ class SacredInvariantTest {
         assertThrows(Pipeline.PipelineException.class, () -> pipeline.handle(Fakes.event("c2", "security_advisory")));
         assertTrue(repository.saved.stream().noneMatch(e -> e.getId().equals("c2")));
     }
+
+    // ---- Milestone 35: the queue, Redis dedup and /notify ----------------------------------------------------------
+
+    /** A Redis stand-in shared by "replicas", with a switch to take it down. */
+    private static final class SharedRedis implements com.agentpulse.notification.infrastructure.RedisDeduper.KeyStore {
+        final java.util.Map<String, String> data = new java.util.HashMap<>();
+        boolean down;
+
+        @Override public boolean setIfAbsent(String key, String value, Duration ttl) {
+            check();
+            return data.putIfAbsent(key, value) == null;
+        }
+        @Override public java.util.Optional<String> get(String key) {
+            check();
+            return java.util.Optional.ofNullable(data.get(key));
+        }
+        @Override public void deleteIfEquals(String key, String value) {
+            check();
+            data.remove(key, value);
+        }
+        private void check() {
+            if (down) {
+                throw new IllegalStateException("connection refused");
+            }
+        }
+    }
+
+    private Pipeline withRealQueueAndRedis(SharedRedis redis, com.agentpulse.notification.infrastructure.MemoryStores.Deliveries jobs) {
+        Targets targets = new Targets(null, List.of("https://hooks.slack.com/services/x"), null);
+        return new Pipeline(Fakes.engine(), provider, repository)
+                .withDeduper(new com.agentpulse.notification.infrastructure.RedisDeduper(redis, Duration.ofMinutes(10)))
+                .withClassifier(classifier)
+                .withBudget(budget)
+                .withOutbox(new QueueOutbox(jobs, targets, java.util.Map.of("standard", List.of("slack")), Clock.systemUTC()))
+                .withCriticalTargets(targets);
+    }
+
+    @Test
+    void criticalEventsAreNeverMergedByRedisDedupAndNeverEnterTheDurableQueue() {
+        SharedRedis redis = new SharedRedis();
+        var jobs = new com.agentpulse.notification.infrastructure.MemoryStores.Deliveries();
+        Pipeline pipeline = withRealQueueAndRedis(redis, jobs);
+
+        Event first = pipeline.handle(Fakes.event("c1", "security_advisory"));
+        Event repeat = pipeline.handle(Fakes.event("c2", "security_advisory"));
+
+        assertEquals(Status.SENT, first.getDecisionState().getStatus());
+        assertEquals(Status.SENT, repeat.getDecisionState().getStatus(), "Redis says duplicate; a critical event ignores it");
+        assertEquals("", repeat.getMergedInto());
+        assertEquals(2, provider.sent.size());
+        assertEquals(1, redis.data.size(), "Redis did record the key, as in the Go service");
+        assertTrue(jobs.list(10).stream().allMatch(com.agentpulse.notification.application.Delivery.Job::direct),
+                "the queue holds only the log of the inline deliveries");
+        assertEquals(0, jobs.claim(java.time.Instant.now().plusSeconds(60), Duration.ofMinutes(1), 10).size(),
+                "nothing the worker could ever send");
+        assertEquals(0, classifier.calls);
+        assertEquals(0, budget.calls);
+    }
+
+    @Test
+    void aStandardEventIsStillQueuedAndMergedThroughTheSameRealParts() {
+        classifier.answer = "standard";
+        SharedRedis redis = new SharedRedis();
+        var jobs = new com.agentpulse.notification.infrastructure.MemoryStores.Deliveries();
+        Pipeline pipeline = withRealQueueAndRedis(redis, jobs);
+
+        pipeline.handle(Fakes.pullRequest("e1", 1));
+        Event repeat = pipeline.handle(Fakes.pullRequest("e2", 1));
+
+        assertEquals(Status.MERGED, repeat.getDecisionState().getStatus());
+        assertEquals(1, jobs.list(10).size(), "queued once; the merged repeat adds nothing");
+    }
+
+    @Test
+    void whenRedisIsDownEventsFailOpenAndACriticalEventIsStillDeliveredAndThreaded() {
+        SharedRedis redis = new SharedRedis();
+        redis.down = true;
+        var jobs = new com.agentpulse.notification.infrastructure.MemoryStores.Deliveries();
+        Pipeline pipeline = withRealQueueAndRedis(redis, jobs);
+
+        Event critical = pipeline.handle(Fakes.event("c1", "security_advisory"));
+        assertEquals(Status.SENT, critical.getDecisionState().getStatus());
+        assertFalse(critical.getThreadId().isEmpty(), "still threaded without Redis");
+        assertFalse(critical.getDedupKey().isEmpty());
+
+        classifier.answer = "standard";
+        Event standard = pipeline.handle(Fakes.pullRequest("e1", 1));
+        assertEquals(Status.QUEUED, standard.getDecisionState().getStatus(), "treated as unique, not lost");
+    }
+
+    @Test
+    void aCriticalNotificationSentThroughNotifyIsDeliveredInlineAndTouchesNoQueueDedupOrAi() {
+        var jobs = new com.agentpulse.notification.infrastructure.MemoryStores.Deliveries();
+        Notify.Service service = new Notify.Service(new Notify.Limits(List.of("hooks.slack.com"), List.of()), provider);
+
+        service.send(new Notify.Request(new Notify.Agent("pager-bot", "", "ops"), "[CRITICAL] database down", "all writes fail",
+                List.of("oncall@example.com"), List.of("https://hooks.slack.com/services/x"), null, null));
+
+        assertEquals(1, provider.sent.size(), "delivered synchronously, before send() returned");
+        assertEquals(List.of("oncall@example.com"), provider.sent.get(0).targets().email());
+        assertTrue(jobs.list(10).isEmpty(), "never in the durable queue");
+        assertEquals(0, classifier.calls);
+        assertEquals(0, budget.calls);
+        assertEquals(0, preferences.calls);
+        assertEquals(List.of("deliver"), order, "nothing was stored or deferred; the provider was the only step");
+    }
 }
+

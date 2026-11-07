@@ -36,5 +36,27 @@ Planned work after milestone 26, taken from the "known limits" of milestones 22 
 ## Milestone 34: Java foundation (built)
 The Java service now has the deterministic core and a shared contract with the Go service; see [milestones/milestone-34.md](milestones/milestone-34.md). Milestones 35 and later bring the rest of the Go service to Java in the order the project owner chooses (suggested: `/notify`, rules and policies API, durable delivery, Redis dedup, accounts, Attention Intelligence, feedback, learning, traces and MCP).
 
+## Milestone 35: Java parity part 2 (built)
+`/notify`, the rules API, the durable delivery queue and Redis deduplication in Java, with three more contract files; see [milestones/milestone-35.md](milestones/milestone-35.md). Milestone 36 (approved in outline): accounts and sign-in, Attention Intelligence and feedback in Java.
+
+## Proposed, not started: SDKs for other languages
+**Why:** Agents are written in many languages; today only Python has an SDK ([sdk/python](../sdk/python), milestone 33). Everyone else must hand-write HTTP calls and the trace chaining.
+**Recorded 2026-11-07 as a documented future feature only. Nothing is built and no language order is chosen.** Like every milestone it needs its AGENTS.md plan and an approval before code.
+
+What an SDK would be, taken from what the Python one does:
+- Publish agent steps to `POST /api/events` with the right `traceId` and `parentEventId` chaining, time tool calls, and record retries, tokens and cost.
+- Never break the agent by default: a failed publish is swallowed or reported, not thrown, unless the caller asks.
+- Never decide anything: an agent's own severity is data only; the service's rules set the attention class, and critical events keep their guarantees however the event arrives.
+- Standard library or the language's built-in HTTP client only, no runtime dependencies where the language allows it; small enough to read in one sitting.
+- Tested against a fake server and against the real service binary, with a CI job per SDK, as the Python SDK is.
+
+Candidate languages, in a suggested order (the owner chooses): **TypeScript/JavaScript** (most agent frameworks, Node and the browser), **Go** (the platform's own language, easy to dogfood), **Java** (follows the Java service, milestones 34 onward), then **.NET** and **Ruby** by demand.
+
+Open questions for the design side:
+1. Hand-written SDKs, as the Python one is, or generated from an OpenAPI description of `/api/events`, `/notify` and the traces API? Generating needs that description to exist first; none does yet.
+2. Which language first, and does the first one also cover `/notify` (generic notifications) or only agent traces?
+3. Shared SDK contract: a language-neutral test file set (like `docs/contract`) that every SDK must pass against a fake server, so the SDKs behave the same?
+4. Versioning and publishing (npm, Maven Central, pkg.go.dev, NuGet): out of scope until an SDK exists.
+
 ## Provider abstraction follow-ups
 Courier, Knock and custom delivery providers behind `NotificationProvider` stay on the list; they are scheduled by demand rather than numbered.

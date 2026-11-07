@@ -7,7 +7,11 @@ The Java implementation of the Attention Orchestration core. It is being brought
 
 **Critical events** are decided by rules alone. They never reach AI, are never merged, muted, delayed or budgeted, and are delivered inline before they are stored. Five tests prove each guarantee (`SacredInvariantTest`).
 
-Not here yet (Go only): `/notify`, metrics, rules and policies API, inbox, channels, durable delivery, accounts, Attention Intelligence, feedback, learning, traces, MCP.
+Also: `POST /notify` (agents ask the service to notify people, with the Go service's validation), the rules API (`/api/rules`, `/api/policies`, stored in the shared `policy_rules` table and reloaded at run time), the durable delivery queue (`/api/deliveries`; retry with backoff, dead letters, manual retry) and Redis deduplication shared across replicas and with the Go service.
+
+Not here yet (Go only): metrics, inbox, channels API, SMS, Novu, accounts, Attention Intelligence, feedback, learning, traces, MCP, rule `payloadMatch` and `channels` (refused, not ignored), event retention.
+
+**Two services on one database must be configured alike**: both run a dispatcher against `delivery_jobs`, and a queued job goes to whichever claims it first.
 
 ## Layout
 ```
@@ -37,4 +41,4 @@ docker run --rm -v "$(pwd):/app" -v m2cache:/root/.m2 -w /app/java-server/notifi
   maven:3.9-eclipse-temurin-17 mvn clean verify
 ```
 
-Set `TEST_DATABASE_URL` (a PostgreSQL the Go migrations have run on: `go run ./cmd/migrate` in the Go module) to include the database test. **The 80 percent line-coverage gate assumes that test runs** (CI always provides PostgreSQL); without it the 3 database tests are skipped and `mvn verify` fails the gate, while `mvn test` still passes. The shared HTTP contract in [docs/contract](../../docs/contract/README.md) runs as part of the suite.
+`mvn verify` passes with no database: the PostgreSQL classes and the Redis adapter are outside the 80 percent line-coverage gate and their tests are skipped. Set `TEST_DATABASE_URL` (a PostgreSQL the Go migrations have run on: `go run ./cmd/migrate` in the Go module) and `TEST_REDIS_URL` to run them; CI always does. The shared HTTP contract in [docs/contract](../../docs/contract/README.md) runs as part of the suite.

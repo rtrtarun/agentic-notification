@@ -1,0 +1,130 @@
+{
+  "name": "rules can be listed, created, reordered, edited and deleted at run time; locked rules cannot; a dry run shows who wins",
+  "steps": [
+    {
+      "name": "the rules API needs the key",
+      "request": { "method": "GET", "path": "/api/rules" },
+      "expect": { "status": 401, "json": { "error": "missing or invalid api key" } }
+    },
+    {
+      "name": "the file's four rules are listed, locked ones first",
+      "request": { "method": "GET", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" } },
+      "expect": {
+        "status": 200,
+        "json": { "rules": [
+          { "name": "github-security-advisory", "locked": true, "then": { "attentionClass": "critical" } },
+          { "name": "github-dependabot-alert", "locked": true, "then": { "attentionClass": "critical" } },
+          { "name": "github-star", "then": { "attentionClass": "background" } },
+          { "name": "default-github", "then": { "attentionClass": "standard", "adaptive": true } }
+        ] }
+      },
+      "save": { "advisory": "rules.0.id", "dependabot": "rules.1.id", "star": "rules.2.id", "default": "rules.3.id" }
+    },
+    {
+      "name": "a new rule is created after the existing ones",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "quiet pushes", "when": { "source": "github", "eventType": "push" }, "then": { "attentionClass": "background", "reason": "pushes are quiet" } } },
+      "expect": { "status": 201, "json": { "name": "quiet pushes", "when": { "source": "github", "eventType": "push" }, "then": { "attentionClass": "background", "reason": "pushes are quiet" } }, "absent": ["locked", "disabled"], "present": ["id"] },
+      "save": { "mine": "id" }
+    },
+    {
+      "name": "the broad default rule still wins, because the new rule is below it",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "push", "X-GitHub-Delivery": "r-1" }, "body": { "after": "aaa", "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "standard", "decisionState": { "matchedRule": "default-github" } } }
+    },
+    {
+      "name": "a dry run says the same",
+      "request": { "method": "POST", "path": "/api/rules/test", "headers": { "X-API-Key": "contract-key" }, "body": { "source": "github", "eventType": "push", "repository": "acme/api" } },
+      "expect": { "status": 200, "json": { "matched": true, "attentionClass": "standard", "matchedRule": "default-github", "aiBypassed": false } }
+    },
+    {
+      "name": "reordering puts the new rule above the default",
+      "request": { "method": "POST", "path": "/api/rules/reorder", "headers": { "X-API-Key": "contract-key" }, "body": { "ids": ["{{advisory}}", "{{dependabot}}", "{{star}}", "{{mine}}", "{{default}}"] } },
+      "expect": { "status": 200, "json": { "rules": [ { "name": "github-security-advisory" }, { "name": "github-dependabot-alert" }, { "name": "github-star" }, { "name": "quiet pushes" }, { "name": "default-github" } ] } }
+    },
+    {
+      "name": "the next event is decided by the reordered rule without a restart",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "push", "X-GitHub-Delivery": "r-2" }, "body": { "after": "bbb", "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "background", "decisionState": { "matchedRule": "quiet pushes", "reason": "pushes are quiet" } } }
+    },
+    {
+      "name": "reordering must name every rule once",
+      "request": { "method": "POST", "path": "/api/rules/reorder", "headers": { "X-API-Key": "contract-key" }, "body": { "ids": ["{{mine}}"] } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: send every rule id exactly once" } }
+    },
+    {
+      "name": "locked rules must stay above the rest",
+      "request": { "method": "POST", "path": "/api/rules/reorder", "headers": { "X-API-Key": "contract-key" }, "body": { "ids": ["{{star}}", "{{advisory}}", "{{dependabot}}", "{{mine}}", "{{default}}"] } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: locked rules must stay above all other rules" } }
+    },
+    {
+      "name": "a rule can be edited",
+      "request": { "method": "PUT", "path": "/api/rules/{{mine}}", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "loud pushes", "when": { "source": "github", "eventType": "push" }, "then": { "attentionClass": "standard", "reason": "now loud" } } },
+      "expect": { "status": 200, "json": { "name": "loud pushes", "then": { "attentionClass": "standard", "reason": "now loud" } } }
+    },
+    {
+      "name": "a locked rule cannot be edited",
+      "request": { "method": "PUT", "path": "/api/rules/{{advisory}}", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "x", "then": { "attentionClass": "standard" } } },
+      "expect": { "status": 409, "json": { "error": "this rule is locked: it protects critical routing" } }
+    },
+    {
+      "name": "a locked rule cannot be deleted",
+      "request": { "method": "DELETE", "path": "/api/rules/{{dependabot}}", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 409, "json": { "error": "this rule is locked: it protects critical routing" } }
+    },
+    {
+      "name": "an unknown rule is not found",
+      "request": { "method": "PUT", "path": "/api/rules/nope", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "x", "then": { "attentionClass": "standard" } } },
+      "expect": { "status": 404, "json": { "error": "rule not found" } }
+    },
+    {
+      "name": "an unlocked rule can be deleted",
+      "request": { "method": "DELETE", "path": "/api/rules/{{mine}}", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 204 }
+    },
+    {
+      "name": "deleting it again is not found",
+      "request": { "method": "DELETE", "path": "/api/rules/{{mine}}", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 404, "json": { "error": "rule not found" } }
+    },
+    {
+      "name": "a rule needs a name",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "  ", "then": { "attentionClass": "standard" } } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: name is required and at most 80 characters" } }
+    },
+    {
+      "name": "names are unique, ignoring case",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "GITHUB-STAR", "then": { "attentionClass": "standard" } } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: a rule named \"GITHUB-STAR\" already exists" } }
+    },
+    {
+      "name": "the attention class must be known",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "x", "then": { "attentionClass": "urgent" } } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: attentionClass must be critical, standard or background" } }
+    },
+    {
+      "name": "a critical rule can never be adaptive (critical never reaches AI)",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "x", "then": { "attentionClass": "critical", "adaptive": true } } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: a critical rule cannot be adaptive; critical events never reach Attention Intelligence" } }
+    },
+    {
+      "name": "a dry run of a security advisory shows AI is bypassed",
+      "request": { "method": "POST", "path": "/api/rules/test", "headers": { "X-API-Key": "contract-key" }, "body": { "source": "github", "eventType": "security_advisory" } },
+      "expect": { "status": 200, "json": { "matched": true, "attentionClass": "critical", "matchedRule": "github-security-advisory", "aiBypassed": true, "steps": [ { "name": "github-security-advisory", "matched": true, "winner": true }, { "name": "github-dependabot-alert", "matched": false }, { "name": "github-star", "matched": false }, { "name": "default-github", "matched": true } ] }, "absentInEach": { "steps": ["disabled"] } }
+    },
+    {
+      "name": "a dry run of something no rule matches falls back to standard",
+      "request": { "method": "POST", "path": "/api/rules/test", "headers": { "X-API-Key": "contract-key" }, "body": { "source": "gitlab", "eventType": "push" } },
+      "expect": { "status": 200, "json": { "matched": false, "attentionClass": "standard", "reason": "no matching rule, default standard", "aiBypassed": false }, "absent": ["matchedRule"] }
+    },
+    {
+      "name": "wrong methods are refused",
+      "request": { "method": "GET", "path": "/api/rules/test", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 405, "json": { "error": "method not allowed" } }
+    },
+    {
+      "name": "the policy summary reflects the live rules",
+      "request": { "method": "GET", "path": "/api/policies", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "dedupWindowSeconds": 600, "retentionHours": 2160, "lockedRules": ["github-security-advisory", "github-dependabot-alert"], "ruleCount": 4, "disabledRuleCount": 0, "guardrails": [ { "id": "never-suppress-critical" }, { "id": "no-ai-in-layer-1" }, { "id": "locked-rules-first" }, { "id": "critical-priority-fixed" } ], "classes": [ { "class": "critical", "aiEligible": false }, { "class": "standard", "aiEligible": true }, { "class": "background", "aiEligible": true } ] } }
+    }
+  ]
+}

@@ -1,7 +1,12 @@
 package com.agentpulse.notification.interfaces;
 
 import com.agentpulse.notification.application.MemoryDeduper;
+import com.agentpulse.notification.application.Notify;
 import com.agentpulse.notification.application.PolicyEngine;
+import com.agentpulse.notification.application.QueueOutbox;
+import com.agentpulse.notification.application.RulesService;
+import com.agentpulse.notification.application.Targets;
+import com.agentpulse.notification.infrastructure.MemoryStores;
 import com.agentpulse.notification.application.Pipeline;
 import com.agentpulse.notification.application.Ports.Notification;
 import com.agentpulse.notification.application.Ports.NotificationProvider;
@@ -93,10 +98,18 @@ class ContractTest {
             @Override public void send(Notification n) { }
             @Override public String name() { return "test"; }
         };
-        Pipeline pipeline = new Pipeline(new PolicyEngine(RulesLoader.loadFile(RULES)), logOnly, repository)
-                .withDeduper(new MemoryDeduper(Duration.ofMinutes(10), Clock.systemUTC()));
+        PolicyEngine engine = new PolicyEngine(List.of());
+        RulesService rules = new RulesService(new MemoryStores.Rules(), engine, RulesLoader.loadFile(RULES));
+        MemoryStores.Deliveries deliveries = new MemoryStores.Deliveries();
+        // No channel is configured, so nothing is routed to the queue; critical deliveries are still logged there.
+        QueueOutbox outbox = new QueueOutbox(deliveries, Targets.none(), Map.of(), Clock.systemUTC());
+        Pipeline pipeline = new Pipeline(engine, logOnly, repository)
+                .withDeduper(new MemoryDeduper(Duration.ofMinutes(10), Clock.systemUTC()))
+                .withOutbox(outbox);
         Config config = Config.load(Map.of("API_KEY", KEY, "GITHUB_WEBHOOK_SECRET", SECRET));
-        return new HttpApi(config, pipeline, repository).start(0);
+        Notify.Service notify = new Notify.Service(config.notifyLimits(), logOnly);
+        return new HttpApi(config, pipeline, repository, notify, rules, deliveries, Clock.systemUTC())
+                .start(0);
     }
 
     private void replay(String base, JsonNode contract) throws Exception {
@@ -115,6 +128,11 @@ class ContractTest {
             } else if (req.has("body")) {
                 body = JSON.writeValueAsBytes(req.get("body"));
             }
+            String bodyText = new String(body, StandardCharsets.UTF_8);
+            for (Map.Entry<String, String> v : vars.entrySet()) {
+                bodyText = bodyText.replace("{{" + v.getKey() + "}}", v.getValue());
+            }
+            body = bodyText.getBytes(StandardCharsets.UTF_8);
             HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(base + path))
                     .method(req.get("method").asText(), HttpRequest.BodyPublishers.ofByteArray(body));
             if (req.has("headers")) {
@@ -132,10 +150,20 @@ class ContractTest {
                 JsonNode answer = JSON.readTree(response.body());
                 for (Iterator<Map.Entry<String, JsonNode>> it = step.get("save").fields(); it.hasNext(); ) {
                     Map.Entry<String, JsonNode> s = it.next();
-                    vars.put(s.getKey(), answer.get(s.getValue().asText()).asText());
+                    vars.put(s.getKey(), lookup(answer, s.getValue().asText()));
                 }
             }
         }
+    }
+
+    /** Follows a dotted path through the answer; a number selects an array element ("rules.0.id"). */
+    private static String lookup(JsonNode node, String path) {
+        JsonNode current = node;
+        for (String part : path.split("\\.")) {
+            current = current.isArray() ? current.get(Integer.parseInt(part)) : current.get(part);
+            assertTrue(current != null, "no value at " + path);
+        }
+        return current.asText();
     }
 
     private void check(String step, JsonNode expect, HttpResponse<String> response) throws Exception {

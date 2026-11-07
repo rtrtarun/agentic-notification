@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -111,6 +112,9 @@ func runContractFile(t *testing.T, file contractFile) {
 		case len(step.Request.Body) > 0:
 			body = step.Request.Body
 		}
+		for k, v := range vars {
+			body = bytes.ReplaceAll(body, []byte("{{"+k+"}}"), []byte(v))
+		}
 		req := httptest.NewRequest(step.Request.Method, path, bytes.NewReader(body))
 		for k, v := range step.Request.Headers {
 			req.Header.Set(k, v)
@@ -164,7 +168,7 @@ func runContractFile(t *testing.T, file contractFile) {
 			}
 		}
 		for name, key := range step.Save {
-			vars[name] = fmt.Sprint(got[key])
+			vars[name] = fmt.Sprint(lookup(got, key))
 		}
 	}
 }
@@ -203,4 +207,23 @@ func subsetOf(want, got any, at string) string {
 		}
 	}
 	return ""
+}
+
+// lookup follows a dotted path through the answer; a number selects an array element ("rules.0.id").
+func lookup(v any, path string) any {
+	for _, part := range strings.Split(path, ".") {
+		switch node := v.(type) {
+		case map[string]any:
+			v = node[part]
+		case []any:
+			i, err := strconv.Atoi(part)
+			if err != nil || i < 0 || i >= len(node) {
+				return nil
+			}
+			v = node[i]
+		default:
+			return nil
+		}
+	}
+	return v
 }
