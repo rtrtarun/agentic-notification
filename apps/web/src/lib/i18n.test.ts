@@ -41,7 +41,7 @@ const catalogs = [
 // Screens added from milestone 16 on are written in English first. Translators can add
 // these namespaces to a language at any time; until then English is shown. Everything
 // older must stay fully translated.
-const ENGLISH_ONLY_PREFIXES = ['manage.', 'all.', 'ov.', 'act.page.', 'ana.', 'rules.', 'pol.', 'ch.', 'int.', 'pref.', 'help.', 'live.', 'dl.', 'auth.', 'users.', 'nav.users', 'nav.digests', 'ovr.', 'dg.']
+const ENGLISH_ONLY_PREFIXES = ['manage.', 'all.', 'ov.', 'act.page.', 'ana.', 'rules.', 'pol.', 'ch.', 'int.', 'pref.', 'help.', 'live.', 'dl.', 'auth.', 'users.', 'nav.users', 'nav.digests', 'ovr.', 'dg.', 'learn.']
 const isEnglishOnly = (key: string) => ENGLISH_ONLY_PREFIXES.some((p) => key.startsWith(p))
 
 describe('catalogs', () => {

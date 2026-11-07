@@ -42,6 +42,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle(digestsPrefix+"/", protected(s.digestsHandler))
 	mux.Handle(explainPrefix, protected(s.explainHandler))
 	mux.Handle(attentionStatusPath, protected(s.attentionStatusHandler))
+	mux.Handle(learningPrefix, protected(s.learningHandler))
+	mux.Handle(learningPrefix+"/", protected(s.learningHandler))
 	mux.Handle(overridesPrefix, protected(s.overridesHandler))
 	mux.Handle(overridesPrefix+"/", protected(s.overridesHandler))
 	mux.Handle("/notify", protected(s.notifyHandler))

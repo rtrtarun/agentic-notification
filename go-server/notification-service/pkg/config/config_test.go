@@ -183,3 +183,30 @@ func TestAttentionProviderValidation(t *testing.T) {
 		t.Fatalf("claude with a key should load: %v", err)
 	}
 }
+
+func TestLearningSettings(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil || cfg.LearningMinSignals != 5 || cfg.LearningLookback != 30*24*time.Hour {
+		t.Fatalf("defaults wrong: %v %+v", err, cfg)
+	}
+	t.Setenv("LEARNING_MIN_SIGNALS", "8")
+	t.Setenv("LEARNING_LOOKBACK", "168h")
+	cfg, err = LoadConfig()
+	if err != nil || cfg.LearningMinSignals != 8 || cfg.LearningLookback != 168*time.Hour {
+		t.Fatalf("settings not read: %v %+v", err, cfg)
+	}
+	for name, env := range map[string]map[string]string{
+		"zero signals": {"LEARNING_MIN_SIGNALS": "0"},
+		"bad lookback": {"LEARNING_LOOKBACK": "forever"},
+		"zero look":    {"LEARNING_LOOKBACK": "0s"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			for k, v := range env {
+				t.Setenv(k, v)
+			}
+			if _, err := LoadConfig(); err == nil {
+				t.Fatal("expected an error")
+			}
+		})
+	}
+}

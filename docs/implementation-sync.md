@@ -7,7 +7,7 @@ This file is the handshake between two roles:
 
 Rule: **the code and the tests are the truth about what exists; this file says what is built, what is in progress and where the implementation differs from the spec.** The designer should read this before proposing the next milestone; the implementer updates it in the same commit as any milestone work. Never mark something done here that has not been run.
 
-Last updated: milestone 27 committed; milestones 28 to 33 approved for sequential execution on branch `feature/attention-models`.
+Last updated: milestone 28 committed; milestones 29 to 33 approved for sequential execution on branch `feature/attention-models`.
 
 ## 1. Ground rules both sides follow
 1. Critical events never touch AI, are never merged, are never muted, budgeted or delayed, and are delivered inline. Every milestone adds a test proving it.
@@ -22,7 +22,7 @@ Last updated: milestone 27 committed; milestones 28 to 33 approved for sequentia
 | 1 to 25 | Foundation through Attention Intelligence | Done, committed | See `docs/CHANGELOG.md` |
 | 26 | Ollama and Claude adapters behind Attention | Done, committed, pushed | `docs/milestone-26.md`. Fake model servers only |
 | 27 | Real-service and PostgreSQL verification | Done, committed, pushed | `docs/milestone-27.md`. Contracts pass on memory stores; PostgreSQL runs are left to CI |
-| 28 | Learning engine (`pkg/learning`) | **Approved for execution** | Human-reviewable suggestions from feedback and the event trail; never alters locked or critical rules |
+| 28 | Learning engine (`pkg/learning`) | Done, committed | `docs/milestone-28.md`. Guardrail tested at suggest and apply time; PostgreSQL repository left to CI |
 | 29 | Async worker and attention budgets | **Approved for execution** | Workspace-level budget (`ATTENTION_BUDGET_PER_HOUR`); async worker drains non-critical queued events |
 | 30 | Per-person digests, scoped routing, rich predicates | **Approved for execution** | Strict YAML decoding, payload predicates, per-user digests and preferences, per-person budget scope |
 | 31 | AgentPulse traces, agent telemetry, MCP server | **Approved for execution** | Shared `pkg/mcp` handler backing both `cmd/mcp-server` (stdio) and `/api/mcp` (HTTP); Trace Explorer UI |
@@ -48,13 +48,13 @@ Record every such decision here so the design side can accept or overrule it.
 | Gate | Local requirement and status |
 |---|---|
 | `gofmt -s -w .` and `go vet ./...` | **Mandatory local gate.** Ran and passed after milestone 27 |
-| `go test -cover ./...` | **Mandatory local gate.** Ran and passed after milestone 27; per-package coverage below |
+| `go test -cover ./...` | **Mandatory local gate.** Ran and passed after milestone 28 (`pkg/learning` 80.9 percent); per-package figures below are from milestone 27 |
 | `go test -race ./...` | **Not verified locally** (no CGO or C compiler). Enforced in `.github/workflows/ci.yml` |
 | `golangci-lint` | **Not verified locally** (not installed). Enforced in `.github/workflows/ci.yml` |
 | PostgreSQL integration tests (`-tags integration`) | **Not verified locally** (Docker daemon stopped, no `psql`). Contract suites pass against the in-memory stores and `go vet -tags integration ./...` compiles them. CI runs them against PostgreSQL 16 |
 | Redis-backed code | **Not verified locally.** Use an in-memory store in unit tests |
 | Real Ollama and real Claude API | **Not verified locally.** Replay tests through the real clients cover success, timeout, breaker, rate cap and redaction on the wire |
-| `npm test -- --run` and `npm run build` | **Mandatory local gate.** Ran after milestone 26 (214 tests); re-run after every frontend change |
+| `npm test -- --run` and `npm run build` | **Mandatory local gate.** Ran after milestone 28: 220 tests pass, `tsc -b` clean, `npm run build` succeeds |
 | CI result for this branch | **Not seen.** The `gh` CLI is not installed here, so the CI run cannot be read from this machine. Check the Actions tab; milestone 27's integration tests are only proven once that run is green |
 
 ### Measured coverage after milestone 27 (`go test -cover`, no integration tag)

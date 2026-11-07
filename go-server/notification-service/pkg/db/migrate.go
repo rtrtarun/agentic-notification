@@ -211,6 +211,15 @@ func Migrate(ctx context.Context, db Execer) error {
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 		`CREATE INDEX IF NOT EXISTS digests_created_idx ON digests (created_at DESC)`,
+		// Suggestions made by the learning engine from stored feedback. See pkg/learning.
+		`CREATE TABLE IF NOT EXISTS learning_suggestions (
+			id         TEXT PRIMARY KEY,
+			status     TEXT NOT NULL CHECK (status IN ('pending','applied','dismissed')),
+			body       JSONB NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS learning_suggestions_status_idx ON learning_suggestions (status, updated_at DESC)`,
 		`CREATE TABLE IF NOT EXISTS audit_log (
 			id     BIGSERIAL PRIMARY KEY,
 			at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),

@@ -98,6 +98,10 @@ type Config struct {
 	AttentionModel string
 	// AttentionTimeout bounds one model call.
 	AttentionTimeout time.Duration
+	// LearningMinSignals is how many dismissed or never signals (with no positive one) justify a suggestion.
+	LearningMinSignals int
+	// LearningLookback is how far back feedback is read for suggestions.
+	LearningLookback time.Duration
 	// AttentionMaxCallsPerMin caps model calls per minute.
 	AttentionMaxCallsPerMin int
 	// DigestChannels lists the channels a digest is delivered to; empty means digests are only stored.
@@ -263,6 +267,12 @@ func LoadConfig() (*Config, error) {
 	if cfg.AttentionTimeout, err = envDuration("ATTENTION_TIMEOUT", defaultAttentionTimeout, false); err != nil {
 		return nil, err
 	}
+	if cfg.LearningMinSignals, err = envInt("LEARNING_MIN_SIGNALS", defaultLearningMinSignals, 1, 10000); err != nil {
+		return nil, err
+	}
+	if cfg.LearningLookback, err = envDuration("LEARNING_LOOKBACK", defaultLearningLookback, false); err != nil {
+		return nil, err
+	}
 	if cfg.AttentionMaxCallsPerMin, err = envInt("ATTENTION_MAX_CALLS_PER_MIN", defaultAttentionMaxCalls, 1, 100000); err != nil {
 		return nil, err
 	}
@@ -395,6 +405,8 @@ const (
 )
 
 const (
-	defaultAttentionTimeout  = 5 * time.Second
-	defaultAttentionMaxCalls = 60
+	defaultAttentionTimeout   = 5 * time.Second
+	defaultAttentionMaxCalls  = 60
+	defaultLearningMinSignals = 5
+	defaultLearningLookback   = 30 * 24 * time.Hour
 )

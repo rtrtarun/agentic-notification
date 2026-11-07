@@ -24,6 +24,7 @@ import (
 	"github.com/example/notification-service/pkg/feedback"
 	"github.com/example/notification-service/pkg/inbox"
 	"github.com/example/notification-service/pkg/insights"
+	"github.com/example/notification-service/pkg/learning"
 	"github.com/example/notification-service/pkg/metrics"
 	"github.com/example/notification-service/pkg/notification"
 	"github.com/example/notification-service/pkg/notification/impl"
@@ -79,6 +80,7 @@ type Server struct {
 	shutdownOnce    sync.Once
 	feedback        *feedback.Service
 	feedbackStore   feedback.Store
+	learning        *learning.Service
 	digests         *attention.Generator
 	digestStore     attention.DigestStore
 	digestScheduler *attention.Scheduler
@@ -173,6 +175,7 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 		s.releaseOnStartupFailure()
 		return nil, fmt.Errorf("init feedback: %w", err)
 	}
+	s.initLearning()
 	s.service = notification.NewValidatingService(
 		impl.NewNotificationServiceWith(provider),
 		notification.Limits{
