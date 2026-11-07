@@ -30,4 +30,5 @@ rules:
       source: github
     then:
       attentionClass: standard
+      adaptive: true
       reason: default routing

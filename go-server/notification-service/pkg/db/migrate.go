@@ -128,6 +128,98 @@ func Migrate(ctx context.Context, db Execer) error {
 			id       TEXT PRIMARY KEY,
 			body     JSONB NOT NULL
 		)`,
+		// Queued and logged deliveries. Targets are never stored: they come from configuration
+		// when a job is sent. UNIQUE (event_id, channel) makes enqueueing idempotent. See pkg/delivery.
+		`CREATE TABLE IF NOT EXISTS delivery_jobs (
+			id              TEXT PRIMARY KEY,
+			event_id        TEXT NOT NULL,
+			channel         TEXT NOT NULL,
+			class           TEXT NOT NULL DEFAULT '',
+			title           TEXT NOT NULL,
+			message         TEXT NOT NULL DEFAULT '',
+			grp             TEXT NOT NULL DEFAULT '',
+			status          TEXT NOT NULL,
+			attempts        INT  NOT NULL DEFAULT 0,
+			next_attempt_at TIMESTAMPTZ NOT NULL,
+			lease_until     TIMESTAMPTZ,
+			last_error      TEXT NOT NULL DEFAULT '',
+			direct          BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			UNIQUE (event_id, channel)
+		)`,
+		`CREATE INDEX IF NOT EXISTS delivery_jobs_due_idx ON delivery_jobs (status, next_attempt_at)`,
+		`CREATE INDEX IF NOT EXISTS delivery_jobs_created_idx ON delivery_jobs (created_at DESC)`,
+		// Accounts, sign-in sessions and the security audit trail. See pkg/auth.
+		// Sessions hold the SHA-256 of the cookie token, never the token.
+		`CREATE TABLE IF NOT EXISTS users (
+			id            TEXT PRIMARY KEY,
+			email         TEXT NOT NULL UNIQUE,
+			name          TEXT NOT NULL DEFAULT '',
+			role          TEXT NOT NULL CHECK (role IN ('admin','member')),
+			password_hash TEXT NOT NULL DEFAULT '',
+			disabled      BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE TABLE IF NOT EXISTS user_identities (
+			issuer  TEXT NOT NULL,
+			subject TEXT NOT NULL,
+			user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			PRIMARY KEY (issuer, subject)
+		)`,
+		`CREATE TABLE IF NOT EXISTS sessions (
+			hash       TEXT PRIMARY KEY,
+			user_id    TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			csrf       TEXT NOT NULL,
+			expires_at TIMESTAMPTZ NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions (user_id)`,
+		// What people said about notifications, and the always/never choices that came from it.
+		// See pkg/feedback and pkg/overrides.
+		`CREATE TABLE IF NOT EXISTS feedback (
+			id          TEXT PRIMARY KEY,
+			event_id    TEXT NOT NULL,
+			user_id     TEXT NOT NULL DEFAULT '',
+			action      TEXT NOT NULL,
+			scope       TEXT NOT NULL DEFAULT '',
+			reason      TEXT NOT NULL DEFAULT '',
+			override_id TEXT NOT NULL DEFAULT '',
+			source      TEXT NOT NULL DEFAULT '',
+			event_type  TEXT NOT NULL DEFAULT '',
+			repository  TEXT NOT NULL DEFAULT '',
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS feedback_event_idx ON feedback (event_id, created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS feedback_created_idx ON feedback (created_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS overrides (
+			id         TEXT PRIMARY KEY,
+			scope_key  TEXT NOT NULL UNIQUE,
+			source     TEXT NOT NULL DEFAULT '',
+			event_type TEXT NOT NULL DEFAULT '',
+			repository TEXT NOT NULL DEFAULT '',
+			mode       TEXT NOT NULL CHECK (mode IN ('always','never')),
+			created_by TEXT NOT NULL DEFAULT '',
+			note       TEXT NOT NULL DEFAULT '',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		// Digests written by Attention Intelligence. See pkg/attention.
+		`CREATE TABLE IF NOT EXISTS digests (
+			id         TEXT PRIMARY KEY,
+			window_end TIMESTAMPTZ NOT NULL,
+			body       JSONB NOT NULL,
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+		`CREATE INDEX IF NOT EXISTS digests_created_idx ON digests (created_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS audit_log (
+			id     BIGSERIAL PRIMARY KEY,
+			at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			actor  TEXT NOT NULL DEFAULT '',
+			action TEXT NOT NULL,
+			target TEXT NOT NULL DEFAULT '',
+			ip     TEXT NOT NULL DEFAULT '',
+			detail TEXT NOT NULL DEFAULT ''
+		)`,
 	}
 	for _, stmt := range statements {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {

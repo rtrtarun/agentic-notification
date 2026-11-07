@@ -33,6 +33,9 @@ func (s *Server) preferencesHandler(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		util.WriteJSON(w, http.StatusOK, s.preferences.Get())
 	case http.MethodPut:
+		if !s.requireAdmin(w, r) {
+			return
+		}
 		var in preferences.Preferences
 		if !s.decodeJSON(w, r, &in) {
 			return

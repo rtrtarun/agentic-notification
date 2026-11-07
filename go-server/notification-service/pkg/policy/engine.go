@@ -41,6 +41,7 @@ func (e *Engine) Evaluate(evt event.Event) (PolicyDecision, bool) {
 				AttentionClass: rule.Then.AttentionClass,
 				Reason:         rule.Then.Reason,
 				MatchedRule:    rule.Name,
+				Adaptive:       rule.Then.Adaptive && rule.Then.AttentionClass != event.AttentionCritical,
 			}, true
 		}
 	}

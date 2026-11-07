@@ -205,7 +205,6 @@ export const es: Partial<Messages> = {
   'shell.workspaceNote': 'Cambiar de espacio llegará con el inicio de sesión. Por ahora este es tu único espacio.',
   'top.palette': 'Buscar o ejecutar un comando',
   'top.account': 'Menú de cuenta',
-  'top.accountNote': 'El inicio de sesión y los perfiles aún no están construidos.',
   'palette.title': 'Paleta de comandos',
   'palette.placeholder': 'Escribe un comando o el nombre de una pantalla',
   'palette.empty': 'Ningún comando coincide.',

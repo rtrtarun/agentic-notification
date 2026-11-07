@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useApp } from '../app/AppState'
 import { useToast } from '../design/Toast'
+import { DeliveriesPanel } from '../features/manage/DeliveriesPanel'
 import { LoadGate, useLoad } from '../features/manage/useLoad'
 import { channelsClientFor, testFailureKey, type Channel } from '../lib/channels'
 import { useI18n } from '../lib/i18n/I18nContext'
@@ -49,6 +50,14 @@ export default function ChannelsPage() {
                     <span className="status" data-state={c.configured ? 'ok' : 'warn'}>
                       {c.configured ? t('ch.ready') : t('ch.notConfigured')}
                     </span>
+                    {c.mode === 'mock' && (
+                      <>
+                        {' '}
+                        <span className="status" data-state="warn">
+                          {t('ch.mock')}
+                        </span>
+                      </>
+                    )}
                   </p>
                   <dl className="kv">
                     {c.configured && (
@@ -79,6 +88,7 @@ export default function ChannelsPage() {
               <p className="panel-note">{t('ch.whyCriticalBody')}</p>
               <p className="form-help">{t('ch.secrets')}</p>
             </div>
+            <DeliveriesPanel />
           </>
         )}
       </LoadGate>

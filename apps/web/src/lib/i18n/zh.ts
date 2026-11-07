@@ -185,7 +185,6 @@ export const zh: Partial<Messages> = {
   'shell.workspaceNote': '切换工作区将随登录功能一起推出。目前这是您唯一的工作区。',
   'top.palette': '搜索或运行命令',
   'top.account': '账户菜单',
-  'top.accountNote': '登录和用户资料尚未开发。',
   'palette.title': '命令面板',
   'palette.placeholder': '输入命令或页面名称',
   'palette.empty': '没有匹配的命令。',

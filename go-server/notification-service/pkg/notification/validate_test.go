@@ -116,3 +116,10 @@ func TestValidatingServiceBlocksInvalidRequests(t *testing.T) {
 		t.Fatalf("expected 1 forwarded call, got %d", inner.calls)
 	}
 }
+
+func TestValidateRejectsCallerSuppliedSMSRecipients(t *testing.T) {
+	req := NotificationRequest{Agent: AgentInfo{Name: "a"}, Title: "t", SMSRecipients: []string{"+14155550100"}}
+	if err := (Limits{}).Validate(req); !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("err = %v, want ErrInvalidRequest", err)
+	}
+}

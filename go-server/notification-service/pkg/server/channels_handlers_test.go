@@ -51,7 +51,7 @@ func TestChannelsListMasksSecrets(t *testing.T) {
 	list := decode[struct {
 		Channels []channels.Channel `json:"channels"`
 	}](t, rr).Channels
-	if len(list) != 3 || !list[0].Configured || !list[1].Configured || list[2].Configured {
+	if len(list) != 4 || !list[0].Configured || !list[1].Configured || list[2].Configured || list[3].Configured {
 		t.Fatalf("channels = %+v", list)
 	}
 }

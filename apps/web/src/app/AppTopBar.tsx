@@ -7,6 +7,7 @@ import { useDismiss } from '../hooks/useDismiss'
 import { clearFilters as resetFilters, RANGES } from '../lib/inboxQuery'
 import { useI18n } from '../lib/i18n/I18nContext'
 import { useApp } from './AppState'
+import { useAuth } from './AuthGate'
 
 interface AppTopBarProps {
   onMenu: () => void
@@ -109,6 +110,7 @@ export function AppTopBar({ onMenu, menuOpen, onPalette }: AppTopBarProps) {
 function AccountMenu() {
   const { t } = useI18n()
   const { openSettings } = useApp()
+  const { identity, signOut } = useAuth()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const close = useCallback(() => setOpen(false), [])
@@ -144,7 +146,25 @@ function AccountMenu() {
           >
             {t('conn.settings')}
           </button>
-          <p className="menu-note">{t('top.accountNote')}</p>
+          {identity && (
+            <p className="menu-note">
+              {t('auth.signedInAs', { who: identity.user.name || identity.user.email })}
+              {' · '}
+              {t(`users.role.${identity.user.role}`)}
+            </p>
+          )}
+          {identity?.via === 'session' && (
+            <button
+              type="button"
+              className="menu-item"
+              onClick={() => {
+                close()
+                void signOut()
+              }}
+            >
+              {t('auth.signOut')}
+            </button>
+          )}
         </div>
       )}
     </div>

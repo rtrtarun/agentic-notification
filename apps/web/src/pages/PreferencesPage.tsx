@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useApp } from '../app/AppState'
 import { useToast } from '../design/Toast'
 import { LoadGate, useLoad } from '../features/manage/useLoad'
+import { OverridesPanel } from '../features/manage/OverridesPanel'
 import { useI18n } from '../lib/i18n/I18nContext'
 import {
   addToList,
@@ -40,6 +41,7 @@ export default function PreferencesPage() {
       <LoadGate state={state} onRetry={reload}>
         {(loaded) => <PreferencesForm initial={loaded} save={(p) => client.save(p)} />}
       </LoadGate>
+      <OverridesPanel />
     </section>
   )
 }

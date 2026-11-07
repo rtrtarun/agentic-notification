@@ -164,6 +164,9 @@ func (s *Server) inboxItem(w http.ResponseWriter, r *http.Request, id string) {
 				return
 			}
 		}
+		if req.Read != nil && *req.Read {
+			s.recordOpened(r, id) // a signal for learning: someone looked at it
+		}
 		s.respondWithDetail(w, r, id)
 	case http.MethodDelete:
 		if err := s.inbox.Apply(r.Context(), id, inbox.Action{Type: inbox.ActionDelete}); err != nil {

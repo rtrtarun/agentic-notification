@@ -12,6 +12,9 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"github.com/example/notification-service/pkg/attention"
+	"github.com/example/notification-service/pkg/attention/llm"
+	"github.com/example/notification-service/pkg/auth"
 	"github.com/example/notification-service/pkg/channels"
 	"github.com/example/notification-service/pkg/config"
 	"github.com/example/notification-service/pkg/db"
@@ -21,14 +24,15 @@ import (
 	"github.com/example/notification-service/pkg/feedback"
 	"github.com/example/notification-service/pkg/inbox"
 	"github.com/example/notification-service/pkg/insights"
-	"github.com/example/notification-service/pkg/learning"
 	"github.com/example/notification-service/pkg/metrics"
 	"github.com/example/notification-service/pkg/notification"
 	"github.com/example/notification-service/pkg/notification/impl"
+	"github.com/example/notification-service/pkg/overrides"
 	"github.com/example/notification-service/pkg/pipeline"
 	"github.com/example/notification-service/pkg/policy"
 	"github.com/example/notification-service/pkg/preferences"
 	"github.com/example/notification-service/pkg/rules"
+	"github.com/example/notification-service/pkg/sms"
 	"github.com/example/notification-service/pkg/stream"
 )
 
@@ -56,6 +60,12 @@ type Server struct {
 	logger          *slog.Logger
 	service         notification.NotificationService
 	deliveryService *delivery.Service
+	deliveryStore   delivery.Store
+	dispatcher      *delivery.Dispatcher
+	smsGateway      sms.Gateway
+	auth            *auth.Service
+	oidc            *auth.OIDC
+	authSecret      []byte
 	eventRepo       event.Repository
 	sqlDB           *sql.DB
 	inbox           *inbox.Service
@@ -65,16 +75,23 @@ type Server struct {
 	preferences     *preferences.Service
 	broker          *stream.Broker
 	// shutdown is closed when the server stops, so live streams end instead of delaying shutdown.
-	shutdown         chan struct{}
-	shutdownOnce     sync.Once
-	feedbackRecorder feedback.Recorder
-	learningService  *learning.Service
-	policyEngine     *policy.Engine
-	eventPipeline    *pipeline.Pipeline
-	metrics          *metrics.Registry
-	purger           event.Purger
-	http             *http.Server
-	closers          []func() error
+	shutdown        chan struct{}
+	shutdownOnce    sync.Once
+	feedback        *feedback.Service
+	feedbackStore   feedback.Store
+	digests         *attention.Generator
+	digestStore     attention.DigestStore
+	digestScheduler *attention.Scheduler
+	explainer       attention.Explainer
+	classifier      attention.Classifier
+	attentionLLM    *llm.Model
+	overrides       *overrides.Service
+	policyEngine    *policy.Engine
+	eventPipeline   *pipeline.Pipeline
+	metrics         *metrics.Registry
+	purger          event.Purger
+	http            *http.Server
+	closers         []func() error
 }
 
 // NewServer wires the service. ctx bounds start-up work such as the database connection.
@@ -104,7 +121,22 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 		return nil, fmt.Errorf("load policy rules: %w", err)
 	}
 
-	provider := newProvider(cfg, logger)
+	smsGateway, err := buildSMSGateway(cfg, logger)
+	if err != nil {
+		s.releaseOnStartupFailure()
+		return nil, fmt.Errorf("init sms gateway: %w", err)
+	}
+	targets, err := buildTargets(cfg, smsGateway)
+	if err != nil {
+		s.releaseOnStartupFailure()
+		return nil, err
+	}
+	routes, err := buildRoutes(cfg)
+	if err != nil {
+		s.releaseOnStartupFailure()
+		return nil, err
+	}
+	provider := newProviderWith(cfg, logger, smsGateway)
 	policyEngine := policy.NewEngine(seedRules)
 	deliverySvc := delivery.NewService(provider)
 
@@ -116,6 +148,16 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 
 	s.eventRepo = eventRepo
 	s.rules = ruleService
+	s.smsGateway = smsGateway
+	if err := s.initAuth(ctx); err != nil {
+		s.releaseOnStartupFailure()
+		return nil, err
+	}
+	s.deliveryStore = s.initDeliveryStore()
+	outbox := delivery.NewOutbox(s.deliveryStore, targets, routes)
+	s.initAttention(outbox)
+	s.dispatcher = delivery.NewDispatcher(s.deliveryStore, targets, channelProviders(cfg, smsGateway), logger).
+		WithDailyCap(delivery.ChannelSMS, cfg.SMSDailyLimit)
 	s.channelTester = channels.NewTester(deliverySvc, s.channelSettings(), channelTestGap)
 	prefService, err := preferences.NewService(ctx, s.initPreferencesStore())
 	if err != nil {
@@ -127,8 +169,10 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 	s.insights = insights.NewService(s.inbox)
 	s.deliveryService = deliverySvc
 	s.policyEngine = policyEngine
-	s.feedbackRecorder = feedback.NewInMemoryRecorder()
-	s.learningService = learning.NewService("")
+	if err := s.initFeedback(ctx); err != nil {
+		s.releaseOnStartupFailure()
+		return nil, fmt.Errorf("init feedback: %w", err)
+	}
 	s.service = notification.NewValidatingService(
 		impl.NewNotificationServiceWith(provider),
 		notification.Limits{
@@ -144,8 +188,12 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 			DefaultEmailRecipients: cfg.DefaultEmailRecipients(),
 			SlackWebhookURLs:       cfg.SlackWebhookURLs(),
 			TeamsWebhookURLs:       cfg.TeamsWebhookURLs(),
+			SMSRecipients:          targets.SMS,
 		},
-	).WithDeduper(deduper).WithLogger(logger).WithPreferences(s.preferences).WithPublisher(s.broker)
+	).WithOutbox(outbox).WithOverrides(s.overrides).WithDeduper(deduper).WithLogger(logger).WithPreferences(s.preferences).WithPublisher(s.broker)
+	if cfg.AttentionClassify {
+		s.eventPipeline.WithClassifier(s.classifier)
+	}
 	if purger, ok := eventRepo.(event.Purger); ok {
 		s.purger = purger
 	}
@@ -155,14 +203,35 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 // newProvider builds the delivery provider: email when SMTP is configured, plus
 // webhooks, which refuse private addresses so a webhook URL cannot reach internal hosts.
 func newProvider(cfg *config.Config, logger *slog.Logger) delivery.Provider {
+	return newProviderWith(cfg, logger, nil)
+}
+
+// newProviderWith is newProvider plus SMS when a gateway is configured.
+func newProviderWith(cfg *config.Config, logger *slog.Logger, gw sms.Gateway) delivery.Provider {
 	providers := []delivery.Provider{delivery.NewWebhookProvider(true)}
 	if cfg.SMTPHost != "" && cfg.SMTPSender != "" {
 		providers = append(providers, delivery.NewSMTPProvider(cfg))
+	}
+	if gw != nil {
+		providers = append(providers, delivery.NewSMSProvider(gw))
 	}
 	if len(providers) == 1 && cfg.SlackWebhookURL == "" && cfg.TeamsWebhookURL == "" {
 		logger.Warn("no delivery channel configured; critical events will be recorded but not delivered")
 	}
 	return delivery.NewMultiProvider(providers...)
+}
+
+// channelProviders maps each channel to the provider that sends it, for the queue worker.
+func channelProviders(cfg *config.Config, gw sms.Gateway) map[string]delivery.Provider {
+	webhook := delivery.NewWebhookProvider(true)
+	out := map[string]delivery.Provider{delivery.ChannelSlack: webhook, delivery.ChannelTeams: webhook}
+	if cfg.SMTPHost != "" && cfg.SMTPSender != "" {
+		out[delivery.ChannelEmail] = delivery.NewSMTPProvider(cfg)
+	}
+	if gw != nil {
+		out[delivery.ChannelSMS] = delivery.NewSMSProvider(gw)
+	}
+	return out
 }
 
 func (s *Server) initEventRepository(ctx context.Context) (event.Repository, error) {

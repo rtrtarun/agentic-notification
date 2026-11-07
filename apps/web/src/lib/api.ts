@@ -46,6 +46,14 @@ export class ApiError extends Error {
   }
 }
 
+// The CSRF token of a signed-in session. It is kept in memory only: the session
+// cookie is HttpOnly and the token is fetched again from /api/auth/me on load.
+let csrfToken = ''
+
+export function setCsrfToken(token: string): void {
+  csrfToken = token
+}
+
 function endpoint(settings: Settings, path: string): string {
   return settings.backendUrl.replace(/\/+$/, '') + path
 }
@@ -53,11 +61,15 @@ function endpoint(settings: Settings, path: string): string {
 export async function request(settings: Settings, path: string, init: RequestInit = {}): Promise<Response> {
   let res: Response
   try {
+    const method = (init.method ?? 'GET').toUpperCase()
     res = await fetch(endpoint(settings, path), {
       ...init,
+      // The session cookie travels with every call; an API key, when entered, still works as before.
+      credentials: 'include',
       headers: {
         ...(init.body ? { 'Content-Type': 'application/json' } : {}),
         ...(settings.apiKey ? { 'X-API-Key': settings.apiKey } : {}),
+        ...(csrfToken && method !== 'GET' && method !== 'HEAD' ? { 'X-CSRF-Token': csrfToken } : {}),
       },
     })
   } catch (err) {
@@ -81,10 +93,21 @@ export async function fetchEvents(settings: Settings, signal?: AbortSignal, limi
   return body.events
 }
 
+/** How widely "always" or "never" applies: this kind of event, this repository, or this source. */
+export type FeedbackScope = 'type' | 'repository' | 'source'
+
+export interface FeedbackResult {
+  /** True when the choice was recorded as a signal only, because only admins may change what is delivered. */
+  overrideSkipped?: boolean
+  /** True when undo removed an always or never choice. */
+  reverted?: boolean
+}
+
 export async function sendFeedback(
   settings: Settings,
-  feedback: { eventId: string; action: FeedbackAction; reason?: string },
-): Promise<void> {
-  if (settings.demo) return // nothing is stored in demo mode
-  await request(settings, '/feedback', { method: 'POST', body: JSON.stringify(feedback) })
+  feedback: { eventId: string; action: FeedbackAction; reason?: string; scope?: FeedbackScope },
+): Promise<FeedbackResult> {
+  if (settings.demo) return {} // nothing is stored in demo mode
+  const res = await request(settings, '/feedback', { method: 'POST', body: JSON.stringify(feedback) })
+  return (await res.json().catch(() => ({}))) as FeedbackResult
 }

@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
@@ -27,21 +28,80 @@ const (
 
 // Config holds every runtime setting. Zero values are safe: they fail closed.
 type Config struct {
-	Address               string
-	APIKey                string
-	AllowUnauthenticated  bool
-	DatabaseURL           string
-	RedisURL              string
-	RulesPath             string
-	DedupWindow           time.Duration
-	DefaultNotifyEmail    string
-	SMTPHost              string
-	SMTPPort              int
-	SMTPUsername          string
-	SMTPPassword          string
-	SMTPSender            string
-	SlackWebhookURL       string
-	TeamsWebhookURL       string
+	Address              string
+	APIKey               string
+	AllowUnauthenticated bool
+	DatabaseURL          string
+	RedisURL             string
+	RulesPath            string
+	DedupWindow          time.Duration
+	DefaultNotifyEmail   string
+	SMTPHost             string
+	SMTPPort             int
+	SMTPUsername         string
+	SMTPPassword         string
+	SMTPSender           string
+	SlackWebhookURL      string
+	TeamsWebhookURL      string
+	// SMSGateway selects how texts leave the service: "" (off), "mock", "http" or "sns".
+	SMSGateway     string
+	SMSRecipients  []string
+	SMSHTTPURL     string
+	SMSHTTPHeaders map[string]string
+	SMSHTTPBody    string
+	// SMSDailyLimit caps queued SMS per UTC day. 0 means no cap. Critical events are never capped.
+	SMSDailyLimit      int
+	AWSRegion          string
+	AWSAccessKeyID     string
+	AWSSecretAccessKey string
+	AWSSessionToken    string
+	// StandardChannels and BackgroundChannels list the channels that receive
+	// those attention classes. Empty (the default) means the class is only recorded.
+	StandardChannels   []string
+	BackgroundChannels []string
+	// Accounts and sign-in (all optional). The API key keeps working for services.
+	AuthBootstrapEmail    string
+	AuthBootstrapPassword string
+	AuthSessionTTL        time.Duration
+	// AuthCookieSecure is "auto" (secure when the request arrived over HTTPS), "true" or "false".
+	AuthCookieSecure string
+	// AuthCookieSameSite is "lax" (default), "strict" or "none" (needed when the console is on another site; forces Secure).
+	AuthCookieSameSite string
+	// AuthSecret signs the short-lived sign-in state. Set it when running several replicas.
+	AuthSecret string
+	// PublicURL is this service's own public address, used to build the identity provider callback.
+	PublicURL string
+	// ConsoleURL is where the browser is sent after single sign-on.
+	ConsoleURL string
+	// Single sign-on through any OpenID Connect provider. EntraTenantID is a shortcut for Microsoft Entra ID.
+	EntraTenantID      string
+	OIDCIssuer         string
+	OIDCName           string
+	OIDCClientID       string
+	OIDCClientSecret   string
+	OIDCAllowedDomains []string
+	// OverridesAdminOnly stops members from creating always/never notify overrides (their feedback is then only a signal).
+	OverridesAdminOnly bool
+	// AttentionClassify lets Attention Intelligence refine events whose rule allows it (default on).
+	AttentionClassify bool
+	// AttentionDigestEvery is how often a digest is generated; zero means only on request.
+	AttentionDigestEvery time.Duration
+	// AttentionProvider chooses what powers Attention Intelligence: "heuristic" (default, no model),
+	// "ollama" or "claude". A model that is down or invalid falls back to the heuristic.
+	AttentionProvider string
+	// OllamaURL and OllamaModel locate a local Ollama server (provider "ollama").
+	OllamaURL   string
+	OllamaModel string
+	// AnthropicAPIKey is required for provider "claude" and is never logged or returned by the API.
+	AnthropicAPIKey string
+	// AttentionModel overrides the Claude model name (provider "claude").
+	AttentionModel string
+	// AttentionTimeout bounds one model call.
+	AttentionTimeout time.Duration
+	// AttentionMaxCallsPerMin caps model calls per minute.
+	AttentionMaxCallsPerMin int
+	// DigestChannels lists the channels a digest is delivered to; empty means digests are only stored.
+	DigestChannels        []string
 	GitHubWebhookSecret   string
 	AllowUnsignedWebhooks bool
 	MaxBodyBytes          int64
@@ -124,6 +184,88 @@ func LoadConfig() (*Config, error) {
 	cfg.SlackWebhookURL = os.Getenv("SLACK_WEBHOOK_URL")
 	cfg.TeamsWebhookURL = os.Getenv("TEAMS_WEBHOOK_URL")
 	cfg.GitHubWebhookSecret = os.Getenv("GITHUB_WEBHOOK_SECRET")
+
+	cfg.AuthBootstrapEmail = strings.TrimSpace(os.Getenv("AUTH_BOOTSTRAP_EMAIL"))
+	cfg.AuthBootstrapPassword = os.Getenv("AUTH_BOOTSTRAP_PASSWORD")
+	if (cfg.AuthBootstrapEmail == "") != (cfg.AuthBootstrapPassword == "") {
+		return nil, errors.New("AUTH_BOOTSTRAP_EMAIL and AUTH_BOOTSTRAP_PASSWORD must be set together")
+	}
+	if cfg.AuthSessionTTL, err = envDuration("AUTH_SESSION_TTL", 12*time.Hour, false); err != nil {
+		return nil, err
+	}
+	cfg.AuthCookieSecure = strings.ToLower(strings.TrimSpace(envDefault("AUTH_COOKIE_SECURE", "auto")))
+	if cfg.AuthCookieSecure != "auto" && cfg.AuthCookieSecure != "true" && cfg.AuthCookieSecure != "false" {
+		return nil, fmt.Errorf("invalid AUTH_COOKIE_SECURE: %q (use auto, true or false)", cfg.AuthCookieSecure)
+	}
+	cfg.AuthCookieSameSite = strings.ToLower(strings.TrimSpace(envDefault("AUTH_COOKIE_SAMESITE", "lax")))
+	switch cfg.AuthCookieSameSite {
+	case "lax", "strict", "none":
+	default:
+		return nil, fmt.Errorf("invalid AUTH_COOKIE_SAMESITE: %q (use lax, strict or none)", cfg.AuthCookieSameSite)
+	}
+	cfg.AuthSecret = os.Getenv("AUTH_SECRET")
+	if cfg.OverridesAdminOnly, err = envBool("OVERRIDES_ADMIN_ONLY"); err != nil {
+		return nil, err
+	}
+	cfg.PublicURL = strings.TrimRight(strings.TrimSpace(os.Getenv("PUBLIC_URL")), "/")
+	cfg.ConsoleURL = strings.TrimSpace(os.Getenv("CONSOLE_URL"))
+	cfg.EntraTenantID = strings.TrimSpace(os.Getenv("ENTRA_TENANT_ID"))
+	cfg.OIDCIssuer = strings.TrimSpace(os.Getenv("OIDC_ISSUER"))
+	cfg.OIDCName = strings.TrimSpace(os.Getenv("OIDC_NAME"))
+	cfg.OIDCClientID = strings.TrimSpace(os.Getenv("OIDC_CLIENT_ID"))
+	cfg.OIDCClientSecret = os.Getenv("OIDC_CLIENT_SECRET")
+	cfg.OIDCAllowedDomains = envList("OIDC_ALLOWED_DOMAINS", "")
+
+	cfg.SMSGateway = strings.ToLower(strings.TrimSpace(os.Getenv("SMS_GATEWAY")))
+	switch cfg.SMSGateway {
+	case "", "mock", "http", "sns":
+	default:
+		return nil, fmt.Errorf("invalid SMS_GATEWAY: %q (use mock, http or sns)", cfg.SMSGateway)
+	}
+	cfg.SMSRecipients = envList("SMS_RECIPIENTS", "")
+	cfg.SMSHTTPURL = os.Getenv("SMS_HTTP_URL")
+	cfg.SMSHTTPBody = os.Getenv("SMS_HTTP_BODY")
+	if cfg.SMSHTTPHeaders, err = parseHeaders(os.Getenv("SMS_HTTP_HEADERS")); err != nil {
+		return nil, err
+	}
+	if cfg.SMSDailyLimit, err = envInt("SMS_DAILY_LIMIT", defaultSMSDailyLimit, 0, 100000); err != nil {
+		return nil, err
+	}
+	cfg.AWSRegion = os.Getenv("AWS_REGION")
+	cfg.AWSAccessKeyID = os.Getenv("AWS_ACCESS_KEY_ID")
+	cfg.AWSSecretAccessKey = os.Getenv("AWS_SECRET_ACCESS_KEY")
+	cfg.AWSSessionToken = os.Getenv("AWS_SESSION_TOKEN")
+	cfg.StandardChannels = envList("NOTIFY_STANDARD_CHANNELS", "")
+	cfg.DigestChannels = envList("NOTIFY_DIGEST_CHANNELS", "")
+	cfg.AttentionClassify = true
+	if v := os.Getenv("ATTENTION_CLASSIFY"); v != "" {
+		if cfg.AttentionClassify, err = envBool("ATTENTION_CLASSIFY"); err != nil {
+			return nil, err
+		}
+	}
+	if cfg.AttentionDigestEvery, err = envDuration("ATTENTION_DIGEST_EVERY", 0, true); err != nil {
+		return nil, err
+	}
+	cfg.BackgroundChannels = envList("NOTIFY_BACKGROUND_CHANNELS", "")
+	cfg.AttentionProvider = strings.ToLower(envDefault("ATTENTION_PROVIDER", ProviderHeuristic))
+	switch cfg.AttentionProvider {
+	case ProviderHeuristic, ProviderOllama, ProviderClaude:
+	default:
+		return nil, fmt.Errorf("invalid ATTENTION_PROVIDER: %q (use heuristic, ollama or claude)", cfg.AttentionProvider)
+	}
+	cfg.OllamaURL = os.Getenv("OLLAMA_URL")
+	cfg.OllamaModel = os.Getenv("OLLAMA_MODEL")
+	cfg.AnthropicAPIKey = os.Getenv("ANTHROPIC_API_KEY")
+	cfg.AttentionModel = os.Getenv("ATTENTION_MODEL")
+	if cfg.AttentionProvider == ProviderClaude && strings.TrimSpace(cfg.AnthropicAPIKey) == "" {
+		return nil, errors.New("ATTENTION_PROVIDER=claude requires ANTHROPIC_API_KEY")
+	}
+	if cfg.AttentionTimeout, err = envDuration("ATTENTION_TIMEOUT", defaultAttentionTimeout, false); err != nil {
+		return nil, err
+	}
+	if cfg.AttentionMaxCallsPerMin, err = envInt("ATTENTION_MAX_CALLS_PER_MIN", defaultAttentionMaxCalls, 1, 100000); err != nil {
+		return nil, err
+	}
 	cfg.CORSAllowedOrigins = envList("CORS_ALLOWED_ORIGINS", "")
 	cfg.AllowedWebhookHosts = envList("NOTIFY_ALLOWED_WEBHOOK_HOSTS", defaultWebhookHostList)
 	cfg.AllowedEmailDomains = envList("NOTIFY_ALLOWED_EMAIL_DOMAINS", "")
@@ -203,6 +345,29 @@ func envBool(name string) (bool, error) {
 	return b, nil
 }
 
+// defaultSMSDailyLimit bounds queued SMS spend until an operator chooses otherwise.
+const defaultSMSDailyLimit = 50
+
+// parseHeaders reads "Name=value,Name2=value2" into a map.
+func parseHeaders(s string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, pair := range splitList(s) {
+		name, value, ok := strings.Cut(pair, "=")
+		if name = strings.TrimSpace(name); !ok || name == "" {
+			return nil, fmt.Errorf("invalid SMS_HTTP_HEADERS entry %q (use Name=value)", pair)
+		}
+		out[name] = strings.TrimSpace(value)
+	}
+	return out, nil
+}
+
+func envDefault(name, def string) string {
+	if v, ok := os.LookupEnv(name); ok && v != "" {
+		return v
+	}
+	return def
+}
+
 func envList(name, def string) []string {
 	v, ok := os.LookupEnv(name)
 	if !ok {
@@ -221,3 +386,15 @@ func splitList(s string) []string {
 	}
 	return out
 }
+
+// Attention Intelligence providers for ATTENTION_PROVIDER.
+const (
+	ProviderHeuristic = "heuristic"
+	ProviderOllama    = "ollama"
+	ProviderClaude    = "claude"
+)
+
+const (
+	defaultAttentionTimeout  = 5 * time.Second
+	defaultAttentionMaxCalls = 60
+)

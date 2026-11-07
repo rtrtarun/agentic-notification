@@ -11,6 +11,10 @@ type RuleCondition struct {
 type RuleOutcome struct {
 	AttentionClass string `json:"attentionClass" yaml:"attentionClass"`
 	Reason         string `json:"reason" yaml:"reason"`
+	// Adaptive lets Attention Intelligence refine the outcome of this rule: a
+	// standard event may be moved to background. It never applies to a critical
+	// rule, and an explicit rule without it is never second-guessed.
+	Adaptive bool `json:"adaptive,omitempty" yaml:"adaptive,omitempty"`
 }
 
 // Rule maps a condition to an attention class. Rules run top to bottom and the
@@ -33,4 +37,6 @@ type PolicyDecision struct {
 	AttentionClass string
 	Reason         string
 	MatchedRule    string
+	// Adaptive is true when the rule allows Attention Intelligence to refine its outcome.
+	Adaptive bool
 }

@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/example/notification-service/pkg/event"
-	"github.com/example/notification-service/pkg/feedback"
 	"github.com/example/notification-service/pkg/notification"
 	"github.com/example/notification-service/pkg/pipeline"
 	"github.com/example/notification-service/pkg/util"
@@ -25,6 +24,26 @@ func (s *Server) Handler() http.Handler {
 	protected := func(h http.HandlerFunc) http.Handler {
 		return s.corsMiddleware(s.loggingMiddleware(s.authMiddleware(s.timeoutMiddleware(h))))
 	}
+	// Sign-in routes that must work before anyone is signed in.
+	public := func(h http.HandlerFunc) http.Handler {
+		return s.corsMiddleware(s.loggingMiddleware(s.timeoutMiddleware(h)))
+	}
+	mux.Handle(authPrefix+"/status", public(s.authStatusHandler))
+	mux.Handle(authPrefix+"/login", public(s.loginHandler))
+	mux.Handle(authPrefix+"/oidc/start", public(s.oidcStartHandler))
+	mux.Handle(authPrefix+"/oidc/callback", public(s.oidcCallbackHandler))
+	mux.Handle(authPrefix+"/logout", protected(s.logoutHandler))
+	mux.Handle(authPrefix+"/me", protected(s.meHandler))
+	mux.Handle(authPrefix+"/password", protected(s.passwordHandler))
+	mux.Handle(usersPrefix, protected(s.usersHandler))
+	mux.Handle(usersPrefix+"/", protected(s.usersHandler))
+	mux.Handle("/api/audit", protected(s.auditHandler))
+	mux.Handle(digestsPrefix, protected(s.digestsHandler))
+	mux.Handle(digestsPrefix+"/", protected(s.digestsHandler))
+	mux.Handle(explainPrefix, protected(s.explainHandler))
+	mux.Handle(attentionStatusPath, protected(s.attentionStatusHandler))
+	mux.Handle(overridesPrefix, protected(s.overridesHandler))
+	mux.Handle(overridesPrefix+"/", protected(s.overridesHandler))
 	mux.Handle("/notify", protected(s.notifyHandler))
 	mux.Handle("/metrics", protected(s.metricsHandler))
 	mux.Handle("/feedback", protected(s.feedbackHandler))
@@ -38,6 +57,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/api/policies", protected(s.policiesHandler))
 	mux.Handle(channelsPrefix, protected(s.channelsHandler))
 	mux.Handle(channelsPrefix+"/", protected(s.channelsHandler))
+	mux.Handle(deliveriesPrefix, protected(s.deliveriesHandler))
+	mux.Handle(deliveriesPrefix+"/", protected(s.deliveriesHandler))
 	mux.Handle("/api/integrations", protected(s.integrationsHandler))
 	mux.Handle("/api/preferences", protected(s.preferencesHandler))
 	// The stream is long-lived, so it skips the request timeout; it extends its own write deadline.
@@ -74,6 +95,22 @@ func (s *Server) Run(ctx context.Context) error {
 		go func() {
 			defer background.Done()
 			s.runRetention(ctx, s.purger)
+		}()
+	}
+
+	if s.dispatcher != nil {
+		background.Add(1)
+		go func() {
+			defer background.Done()
+			s.dispatcher.Run(ctx)
+		}()
+	}
+
+	if s.digestScheduler != nil {
+		background.Add(1)
+		go func() {
+			defer background.Done()
+			s.digestScheduler.Run(ctx)
 		}()
 	}
 
@@ -133,30 +170,6 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 func (s *Server) metricsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	s.metrics.WritePrometheus(w)
-}
-
-func (s *Server) feedbackHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		util.WriteJSON(w, http.StatusMethodNotAllowed, util.ErrorResponse{Error: errMethod})
-		return
-	}
-
-	var fb feedback.EventFeedback
-	if !s.decodeJSON(w, r, &fb) {
-		return
-	}
-	if fb.EventID == "" || fb.Action == "" {
-		util.WriteJSON(w, http.StatusBadRequest, util.ErrorResponse{Error: "event id and action are required"})
-		return
-	}
-
-	if err := s.feedbackRecorder.Record(fb); err != nil {
-		s.logFor(r.Context()).Error("record feedback failed", "error", err)
-		util.WriteJSON(w, http.StatusInternalServerError, util.ErrorResponse{Error: errInternal})
-		return
-	}
-
-	util.WriteJSON(w, http.StatusAccepted, map[string]string{"status": "accepted"})
 }
 
 func (s *Server) githubWebhookHandler(w http.ResponseWriter, r *http.Request) {

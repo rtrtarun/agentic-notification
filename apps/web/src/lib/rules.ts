@@ -15,7 +15,7 @@ export interface Rule {
   name: string
   description?: string
   when: RuleCondition
-  then: { attentionClass: AttentionClass; reason: string }
+  then: { attentionClass: AttentionClass; reason: string; adaptive?: boolean }
   disabled?: boolean
   /** Locked rules protect critical routing and cannot be changed here. */
   locked?: boolean
@@ -159,7 +159,7 @@ const SEED: Rule[] = [
     when: { source: 'github', eventType: 'star' },
     then: { attentionClass: 'background', reason: 'low-priority social signal' },
   },
-  { id: 'demo-default', name: 'default-github', when: { source: 'github' }, then: { attentionClass: 'standard', reason: 'default routing' } },
+  { id: 'demo-default', name: 'default-github', when: { source: 'github' }, then: { attentionClass: 'standard', reason: 'default routing', adaptive: true } },
 ]
 
 /** An in-memory client for demo mode, with the service's guards. Each call to makeDemoRules starts from the seed. */

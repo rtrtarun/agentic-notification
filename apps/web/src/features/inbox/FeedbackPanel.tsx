@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useApp } from '../../app/AppState'
-import { ApiError, sendFeedback, type FeedbackAction } from '../../lib/api'
+import { ApiError, sendFeedback, type FeedbackAction, type FeedbackScope } from '../../lib/api'
 import type { Translator } from '../../lib/i18n'
 import { useI18n } from '../../lib/i18n/I18nContext'
 
@@ -21,19 +21,28 @@ export function FeedbackPanel({ eventId, critical }: { eventId: string; critical
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [reply, setReply] = useState('')
+  const [scope, setScope] = useState<FeedbackScope>('type')
+  const [signalOnly, setSignalOnly] = useState(false)
 
   // A different notification means a fresh conversation.
   useEffect(() => {
     setLast(null)
     setError(null)
     setReply('')
+    setSignalOnly(false)
   }, [eventId])
 
   const submit = async (action: FeedbackAction, reason?: string) => {
     setBusy(true)
     setError(null)
     try {
-      await sendFeedback(settings, { eventId, action, reason })
+      const result = await sendFeedback(settings, {
+        eventId,
+        action,
+        reason,
+        ...(action === 'always' || action === 'never' ? { scope } : {}),
+      })
+      setSignalOnly(result.overrideSkipped === true)
       setLast(action)
       if (action === 'reply') setReply('')
     } catch (err) {
@@ -67,6 +76,14 @@ export function FeedbackPanel({ eventId, critical }: { eventId: string; critical
           </li>
         )}
       </ul>
+      <label className="toolbar-field">
+        <span>{t('ovr.scope')}</span>
+        <select className="field select" value={scope} onChange={(e) => setScope(e.target.value as FeedbackScope)}>
+          <option value="type">{t('ovr.scope.type')}</option>
+          <option value="repository">{t('ovr.scope.repository')}</option>
+          <option value="source">{t('ovr.scope.source')}</option>
+        </select>
+      </label>
       {critical && <p className="hint">{t('sheet.criticalHint')}</p>}
 
       <form
@@ -95,6 +112,7 @@ export function FeedbackPanel({ eventId, critical }: { eventId: string; critical
           </p>
         )}
         {last === 'undo' && <p>{t('done.undo')}</p>}
+        {signalOnly && (last === 'always' || last === 'never') && <p className="hint">{t('ovr.signalOnly')}</p>}
       </div>
       {error && (
         <p className="error-text" role="alert">

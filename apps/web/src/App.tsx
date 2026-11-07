@@ -1,6 +1,7 @@
 import { lazy } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppProvider, useApp } from './app/AppState'
+import { AuthGate } from './app/AuthGate'
 import { Shell } from './app/Shell'
 import { SettingsDialog } from './components/SettingsDialog'
 import { Welcome } from './components/Welcome'
@@ -17,6 +18,8 @@ const ChannelsPage = lazy(() => import('./pages/ChannelsPage'))
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage'))
 const PreferencesPage = lazy(() => import('./pages/PreferencesPage'))
 const HelpPage = lazy(() => import('./pages/HelpPage'))
+const UsersPage = lazy(() => import('./pages/UsersPage'))
+const DigestsPage = lazy(() => import('./pages/DigestsPage'))
 const AllPage = lazy(() => import('./pages/AllPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const PlannedPage = lazy(() => import('./pages/PlannedPage'))
@@ -27,6 +30,8 @@ const BUILT: Record<string, React.ReactElement> = {
   overview: <OverviewPage />,
   all: <AllPage />,
   help: <HelpPage />,
+  users: <UsersPage />,
+  digests: <DigestsPage />,
   preferences: <PreferencesPage />,
   channels: <ChannelsPage />,
   integrations: <IntegrationsPage />,
@@ -53,15 +58,17 @@ function Screens() {
 
   return (
     <>
-      <Routes>
-        <Route element={<Shell />}>
-          <Route index element={<Navigate to={HOME_PATH} replace />} />
-          {NAV_ITEMS.map((item) => (
-            <Route key={item.id} path={item.path} element={BUILT[item.id] ?? <PlannedPage item={item} />} />
-          ))}
-          <Route path="*" element={<Navigate to={HOME_PATH} replace />} />
-        </Route>
-      </Routes>
+      <AuthGate>
+        <Routes>
+          <Route element={<Shell />}>
+            <Route index element={<Navigate to={HOME_PATH} replace />} />
+            {NAV_ITEMS.map((item) => (
+              <Route key={item.id} path={item.path} element={BUILT[item.id] ?? <PlannedPage item={item} />} />
+            ))}
+            <Route path="*" element={<Navigate to={HOME_PATH} replace />} />
+          </Route>
+        </Routes>
+      </AuthGate>
       {dialog}
     </>
   )

@@ -89,3 +89,97 @@ func TestRecipientHelpers(t *testing.T) {
 		})
 	}
 }
+
+func TestSMSAndRoutingSettings(t *testing.T) {
+	t.Setenv("SMS_GATEWAY", " Mock ")
+	t.Setenv("SMS_RECIPIENTS", "+14155550100, +14155550101")
+	t.Setenv("SMS_HTTP_HEADERS", "Authorization=Bearer abc, X-Key=1")
+	t.Setenv("SMS_DAILY_LIMIT", "5")
+	t.Setenv("NOTIFY_STANDARD_CHANNELS", "slack, email")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SMSGateway != "mock" || len(cfg.SMSRecipients) != 2 || cfg.SMSDailyLimit != 5 {
+		t.Fatalf("sms settings = %+v", cfg)
+	}
+	if cfg.SMSHTTPHeaders["Authorization"] != "Bearer abc" || cfg.SMSHTTPHeaders["X-Key"] != "1" {
+		t.Fatalf("headers = %v", cfg.SMSHTTPHeaders)
+	}
+	if len(cfg.StandardChannels) != 2 || len(cfg.BackgroundChannels) != 0 {
+		t.Fatalf("routes = %v / %v", cfg.StandardChannels, cfg.BackgroundChannels)
+	}
+}
+
+func TestSMSSettingsAreValidated(t *testing.T) {
+	t.Setenv("SMS_GATEWAY", "carrier-pigeon")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("an unknown gateway must be rejected")
+	}
+	t.Setenv("SMS_GATEWAY", "")
+	t.Setenv("SMS_HTTP_HEADERS", "no-equals-sign")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("a malformed header must be rejected")
+	}
+}
+
+func TestSMSDefaults(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SMSGateway != "" || cfg.SMSDailyLimit != 50 || len(cfg.StandardChannels) != 0 {
+		t.Fatalf("defaults = %+v", cfg)
+	}
+}
+
+func TestAttentionProviderSettings(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AttentionProvider != ProviderHeuristic || cfg.AttentionTimeout != 5*time.Second || cfg.AttentionMaxCallsPerMin != 60 {
+		t.Fatalf("defaults wrong: %q %v %d", cfg.AttentionProvider, cfg.AttentionTimeout, cfg.AttentionMaxCallsPerMin)
+	}
+
+	t.Setenv("ATTENTION_PROVIDER", "Ollama")
+	t.Setenv("OLLAMA_URL", "http://ollama:11434")
+	t.Setenv("OLLAMA_MODEL", "llama3.2")
+	t.Setenv("ATTENTION_TIMEOUT", "8s")
+	t.Setenv("ATTENTION_MAX_CALLS_PER_MIN", "10")
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AttentionProvider != ProviderOllama || cfg.OllamaURL != "http://ollama:11434" || cfg.OllamaModel != "llama3.2" ||
+		cfg.AttentionTimeout != 8*time.Second || cfg.AttentionMaxCallsPerMin != 10 {
+		t.Fatalf("settings not read: %+v", cfg)
+	}
+}
+
+func TestAttentionProviderValidation(t *testing.T) {
+	cases := map[string]map[string]string{
+		"unknown provider":   {"ATTENTION_PROVIDER": "gpt"},
+		"claude without key": {"ATTENTION_PROVIDER": "claude"},
+		"claude blank key":   {"ATTENTION_PROVIDER": "claude", "ANTHROPIC_API_KEY": "  "},
+		"bad timeout":        {"ATTENTION_TIMEOUT": "soon"},
+		"zero timeout":       {"ATTENTION_TIMEOUT": "0s"},
+		"zero calls per min": {"ATTENTION_MAX_CALLS_PER_MIN": "0"},
+		"calls not a number": {"ATTENTION_MAX_CALLS_PER_MIN": "many"},
+	}
+	for name, env := range cases {
+		t.Run(name, func(t *testing.T) {
+			for k, v := range env {
+				t.Setenv(k, v)
+			}
+			if _, err := LoadConfig(); err == nil {
+				t.Fatal("expected an error")
+			}
+		})
+	}
+	t.Setenv("ATTENTION_PROVIDER", "claude")
+	t.Setenv("ANTHROPIC_API_KEY", "sk-test")
+	if _, err := LoadConfig(); err != nil {
+		t.Fatalf("claude with a key should load: %v", err)
+	}
+}

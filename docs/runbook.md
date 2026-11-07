@@ -79,6 +79,24 @@ Preferences (Preferences screen, `GET`/`PUT /api/preferences`) apply to standard
 ### Channel test returns 429, 409 or 502
 `POST /api/channels/{id}/test`: 429 means a test was sent in the last 10 seconds; 409 means the channel is not configured (see the variable named on the Channels screen); 502 means delivery failed, and the reason is in the service log, not in the response.
 
+### Standard events are not being delivered
+Check `NOTIFY_STANDARD_CHANNELS` (empty means standard events are only recorded) and that the named channel is configured on Channels. Muted, held, quiet-hours and merged events are not delivered by design. Open Channels > Deliveries: *Waiting* means the dispatcher has not reached the job or it is backing off; *Gave up* shows the redacted error and a Retry button. A job is dead at once if its number is invalid or its channel was un-configured after queuing.
+
+### SMS
+`SMS_GATEWAY=mock` only logs (the Channels screen shows "Mock"). For production set `SMS_GATEWAY=sns` with `AWS_REGION`, `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` (SNS must be out of the SMS sandbox for the account), or `http` with `SMS_HTTP_URL`, `SMS_HTTP_HEADERS` and `SMS_HTTP_BODY`. Numbers are E.164 and come only from `SMS_RECIPIENTS`. `SMS_DAILY_LIMIT` (default 50) caps queued texts per UTC day; critical events are never capped.
+
+### Signing in and accounts
+Set `AUTH_BOOTSTRAP_EMAIL` and `AUTH_BOOTSTRAP_PASSWORD` once to create the first admin (nothing happens if an account already exists). People then sign in at the console; admins add others under Users & Access. A person who is locked out waits fifteen minutes; an admin can reset their password. If the only admin is lost, add a new database row or start a fresh service with the bootstrap settings and an empty `users` table. For a browser on another site than the service set `AUTH_COOKIE_SAMESITE=none` (this forces `Secure`, so HTTPS is required) and list the console's origin in `CORS_ALLOWED_ORIGINS`.
+
+### Single sign-on (Microsoft Entra ID)
+Register an app in Entra ID, add `PUBLIC_URL/api/auth/oidc/callback` as a web redirect URI, create a client secret, then set `ENTRA_TENANT_ID` (a tenant ID or domain, not `common`), `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `PUBLIC_URL`, `CONSOLE_URL` and `OIDC_ALLOWED_DOMAINS` (comma list of email domains whose people may be created as members; empty means only existing accounts can sign in). With several replicas set the same `AUTH_SECRET` on each. A refused sign-in returns to the console with `?signin=denied` or `failed`; the reason is in the service log, never in the address.
+
+### An event was not delivered because of an override
+Open the event: its decision reason names the override ("never notify override for github / star"). Preferences > Always and never notify lists every override with who chose it; remove it there. Critical events ignore overrides, so a missing critical alert is a different problem (see "Critical alerts are not arriving"). To stop members from creating overrides set `OVERRIDES_ADMIN_ONLY=true`.
+
+### Digests are empty, or something was held that should not be
+A digest covers events whose outcome is `digest` or `delayed` since the last one. If it is empty, nothing was held: check Activity for outcomes. If something was held that should not be, open it and press "Explain in words": it names the rule, any override and whether Attention Intelligence took part. To stop Attention refining a rule, edit the rule and turn off "Let Attention refine this"; to stop it everywhere set `ATTENTION_CLASSIFY=false`. A digest is only delivered when `NOTIFY_DIGEST_CHANNELS` names a configured channel; otherwise it is stored and visible under Digests. Digests are made every `ATTENTION_DIGEST_EVERY` after start (`24h` is typical) or by an admin on request.
+
 ## Deploying
 
 1. Create the Secret (`k8s/secret.example.yaml` shows the keys). Never commit real values.
@@ -90,3 +108,6 @@ Preferences (Preferences screen, `GET`/`PUT /api/preferences`) apply to standard
 Events are in PostgreSQL; use the managed database's backups and point-in-time recovery. The service holds no other durable state (Redis only caches the dedup window; losing it just allows one window of duplicates). Test a restore into a scratch database before relying on it.
 
 Targets (proposed, confirm with stakeholders): RPO 5 minutes, RTO 30 minutes.
+
+### Attention model (milestone 26)
+By default Attention Intelligence is the built-in rules-with-reasons heuristic. To use a model, set `ATTENTION_PROVIDER=ollama` (with `OLLAMA_URL` and `OLLAMA_MODEL`) or `ATTENTION_PROVIDER=claude` (with `ANTHROPIC_API_KEY`). Check `GET /api/attention/status` as an admin: `breaker` should be `closed`, and `fallbacks` should stay small compared with `calls`. A rising `fallbacks` count with a `lastError` means the model is down, too slow (raise `ATTENTION_TIMEOUT`) or answering outside the strict JSON format (use a stronger model). Nothing breaks meanwhile: the heuristic answers. A breaker that stays `open` is retried every 30 seconds. To stop any model use immediately, unset `ATTENTION_PROVIDER` and restart. Critical events are never sent to a model, and digests and explanations show a "Written by" badge so you can tell who wrote them.

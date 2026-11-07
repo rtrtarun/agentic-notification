@@ -185,7 +185,6 @@ export const ar: Partial<Messages> = {
   'shell.workspaceNote': 'سيتوفر التبديل بين مساحات العمل مع تسجيل الدخول. هذه مساحة عملك الوحيدة حاليًا.',
   'top.palette': 'ابحث أو نفّذ أمرًا',
   'top.account': 'قائمة الحساب',
-  'top.accountNote': 'تسجيل الدخول وملفات المستخدمين لم يُبنَ بعد.',
   'palette.title': 'لوحة الأوامر',
   'palette.placeholder': 'اكتب أمرًا أو اسم شاشة',
   'palette.empty': 'لا يوجد أمر مطابق.',
