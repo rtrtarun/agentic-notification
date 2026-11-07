@@ -23,7 +23,8 @@ What is running, where, and how to check it. No secrets here: values live in the
 | Database | Neon PostgreSQL (AWS `us-east-2`), **direct** host (no `-pooler`) with `binary_parameters=yes` | project in the Neon dashboard | The pooler broke prepared statements; see the Neon note below |
 | Image registry | GitHub Container Registry (public packages) | `ghcr.io/rtrtarun/agentic-notification/` | Two images, see "Releases and images" |
 | Java service | **Not deployed anywhere** | none | Images are published from milestone 36; no host runs one |
-| CI | GitHub Actions | the repository's Actions tab | `ci.yml` (all four jobs), `pages.yml`, `publish-image.yml` |
+| Releases | GitHub Releases, created by `publish-image.yml` | https://github.com/rtrtarun/agentic-notification/releases | One per version (`v0.36.0` once milestone 36 is merged); none exist yet |
+| CI | GitHub Actions | the repository's Actions tab | `ci.yml` (all four jobs), `pages.yml`, `publish-image.yml` (versioned images, then the GitHub Release) |
 
 **What the live service is running.** `GET https://agentpulse-rpyb.onrender.com/health` returns the release in `version` once it runs `0.36.0` or later. Before that it returns no `version` field, which means a release older than milestone 36 (the one deployed on 2026-11-07 predates it). Webhooks are not connected to a repository yet.
 
@@ -75,7 +76,8 @@ Every release publishes **two images** to GitHub Container Registry, built by [p
 - **The release number is the `VERSION` file** at the repository root (`0.36.0` for milestone 36). Pre-1.0 the minor number follows the milestone; patch numbers are fixes.
 - **Tags on each image:** `0.36.0` (this release), `0.36` (latest patch of that minor), `latest`, and `sha-<commit>` (always unique).
 - **Running service identification:** the version is baked into the image (`APP_VERSION`, also the `org.opencontainers.image.version` label) and `GET /health` returns it, so you can tell what is running without a commit hash. A build outside the workflow reports `dev`.
-- **To release:** edit `VERSION`, update `docs/CHANGELOG.md`, merge to the default branch. The workflow runs when `VERSION`, either service or the workflow changes (or by hand from the Actions tab). Publishing a version that already exists moves that tag to the new build and prints a warning; the `sha-` tag never moves.
+- **GitHub Release:** after both images are pushed, the workflow creates a GitHub Release named `v<VERSION>` (for example `v0.36.0`) on the default branch only, targeting the merged commit. It is marked a **pre-release** while the version starts with `0.`; its notes list the two image references, how to check `/health`, the hand-written **"Changes included"** note from `docs/releases/<VERSION>.md` (highlights, what changed, upgrade notes, what was and was not checked, known issues), links to this changelog and deployment guide, and the pull requests merged since the previous release. A release that already exists is never changed (the run prints a notice), so a version is released once.
+- **To release:** edit `VERSION`, write `docs/releases/<VERSION>.md` (copy the previous one), update `docs/CHANGELOG.md`, merge to the default branch. The workflow runs when `VERSION`, either service or the workflow changes (or by hand from the Actions tab). Publishing a version that already exists moves the image tags to the new build and prints a warning, but leaves the existing GitHub Release alone; the `sha-` tag never moves. **Bump `VERSION` for every release you want a new GitHub Release for.**
 - **To deploy a release:** point the host at a version tag instead of `latest`, for example `notification-service:0.36.0`, so a restart never picks up an unreviewed build. On Render: the service's settings, image URL, then redeploy.
 - **Check:** `docker run --rm -p 8080:8080 -e API_KEY=k ghcr.io/rtrtarun/agentic-notification/notification-service:0.36.0` then `curl localhost:8080/health`.
 

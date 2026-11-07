@@ -19,6 +19,7 @@ docs/
 ├── CHANGELOG.md             every change, newest first
 ├── contract/                the shared HTTP contract both services pass
 ├── milestones/              records for the current work (34 to 36)
+├── releases/                one note per release (0.36.0): what changed, upgrade notes, what was checked
 ├── rules/                   coding standards every change follows
 └── archived/                milestones 1 to 33 and superseded design notes
 ```

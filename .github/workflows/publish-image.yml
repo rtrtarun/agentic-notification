@@ -8,8 +8,14 @@ name: Publish service images
 # service can be identified without a commit hash. Any container host can then run an image.
 # Uses the built-in GITHUB_TOKEN; no secrets to create.
 #
-# To release: edit VERSION, merge to the default branch. Publishing the same version again moves that
-# tag to the new build (the workflow warns); the sha tag always stays unique.
+# After both images are published, a GitHub Release named v<VERSION> is created on the default branch
+# (marked a pre-release while the version is 0.x), with notes generated from the merged pull requests and
+# the image references, plus the hand-written note docs/releases/<VERSION>.md (the changes included, upgrade notes,
+# what was and was not checked) when it exists. A release that already exists is never changed: bump VERSION for a new release.
+#
+# To release: edit VERSION, add docs/releases/<VERSION>.md, merge to the default branch. Publishing the same version again moves the image
+# tags to the new build (the workflow warns) but leaves the existing GitHub Release alone; the sha tag
+# always stays unique.
 
 on:
   push:
@@ -87,3 +93,57 @@ jobs:
             ${{ steps.name.outputs.image }}:${{ needs.version.outputs.minor }}
             ${{ steps.name.outputs.image }}:latest
             ${{ steps.name.outputs.image }}:sha-${{ github.sha }}
+
+  release:
+    # Only the default branch makes releases, and only when both images were pushed.
+    needs: [version, image]
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          tag="v${VERSION}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "::notice::Release $tag already exists and is left unchanged. Bump VERSION for a new release."
+            exit 0
+          fi
+          repo="${GITHUB_REPOSITORY,,}"
+          generated="$(gh api -X POST "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
+            -f tag_name="$tag" -f target_commitish="$GITHUB_SHA" --jq .body)"
+          {
+            echo "## Images"
+            echo
+            echo "| Service | Image |"
+            echo "|---|---|"
+            echo "| Go (the one the console talks to) | \`ghcr.io/${repo}/notification-service:${VERSION}\` |"
+            echo "| Java | \`ghcr.io/${repo}/notification-service-java:${VERSION}\` |"
+            echo
+            echo "Also tagged \`${VERSION%.*}\`, \`latest\` and \`sha-${GITHUB_SHA}\`. A running service reports this release in \`GET /health\` (\`\"version\": \"${VERSION}\"\`)."
+            echo
+            if [ -f "docs/releases/${VERSION}.md" ]; then
+              echo "## Changes included"
+              echo
+              # The hand-written note for this version, without its own title.
+              # Relative links would break on a release page, so they point at this commit.
+              sed -e '1{/^# /d}' -e "s#](\.\./#](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/docs/#g" "docs/releases/${VERSION}.md"
+              echo
+            else
+              echo "No release note exists for ${VERSION}: add docs/releases/${VERSION}.md next time."
+              echo
+            fi
+            echo "Details: [CHANGELOG](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/docs/CHANGELOG.md) and [Deployment](https://github.com/${GITHUB_REPOSITORY}/blob/${GITHUB_SHA}/docs/deployment.md)."
+            echo
+            echo "$generated"
+          } > release-notes.md
+          flags=()
+          if [[ "$VERSION" == 0.* ]]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$tag" --target "$GITHUB_SHA" --title "$tag" --notes-file release-notes.md "${flags[@]}"
+          echo "Created release $tag" >> "$GITHUB_STEP_SUMMARY"
