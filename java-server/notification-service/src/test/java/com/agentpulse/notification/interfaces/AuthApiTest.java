@@ -298,4 +298,15 @@ class AuthApiTest {
         assertEquals(401, call("GET", "/events", null, Map.of("Cookie", "attn_session=not-a-real-token")).statusCode());
         assertEquals(404, call("GET", "/api/auth/nothing", null, Map.of()).statusCode());
     }
+
+    @Test
+    void healthReportsTheRelease() throws Exception {
+        start(false, Map.of("APP_VERSION", "1.2.3"));
+        JsonNode health = json(call("GET", "/health", null, Map.of()));
+        assertEquals("ok", health.get("status").asText());
+        assertEquals("1.2.3", health.get("version").asText());
+        stop();
+        start(false, Map.of());
+        assertEquals("dev", json(call("GET", "/health", null, Map.of())).get("version").asText(), "unset means dev");
+    }
 }

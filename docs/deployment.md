@@ -1,6 +1,8 @@
 # Deployment and hosting
 
-> **Status after Milestone 35.** Two services exist: the Go service (everything below) and the Java service (milestones 34 and 35; see "The Java service" at the end). The Go service has accounts and single sign-on, a delivery retry queue, optional Ollama or Claude and Novu, and an MCP server. The service now has accounts and single sign-on, a delivery retry queue, optional Ollama or Claude and Novu, and an MCP server. The environment variables for all of it are in "Production reference" at the end of this document, and each milestone document lists its own settings.
+> **Status after Milestone 36** (accounts with sign-up, versioned images for both services; the live service may still run an earlier release, see "Where we have deployed").
+>
+> **Earlier status (milestone 35).** Two services exist: the Go service (everything below) and the Java service (milestones 34 and 35; see "The Java service" at the end). The Go service has accounts and single sign-on, a delivery retry queue, optional Ollama or Claude and Novu, and an MCP server. The service now has accounts and single sign-on, a delivery retry queue, optional Ollama or Claude and Novu, and an MCP server. The environment variables for all of it are in "Production reference" at the end of this document, and each milestone document lists its own settings.
 
 The platform has two deployable parts. They are hosted differently.
 
@@ -10,6 +12,35 @@ The platform has two deployable parts. They are hosted differently.
 | Service (`go-server/notification-service`) | A Go server that needs PostgreSQL (and optionally Redis) | Any container host: Docker Compose, Kubernetes, Fly.io, Render, AWS |
 
 GitHub Pages cannot run the service. It only serves static files, so until a service is hosted the console runs in **demo mode** (sample data).
+
+## Where we have deployed
+What is running, where, and how to check it. No secrets here: values live in the host dashboards and in the (git-ignored) local `env.txt`.
+
+| Part | Where | Address | Notes |
+|---|---|---|---|
+| Console | GitHub Pages, from [pages.yml](../.github/workflows/pages.yml) | https://rtrtarun.github.io/agentic-notification/ | Built with the repository variable `BACKEND_URL` set to the service below, so it is not in demo mode; **Try the demo** still works from the welcome screen |
+| Go service | Render web service, image `ghcr.io/rtrtarun/agentic-notification/notification-service` (set to `:latest` on 2026-11-07) | https://agentpulse-rpyb.onrender.com | Environment variables set: `PORT`, `API_KEY`, `GITHUB_WEBHOOK_SECRET`, `DATABASE_URL`, `CORS_ALLOWED_ORIGINS`, `AUTH_BOOTSTRAP_EMAIL`, `AUTH_BOOTSTRAP_PASSWORD`; Slack is configured only in the local `env.txt`, not yet on Render |
+| Database | Neon PostgreSQL (AWS `us-east-2`), **direct** host (no `-pooler`) with `binary_parameters=yes` | project in the Neon dashboard | The pooler broke prepared statements; see the Neon note below |
+| Image registry | GitHub Container Registry (public packages) | `ghcr.io/rtrtarun/agentic-notification/` | Two images, see "Releases and images" |
+| Java service | **Not deployed anywhere** | none | Images are published from milestone 36; no host runs one |
+| CI | GitHub Actions | the repository's Actions tab | `ci.yml` (all four jobs), `pages.yml`, `publish-image.yml` |
+
+**What the live service is running.** `GET https://agentpulse-rpyb.onrender.com/health` returns the release in `version` once it runs `0.36.0` or later. Before that it returns no `version` field, which means a release older than milestone 36 (the one deployed on 2026-11-07 predates it). Webhooks are not connected to a repository yet.
+
+## Releases and images
+Every release publishes **two images** to GitHub Container Registry, built by [publish-image.yml](../.github/workflows/publish-image.yml):
+
+| Image | Service | Used by |
+|---|---|---|
+| `ghcr.io/rtrtarun/agentic-notification/notification-service` | Go (the one the console talks to) | Render today |
+| `ghcr.io/rtrtarun/agentic-notification/notification-service-java` | Java | nothing yet |
+
+- **The release number is the `VERSION` file** at the repository root (`0.36.0` for milestone 36). Pre-1.0 the minor number follows the milestone; patch numbers are fixes.
+- **Tags on each image:** `0.36.0` (this release), `0.36` (latest patch of that minor), `latest`, and `sha-<commit>` (always unique).
+- **Running service identification:** the version is baked into the image (`APP_VERSION`, also the `org.opencontainers.image.version` label) and `GET /health` returns it, so you can tell what is running without a commit hash. A build outside the workflow reports `dev`.
+- **To release:** edit `VERSION`, update `docs/CHANGELOG.md`, merge to the default branch. The workflow runs when `VERSION`, either service or the workflow changes (or by hand from the Actions tab). Publishing a version that already exists moves that tag to the new build and prints a warning; the `sha-` tag never moves.
+- **To deploy a release:** point the host at a version tag instead of `latest`, for example `notification-service:0.36.0`, so a restart never picks up an unreviewed build. On Render: the service's settings, image URL, then redeploy.
+- **Check:** `docker run --rm -p 8080:8080 -e API_KEY=k ghcr.io/rtrtarun/agentic-notification/notification-service:0.36.0` then `curl localhost:8080/health`.
 
 ## Go live under GitHub
 
@@ -32,7 +63,9 @@ With nothing else configured the site opens in **demo mode** (sample data, nothi
 
 The Pages environment may only deploy from the default branch. If a run from another branch is refused, merge to `main` or change the rule under Settings, then Environments, then github-pages.
 
-### Step 2: publish the service image
+### Step 2: publish the service images
+
+See "Releases and images" above: both the Go and the Java image are published, with the release from `VERSION`. The rest of this step describes the Go image, which is the one the console uses.
 
 Workflow: [.github/workflows/publish-image.yml](../.github/workflows/publish-image.yml). On a push to `main` that touches the service, it builds the Docker image and pushes `ghcr.io/<owner>/<repository>/notification-service:latest` (and a tag per commit) using the built-in token. No secrets to create. To let a host pull it without logging in, set the package to public under your profile's Packages, then the package's settings.
 
@@ -162,7 +195,7 @@ One concrete path through "Order of work". Dashboard labels change; match by mea
 
 1. **Secrets:** run `openssl rand -hex 32` twice: the first is `API_KEY`, the second `GITHUB_WEBHOOK_SECRET`. Keep them in a password manager; never commit them.
 2. **Database (Neon):** create a project and copy the connection string (`postgres://user:pass@host/db?sslmode=require`) as `DATABASE_URL`. The service creates its tables at start-up.
-3. **Service (Render):** New, Web Service, deploy an existing image: `ghcr.io/rtrtarun/agentic-notification/notification-service:latest` (public). Use a plan that stays running (a sleeping service can miss GitHub's webhook timeout). Health check path `/health`. Variables:
+3. **Service (Render):** New, Web Service, deploy an existing image: `ghcr.io/rtrtarun/agentic-notification/notification-service:0.36.0` (public; use a version tag so restarts do not pick up a new build, or `:latest` to follow releases). Use a plan that stays running (a sleeping service can miss GitHub's webhook timeout). Health check path `/health`. Variables:
 
 | Variable | Value |
 |---|---|
@@ -171,6 +204,8 @@ One concrete path through "Order of work". Dashboard labels change; match by mea
 | `DATABASE_URL` | the Neon **direct** string (host without `-pooler`) with `?sslmode=require&binary_parameters=yes` (see the Neon note below) |
 | `CORS_ALLOWED_ORIGINS` | `https://rtrtarun.github.io` |
 | `AUTH_BOOTSTRAP_EMAIL`, `AUTH_BOOTSTRAP_PASSWORD` | creates the first admin once |
+| `AUTH_COOKIE_SAMESITE` | `none` when the console is on another site (GitHub Pages and Render are), or sessions will not stick (it forces `Secure`; use one site for both as the real fix) |
+| `AUTH_SIGNUP` | `approval` to let people ask for an account (an admin approves each one); leave unset to keep sign-up off |
 | `SLACK_WEBHOOK_URL`, `NOTIFY_STANDARD_CHANNELS=slack` | recommended, so alerts have somewhere to go |
 
    Leave `ALLOW_UNAUTHENTICATED_API` and `ALLOW_UNSIGNED_WEBHOOKS` unset.
@@ -183,11 +218,12 @@ One concrete path through "Order of work". Dashboard labels change; match by mea
 If Slack is not configured a critical delivery can fail and answer 500; that is the designed behaviour (the sender retries). The ingestion endpoints have no rate limiting yet (finding F1 in [implementation-sync.md](implementation-sync.md)), so keep `API_KEY` private. Fly.io, Railway or a VM with Docker take the same image and variables.
 
 ## The Java service
-Image: built from `java-server/notification-service/Dockerfile`; Compose service `java-notification-service` on port 8081. It is **not** published to a registry by any workflow (only the Go image is).
+Image: `ghcr.io/rtrtarun/agentic-notification/notification-service-java` (published with every release, tagged like the Go image), or built from `java-server/notification-service/Dockerfile`; Compose service `java-notification-service` on port 8081.
 
 - **Run:** `docker compose up --build postgres redis go-notification-service java-notification-service`, then `curl localhost:8081/health`. The Go service must start first because it creates the schema (Java never migrates; it waits up to 60 seconds for the `events` table). `go run ./cmd/migrate` in the Go module can create the schema on its own.
 - **Settings:** the Go service's names: `PORT`, `API_KEY`, `GITHUB_WEBHOOK_SECRET`, `DATABASE_URL`, `REDIS_URL`, `RULES_PATH`, `DEDUP_WINDOW`, `SMTP_*`, `SLACK_WEBHOOK_URL`, `TEAMS_WEBHOOK_URL`, `NOTIFY_*`, `EVENT_RETENTION`, `LOG_LEVEL`. With `REDIS_URL` set it refuses to start if Redis is unreachable.
 - **Rules:** it refuses rules that use `payloadMatch` or per-rule `channels` (Go only). Do not share a `rules.yaml` that uses them.
 - **Do not run both services against one database with different delivery settings.** Both run a dispatcher on `delivery_jobs`; a queued job goes to whichever claims it first and can be dead-lettered by a service that lacks the channel. Run one implementation per database, or configure both alike.
-- **Not in Java:** accounts (the API key is the only gate), Attention Intelligence, feedback, learning, traces, MCP, SMS, Novu, metrics, retention. See [java-service.md](java-service.md).
+- **Accounts (milestone 36):** the same sign-in, sign-up with admin approval and sessions as Go, shared database tables, settings `AUTH_BOOTSTRAP_EMAIL`, `AUTH_BOOTSTRAP_PASSWORD`, `AUTH_SESSION_TTL`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`, `AUTH_SIGNUP`. No CORS and no single sign-on, so the console uses the Go service.
+- **Not in Java:** single sign-on, Attention Intelligence, feedback, learning, traces, MCP, SMS, Novu, metrics, retention. See [java-service.md](java-service.md).
 - **Smoke checks:** same as the Go service for `/health`, `/events`, `/webhooks/github` and `/notify`; the shared contract in [contract/](contract/README.md) is the reference for behaviour.

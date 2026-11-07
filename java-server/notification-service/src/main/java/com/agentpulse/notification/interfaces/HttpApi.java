@@ -86,7 +86,7 @@ public final class HttpApi {
             auth.handle(x);
         } else {
             switch (path) {
-                case "/health" -> api.reply(x, 200, Map.of("status", "ok", "service", "attention-orchestration"));
+                case "/health" -> api.reply(x, 200, Map.of("status", "ok", "service", "attention-orchestration", "version", config.appVersion()));
                 case "/webhooks/github" -> webhook(x);
                 case "/events" -> listEvents(x);
                 case "/notify" -> notify.handle(x);

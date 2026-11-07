@@ -181,6 +181,7 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	util.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"status":  "ok",
 		"service": "attention-orchestration",
+		"version": s.cfg.AppVersion,
 	})
 }
 

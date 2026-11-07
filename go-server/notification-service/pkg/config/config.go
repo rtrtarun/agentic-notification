@@ -74,6 +74,9 @@ type Config struct {
 	AuthCookieSecure string
 	// AuthCookieSameSite is "lax" (default), "strict" or "none" (needed when the console is on another site; forces Secure).
 	AuthCookieSameSite string
+	// AppVersion is the release this build belongs to (APP_VERSION, set by the image build). It is
+	// reported by /health so a running service can be identified without a commit hash.
+	AppVersion string
 	// AuthSignup is "off" (default) or "approval": people may ask for an account and
 	// an admin must approve it before it can sign in.
 	AuthSignup string
@@ -237,6 +240,7 @@ func LoadConfig() (*Config, error) {
 	default:
 		return nil, fmt.Errorf("invalid AUTH_COOKIE_SAMESITE: %q (use lax, strict or none)", cfg.AuthCookieSameSite)
 	}
+	cfg.AppVersion = envDefault("APP_VERSION", "dev")
 	cfg.AuthSignup = strings.ToLower(strings.TrimSpace(envDefault("AUTH_SIGNUP", "off")))
 	switch cfg.AuthSignup {
 	case "off", "approval":

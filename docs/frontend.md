@@ -10,6 +10,14 @@ Component-level detail, design tokens, wireframes and the skills audit: [ui-arch
 - **Primary job:** see recent decisions at a glance, open one to see the reason, and correct it.
 - **Also the job, since milestones 15 to 33:** managing rules, channels, preferences and digests, reviewing suggestions from feedback, and following AI agent runs. Newer screens are described in "Screens as of milestone 33" below; the sections after it describe the inbox core.
 
+## Sign-in, sign-up and sign-out (milestone 36)
+- **First run.** The welcome screen offers **Try the demo** or **Connect your service**. Connect uses the service address built into the site (the `BACKEND_URL` variable) and goes straight to the sign-in page; it no longer asks for an API key.
+- **Sign-in page.** Email and password, single sign-on when the service offers it, and **Ask for access** when the service has sign-up on. The service address and the API key sit behind a small **Advanced** link, for services and operators.
+- **Sign-up.** Name, email, password (12 characters or more) and a repeat. The answer is always "request received": an admin must approve it, and the page never says whether the email already had an account. A person whose account is pending sees a clear message at sign-in; a rejected one sees another.
+- **Approving.** The Users screen lists **Waiting for approval** with Approve and Reject.
+- **Sign out** ends the session and forgets an API key, so a reload does not walk back in.
+- **A blocked cookie.** If sign-in works but the browser does not keep the session (the console and the API are on different sites), the page says so instead of returning to the sign-in form. See [deployment.md](deployment.md).
+
 ## Design language
 
 The identity comes from the subject, not a template: notifications are signals, and critical means distress, so the console borrows from maritime signal flags.

@@ -6,6 +6,10 @@ COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -o /out/notification-service ./cmd/notification-service
 
 FROM alpine:3.21
+# The release this image belongs to; /health reports it. Set by the publish workflow from the VERSION file.
+ARG VERSION=dev
+ENV APP_VERSION=$VERSION
+LABEL org.opencontainers.image.version=$VERSION
 RUN apk add --no-cache ca-certificates && adduser -D -u 10001 app
 WORKDIR /app
 COPY --from=build /out/notification-service .

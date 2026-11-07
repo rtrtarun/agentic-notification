@@ -47,7 +47,8 @@ public record Config(
         Duration authSessionTtl,
         String authCookieSecure,
         String authCookieSameSite,
-        String authSignup) {
+        String authSignup,
+        String appVersion) {
 
     public static final int DEFAULT_PORT = 8080;
     public static final long DEFAULT_MAX_BODY_BYTES = 1L << 20;
@@ -97,7 +98,8 @@ public record Config(
                 duration(env, "AUTH_SESSION_TTL", Duration.ofHours(12), false),
                 choice(env, "AUTH_COOKIE_SECURE", "auto", "auto", "true", "false"),
                 choice(env, "AUTH_COOKIE_SAMESITE", "lax", "lax", "strict", "none"),
-                choice(env, "AUTH_SIGNUP", "off", "off", "approval"));
+                choice(env, "AUTH_SIGNUP", "off", "off", "approval"),
+                text(env, "APP_VERSION").isEmpty() ? "dev" : text(env, "APP_VERSION"));
     }
 
     /** Recipients of critical email: DEFAULT_NOTIFY_EMAIL may hold several addresses separated by commas. */

@@ -9,6 +9,10 @@ COPY src ./src
 RUN mvn -B -q package -DskipTests -Djacoco.skip=true
 
 FROM eclipse-temurin:17-jre-jammy
+# The release this image belongs to; /health reports it. Set by the publish workflow from the VERSION file.
+ARG VERSION=dev
+ENV APP_VERSION=$VERSION
+LABEL org.opencontainers.image.version=$VERSION
 RUN useradd --system --uid 10001 appuser
 WORKDIR /app
 COPY --from=build /build/target/notification-service.jar /app/notification-service.jar
