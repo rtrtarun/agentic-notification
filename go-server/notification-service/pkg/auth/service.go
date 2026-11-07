@@ -366,7 +366,7 @@ func (s *Service) UpdateUser(ctx context.Context, actor, id string, p UserPatch)
 		if *p.Status != StatusActive && *p.Status != StatusRejected {
 			return User{}, fmt.Errorf("%w: status must be active or rejected", ErrInvalidInput)
 		}
-		if *p.Status != u.Status && !(u.Status == "" && *p.Status == StatusActive) {
+		if *p.Status != u.Status && (u.Status != "" || *p.Status != StatusActive) {
 			endSessions = true
 		}
 		u.Status = *p.Status
