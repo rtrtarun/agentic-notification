@@ -54,7 +54,17 @@ jobs:
       - name: Vulnerability scan
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
       - name: Test (race, integration, coverage)
-        run: go test -race -tags integration -coverprofile=coverage.out ./...
+        # On failure the first failing lines are also written as an annotation, so the cause
+        # is visible from the run summary and the API without opening the raw log.
+        run: |
+          set +e
+          go test -race -tags integration -coverprofile=coverage.out ./... 2>&1 | tee test.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" -ne 0 ]; then
+            summary=$(grep -E '^(--- FAIL|FAIL|panic:|WARNING: DATA RACE)|_test\.go:[0-9]+:|Error:|expected|got ' test.log | head -60 | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=go test failed::${summary}"
+          fi
+          exit $code
       - name: Coverage gate
         run: |
           total=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$3); print $3}')
