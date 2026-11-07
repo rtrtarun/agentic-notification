@@ -1,3 +1,5 @@
+> **Archived 2026-11-07.** Historical; it does not describe the current system. Current documents: [docs/README.md](../../README.md).
+
 # Comparison: Azure Notification Hubs
 
 [Azure Notification Hubs](https://azure.microsoft.com/en-us/products/notification-hubs) is a push engine. This platform decides whether a notification should be sent at all. They overlap only at delivery, and Notification Hubs could sit behind our `NotificationProvider` interface as one more provider.
@@ -38,7 +40,7 @@ Microsoft notes that Notification Hubs reached Android through Google's legacy F
 | Give feedback | `POST /feedback` | `X-API-Key` |
 | Metrics, health | `GET /metrics`, `GET /health` | key, none |
 
-Full contracts: [architecture.md](architecture.md) section 11.
+Full contracts: [architecture.md](../../architecture.md) section 11.
 
 ## Ideas worth borrowing
 

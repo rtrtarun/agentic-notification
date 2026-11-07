@@ -1,3 +1,5 @@
+> **Archived 2026-11-07.** Historical; it does not describe the current system. Current documents: [docs/README.md](../../README.md).
+
 This is actually the **most important question** to answer before building more features. If your project is just "Grafana alerts but for AI," it won't stand out. The goal is to identify what existing tools do well, what they don't, and where an AI-native platform can add value.
 
 ---

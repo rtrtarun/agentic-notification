@@ -9,4 +9,4 @@ Turns stored feedback into suggestions an admin can review. It never changes any
 - Feedback from before an applied suggestion does not count towards the next one for the same scope.
 - `Repository`: `MemoryRepository` and `PostgresRepository` (table `learning_suggestions`), both held to one contract test.
 
-Every dependency is a small interface (`FeedbackReader`, `EventReader`, `RuleEditor`, `OverrideWriter`). See [docs/milestones/milestone-28.md](../../../../docs/milestones/milestone-28.md).
+Every dependency is a small interface (`FeedbackReader`, `EventReader`, `RuleEditor`, `OverrideWriter`). See [docs/milestones/milestone-28.md](../../../../docs/archived/milestones/milestone-28.md).

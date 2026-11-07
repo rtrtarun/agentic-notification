@@ -1,3 +1,5 @@
+> **Archived 2026-11-07.** Historical; it does not describe the current system. Current documents: [docs/README.md](../../README.md).
+
 I like the direction you're taking. The current project demonstrates the core idea (AI Agent → Notification Service), but if your goal is to make it a portfolio-quality project or something that could gain traction on GitHub, I'd expand it from a simple notification service into an **AI Agent Event Bus**.
 
 Instead of being "another notification app," position it as:

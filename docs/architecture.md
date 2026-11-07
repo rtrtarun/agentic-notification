@@ -1,6 +1,6 @@
 # Attention Orchestration Platform: Architecture
 
-*Status as of 2026-11-07, branch `feature/attention-models`, after Milestone 33. Sections 3, 5, 12, 13, 14, 19 and 22 and the terminology table in section 4 are current. The flows, contracts and diagrams in sections 6 to 11 and 15 to 18 describe the original pipeline; later milestones extended them and the milestone documents are the detailed record, so check a milestone document before relying on a detail there.*
+*Status as of 2026-11-07, branch `feature/java-parity`, after Milestone 35 (the Go backend and console are described as of Milestone 33; the Java service is in [java-service.md](java-service.md)). Sections 3, 5, 12, 13, 14, 19 and 22 and the terminology table in section 4 are current. The flows, contracts and diagrams in sections 6 to 11 and 15 to 18 describe the original pipeline; later milestones extended them and the milestone documents are the detailed record, so check a milestone document before relying on a detail there.*
 *Scope of this document: the Go backend (`go-server/notification-service`) and the web console (`apps/web`), with the Java service and the deployment files described where they touch them.*
 
 > **Notifications are cheap. Human attention is expensive.**
@@ -98,22 +98,21 @@ flowchart TB
 
 ## 2. Source Documents and References
 
-Related: [ui-architecture.md](ui-architecture.md), [deployment.md](deployment.md) and [notification-hubs-comparison.md](notification-hubs-comparison.md).
+Current documents are indexed in [README.md](README.md). Superseded notes (the original design narrative, the console design audit, market and vision notes, milestones 1 to 33) are in [archived/](archived/README.md).
 
 | Document | What it is | Reliability today |
 |---|---|---|
 | [`AGENTS.md`](../AGENTS.md) | Project charter: layers, rules, tech stack, the 10-milestone plan | Authoritative for intent. Milestone *numbers* no longer match the implemented milestones (see section 3) |
-| [`docs/orchestration-platform.md`](orchestration-platform.md) | Earlier architecture overview and implementation status | Refreshed in milestone 33; this document is the current reference |
-| [`docs/project vision.md`](<project vision.md>) | Enhanced product vision: timeline, smart rules, MCP server, SDK, dashboard, agent registry, replay | Aspirational. Almost none of it is built |
-| [`docs/agentpulse.md`](agentpulse.md) | Earlier product framing ("AgentPulse") | Historical |
-| [`docs/extrat of what we wnted to see.md`](<extrat of what we wnted to see.md>) | Working notes | Historical |
-| [`docs/milestones/milestone-1.md` ... `milestones/milestone-13.md`](milestones/milestone-13.md) | Per-milestone goals, decisions, tests, acceptance | Accurate for what each milestone delivered |
-| [`docs/rules/coding-standards.md`](rules/coding-standards.md) | Enforced and review-time standards | Accurate; items marked `[Gap]` are tracked |
-| [`docs/runbook.md`](runbook.md) | Operating the service: symptoms, causes, actions | Accurate as of step 6 |
-| [`docs/frontend.md`](frontend.md) | The console: design language, states, copy rules, structure | Accurate |
-| [`docs/milestones/milestone-14.md`](milestones/milestone-14.md) | Operator console and read API | Accurate |
-| [`docs/CHANGELOG.md`](CHANGELOG.md) | Running index of every change | Accurate |
-| [`roadmap.md`](../roadmap.md) | Outline of roadmap headings | Skeleton only |
+| [`implementation-sync.md`](implementation-sync.md) | What is built, proven, open and decided | Current; the status source of truth |
+| [`roadmap.md`](roadmap.md) | What is not built yet | Current |
+| [`java-service.md`](java-service.md) | The Java service: scope, layout, configuration, tests | Current |
+| [`agentpulse.md`](agentpulse.md) | AgentPulse product framing (agent observability) | Product intent; built as milestone 31 ([record](archived/milestones/milestone-31.md)) |
+| [`frontend.md`](frontend.md) | The console: screens, design language, states, structure | Accurate (component-level audit: [archived/design-notes/ui-architecture.md](archived/design-notes/ui-architecture.md)) |
+| [`contract/`](contract/README.md) | Shared HTTP contract both services pass | Current |
+| [`milestones/`](milestones/README.md) | Records for milestones 34 and 35; milestones 1 to 33 are in [archived/milestones/](archived/milestones/) | Accurate for what each delivered |
+| [`rules/coding-standards.md`](rules/coding-standards.md) | Enforced and review-time standards | Accurate; items marked `[Gap]` are tracked |
+| [`deployment.md`](deployment.md), [`runbook.md`](runbook.md) | Going live; symptoms, causes, actions | Accurate |
+| [`CHANGELOG.md`](CHANGELOG.md) | Running index of every change | Accurate |
 | [`skills/`](../skills/README.md) | `golang-pro` and `tarun-code-review` guides | Used for the Milestone 13 review |
 
 **External references cited by the project:** Novu design guide (digests, multi-channel), Apple notification summaries, Horvitz et al. (intelligent notification platform), MagicBell UI patterns.
@@ -735,7 +734,7 @@ Each milestone has its own document, `docs/milestones/milestone-N.md`, with deci
 | 1 to 4 | Repository, Docker, CI, basic API and React app, API key authentication, configuration, logging, GitHub webhook ingestion and persistence, rule engine and criticality |
 | 5 to 9 | Persistence of events and decisions, the delivery abstraction (`Provider`, `Service`), SMTP, a first in-memory feedback endpoint, an Ollama stub |
 | 10 to 12 | Local deployment, the end-to-end critical pipeline with YAML rules, deduplication and threading |
-| 13 | Security and production hardening (see [milestones/milestone-13.md](milestones/milestone-13.md)) |
+| 13 | Security and production hardening (see [milestones/milestone-13.md](archived/milestones/milestone-13.md)) |
 | 14 | Operator console and read API |
 | 15 to 21 | Inbox with state and a detail drawer; All notifications; Overview, Activity and Analytics; editable Rules and Policies; Channels and Integrations; Preferences and live updates; Help and Support |
 | 22 | Built-in delivery: a durable queue with retries and dead letters, SMS gateways |
@@ -791,7 +790,7 @@ Local statement coverage by package is in [implementation-sync.md](implementatio
 | Step | Goal |
 |---|---|
 | **Verify against real services** | Run PostgreSQL, Redis, Ollama, Claude, Novu, SNS, an OpenID provider and a real MCP client against the code; record results; fix what they find. Get the CI run green end to end, including `-race` and the coverage gate |
-| **SDKs for other languages** | Documented only (2026-11-07): TypeScript/JavaScript, Go and Java first, modelled on the Python SDK (never breaks the agent, never decides severity, tested against a fake server and the real binary). No language order or build approach chosen; see `upcoming-milestones.md` |
+| **SDKs for other languages** | Documented only (2026-11-07): TypeScript/JavaScript, Go and Java first, modelled on the Python SDK (never breaks the agent, never decides severity, tested against a fake server and the real binary). No language order or build approach chosen; see `roadmap.md` |
 | **Per-person delivery** | Resolve a person's address at send time without storing it in jobs; deliver personal digests; per-person schedules and budgets |
 | **Console completeness** | Screens for predicates, per-rule channels, personal preferences and "my digest"; translations for the newer screens; component-level tests |
 | **Queue and scale** | Move the worker and delivery from polling to NATS (or another queue) if polling stops being enough; share the circuit breaker across replicas |
@@ -1174,12 +1173,12 @@ Unit tests use in-memory fakes behind the same interfaces as production. Real-in
 
 ## 23. Change Record
 
-Everything changed on `feature-impl` since the milestone 13 plan, in the order it happened. The running index is [CHANGELOG.md](CHANGELOG.md); per-milestone detail is in [milestones/milestone-13.md](milestones/milestone-13.md) and [milestones/milestone-14.md](milestones/milestone-14.md).
+Everything changed on `feature-impl` since the milestone 13 plan, in the order it happened. The running index is [CHANGELOG.md](CHANGELOG.md); per-milestone detail is in [milestones/milestone-13.md](archived/milestones/milestone-13.md) and [milestones/milestone-14.md](archived/milestones/milestone-14.md).
 
 | # | Change | Where | Why |
 |---|---|---|---|
 | 1 | Added the `golang-pro` and `tarun-code-review` skills | [`skills/`](../skills/README.md) | Reference guides for Go work and PR review |
-| 2 | Principal-engineer review of the Go service (verdict BLOCK), then fixed | [milestones/milestone-13.md](milestones/milestone-13.md) step 6 | Close the security, reliability and scale findings |
+| 2 | Principal-engineer review of the Go service (verdict BLOCK), then fixed | [milestones/milestone-13.md](archived/milestones/milestone-13.md) step 6 | Close the security, reliability and scale findings |
 | 3 | API and webhook security: fail-closed auth with constant-time compare, SSRF and recipient validation, header-injection defence, body limits, server timeouts, CORS allow-list | `server`, `notification`, `delivery`, `config` | An open `/notify` could be used to reach internal hosts |
 | 4 | Reliability: concurrent channels with joined errors, webhook idempotency via the delivery ID, dedup `Forget` after failure, push commits in the dedup key, collision-free event IDs | `delivery`, `pipeline`, `dedup`, `server` | Critical alerts must not be lost or duplicated, and retries must not be suppressed |
 | 5 | Scale and data: Redis dedup, pool settings, migration advisory lock, retention, capped list, `created_at` index, capped feedback recorder | `dedup`, `db`, `event`, `feedback`, `server` | Run more than one replica and bound growth |
@@ -1208,7 +1207,7 @@ Everything changed on `feature-impl` since the milestone 13 plan, in the order i
 | 20 | `pkg/preferences`, `pkg/stream`, `/api/preferences`, `/api/stream` (SSE), table `preferences`, pipeline hooks | Preferences, live indicator |
 | 21 | none | Help and Support, diagnostics |
 
-Layer rules held throughout: Layer 1 stays deterministic (rules, preferences and dedup contain no AI), and critical events are never merged, delayed, muted or lowered. That is enforced in `pkg/rules` (locked rules), `pkg/preferences` (`Decide`) and `pkg/inbox` (priority guard), each with tests. Details: [milestones/milestone-16.md](milestones/milestone-16.md) to [milestones/milestone-21.md](milestones/milestone-21.md).
+Layer rules held throughout: Layer 1 stays deterministic (rules, preferences and dedup contain no AI), and critical events are never merged, delayed, muted or lowered. That is enforced in `pkg/rules` (locked rules), `pkg/preferences` (`Decide`) and `pkg/inbox` (priority guard), each with tests. Details: [milestones/milestone-16.md](archived/milestones/milestone-16.md) to [milestones/milestone-21.md](archived/milestones/milestone-21.md).
 
 **Still open:** user authentication, pagination and search, persisted and validated feedback, the AI attention worker, digests, Novu, tracing, STARTTLS requirement, and the Java service review (section 13).
 

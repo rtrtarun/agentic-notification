@@ -1,3 +1,5 @@
+> **Archived 2026-11-07.** Historical; it does not describe the current system. Current documents: [docs/README.md](../../README.md).
+
 # Design and implementation sync
 
 This file is the handshake between two roles:
@@ -70,4 +72,4 @@ Record every such decision here so the design side can accept or overrule it.
 - If this file and the code disagree, the code and tests win and this file is a bug.
 
 ## 7. Production deployment reference
-The environment variables, ordering and smoke checks for going live are in [deployment.md](deployment.md), section "Production reference". Variables for features not yet built are marked **planned** there and promoted to **active** as each milestone lands.
+The environment variables, ordering and smoke checks for going live are in [deployment.md](../../deployment.md), section "Production reference". Variables for features not yet built are marked **planned** there and promoted to **active** as each milestone lands.

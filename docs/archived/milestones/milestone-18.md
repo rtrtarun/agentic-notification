@@ -4,7 +4,7 @@
 Let people change how events are classified without a redeploy, safely: a mistake must never silence a security alert.
 
 ## Architecture decisions
-- New package `pkg/rules` (service, `Store`, memory and PostgreSQL stores, dry run). `policy.Engine` gained `SetRules` (mutex-guarded), `disabled`/`locked` rule flags and `*` wildcards (`path.Match`, so `*` does not cross `/`). See the [rules README](../../go-server/notification-service/pkg/rules/README.md).
+- New package `pkg/rules` (service, `Store`, memory and PostgreSQL stores, dry run). `policy.Engine` gained `SetRules` (mutex-guarded), `disabled`/`locked` rule flags and `*` wildcards (`path.Match`, so `*` does not cross `/`). See the [rules README](../../../go-server/notification-service/pkg/rules/README.md).
 - **Locked rules** are the safety net. They come from the built-in defaults or `locked: true` in `config/rules.yaml` (the two critical rules are locked). They cannot be edited, disabled or removed (409), run before every unlocked rule (reorder rejects anything else), and the `locked` flag in a request body is ignored, so the API cannot create one.
 - The store is seeded from the rules file or defaults when empty; afterwards the stored rules win. A locked rule in the file that is missing from the store is added back at start-up.
 - Every change replaces the whole list in one transaction and is pushed to the engine immediately; the next event uses it. A test drives the real pipeline to prove it.

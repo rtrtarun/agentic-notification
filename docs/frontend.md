@@ -2,7 +2,7 @@
 
 The web app in [`apps/web`](../apps/web) is an operator console. It answers two questions for the person running the platform: **what did the system decide about each event, and why?** and **was that right?** It reads the platform's read APIs (inbox, rules, channels, digests, traces and more) and writes feedback, rules, preferences and overrides back. A complete demo mode runs the whole console on sample data with no service.
 
-Component-level detail, design tokens, wireframes and the skills audit: [ui-architecture.md](ui-architecture.md). Architecture context: [architecture.md](architecture.md) (sections 9, 10.6, 19). Milestone record: [milestones/milestone-14.md](milestones/milestone-14.md).
+Component-level detail, design tokens, wireframes and the skills audit: [ui-architecture.md](archived/design-notes/ui-architecture.md). Architecture context: [architecture.md](architecture.md) (sections 9, 10.6, 19). Milestone record: [milestones/milestone-14.md](archived/milestones/milestone-14.md).
 
 ## Audience and job
 
@@ -68,7 +68,7 @@ One thing moves: the detail sheet fades and slides in (180 ms, strong ease-out) 
 
 The console works like an inbox. The **sidebar** lists the views (All, Critical, Standard, Background) with counts. The **top bar** has a search box (every word must match, in the language shown), a time range (1h, 24h, 7d, All) and a **bell** with the unread count and a short list of the latest unread events. Opened events become read; **Mark all as read** clears the rest. The list shows 10 threads per page.
 
-Each row has a **coloured chip** for what kind of event it is (Security, Code, Issues, Builds, Releases, Social, Other) next to the flag that says how much it matters. Five **colour themes** (Harbour, Violet, Forest, Sunset, Night) and three **languages** (English, Español, हिन्दी) are chosen in the sidebar and remembered. Details: [ui-architecture.md](ui-architecture.md) section 14a.
+Each row has a **coloured chip** for what kind of event it is (Security, Code, Issues, Builds, Releases, Social, Other) next to the flag that says how much it matters. Five **colour themes** (Harbour, Violet, Forest, Sunset, Night) and three **languages** (English, Español, हिन्दी) are chosen in the sidebar and remembered. Details: [ui-architecture.md](archived/design-notes/ui-architecture.md) section 14a.
 
 ## First use and orientation
 
@@ -156,7 +156,7 @@ Rules: components render; `lib/` holds logic and has the unit tests; only `lib/a
 
 ## Accessibility
 
-Visible keyboard focus (3px Signal blue ring), native `<dialog>` for settings (focus trap and Escape), the detail sheet moves focus to its heading and returns it on close and closes on Escape, status text is announced (`role="status"` and `role="alert"`), state is never colour-only, reduced motion is respected, and the layout holds down to 390px wide. Below 80rem, where the sheet covers the screen (and when the phone drawer is open), the page behind it is `inert`. Hover styles apply only to devices that can hover; touch devices get press feedback instead. See [ui-architecture.md](ui-architecture.md) section 15 for the mobile checklist.
+Visible keyboard focus (3px Signal blue ring), native `<dialog>` for settings (focus trap and Escape), the detail sheet moves focus to its heading and returns it on close and closes on Escape, status text is announced (`role="status"` and `role="alert"`), state is never colour-only, reduced motion is respected, and the layout holds down to 390px wide. Below 80rem, where the sheet covers the screen (and when the phone drawer is open), the page behind it is `inert`. Hover styles apply only to devices that can hover; touch devices get press feedback instead. See [ui-architecture.md](archived/design-notes/ui-architecture.md) section 15 for the mobile checklist.
 
 ## Run, test, build
 

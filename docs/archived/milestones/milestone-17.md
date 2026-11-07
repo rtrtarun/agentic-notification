@@ -4,7 +4,7 @@
 Answer three questions without opening the inbox: what needs me now (Overview), what happened and who did what (Activity), and is the platform actually protecting attention (Analytics).
 
 ## Architecture decisions
-- New package `go-server/notification-service/pkg/insights`. It is read-only and depends on `inbox.Service` through a small `Source` interface (`Items`, `RecentActions`), so the maths (`Analyze`, `BuildActivity`) is pure and tested without a store. See its [README](../../go-server/notification-service/pkg/insights/README.md).
+- New package `go-server/notification-service/pkg/insights`. It is read-only and depends on `inbox.Service` through a small `Source` interface (`Items`, `RecentActions`), so the maths (`Analyze`, `BuildActivity`) is pure and tested without a store. See its [README](../../../go-server/notification-service/pkg/insights/README.md).
 - **No new table.** Analytics are computed from the events and inbox state already stored, over the newest 1000 events (the existing list limit). That limit is stated on screen.
 - `inbox.Repository` gained `RecentTrail(ctx, limit)` (memory and PostgreSQL) so the activity feed can include user actions across all notifications. `inbox.Service` gained `Items` and `RecentActions`.
 - **Held back** is `events - delivered`: everything that did not interrupt a person. **Median time to read** uses `readAt - createdAt`. **Open critical** is critical and neither acknowledged nor resolved.

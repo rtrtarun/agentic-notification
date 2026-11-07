@@ -62,4 +62,4 @@ New `pkg/attention/llm/` (`model.go`, `prompts.go`, tests, README) and `pkg/clau
 - **Explanations of non-critical events are sent to the model** (as redacted facts plus the heuristic's sentence). Use `heuristic` or local Ollama if that is not acceptable.
 
 ## Next
-See [upcoming-milestones.md](../upcoming-milestones.md) for proposed milestones 27 to 31.
+See [upcoming-milestones.md](../design-notes/upcoming-milestones.md) for proposed milestones 27 to 31.

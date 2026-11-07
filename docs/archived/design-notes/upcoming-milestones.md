@@ -1,8 +1,10 @@
+> **Archived 2026-11-07.** Historical; it does not describe the current system. Current documents: [docs/README.md](../../README.md).
+
 # Upcoming milestones
 
-> **Historical.** This was the first proposal for milestones 27 onward. Milestones 27 to 33 were built as `PROMPT_SPEC.md` defined them (they differ from the list below); see [implementation-sync.md](implementation-sync.md) for what was built and what is still open.
+> **Historical.** This was the first proposal for milestones 27 onward. Milestones 27 to 33 were built as `PROMPT_SPEC.md` defined them (they differ from the list below); see [implementation-sync.md](../../implementation-sync.md) for what was built and what is still open.
 
-Planned work after milestone 26, taken from the "known limits" of milestones 22 to 26 and from the original plan. Each is a proposal: per [AGENTS.md](../AGENTS.md), a milestone gets a full plan (goals, decisions, database, APIs, folders, risks, tests, acceptance) and an approval before any code is written, and the work stops after each one.
+Planned work after milestone 26, taken from the "known limits" of milestones 22 to 26 and from the original plan. Each is a proposal: per [AGENTS.md](../../../AGENTS.md), a milestone gets a full plan (goals, decisions, database, APIs, folders, risks, tests, acceptance) and an approval before any code is written, and the work stops after each one.
 
 ## Milestone 27: Verify against real services
 **Why:** Every adapter so far is tested against fakes. Real behaviour is unproven.
@@ -34,13 +36,13 @@ Planned work after milestone 26, taken from the "known limits" of milestones 22 
 - Acceptance: a documented deploy from scratch, a restore test, and a load test result.
 
 ## Milestone 34: Java foundation (built)
-The Java service now has the deterministic core and a shared contract with the Go service; see [milestones/milestone-34.md](milestones/milestone-34.md). Milestones 35 and later bring the rest of the Go service to Java in the order the project owner chooses (suggested: `/notify`, rules and policies API, durable delivery, Redis dedup, accounts, Attention Intelligence, feedback, learning, traces and MCP).
+The Java service now has the deterministic core and a shared contract with the Go service; see [milestones/milestone-34.md](../../milestones/milestone-34.md). Milestones 35 and later bring the rest of the Go service to Java in the order the project owner chooses (suggested: `/notify`, rules and policies API, durable delivery, Redis dedup, accounts, Attention Intelligence, feedback, learning, traces and MCP).
 
 ## Milestone 35: Java parity part 2 (built)
-`/notify`, the rules API, the durable delivery queue and Redis deduplication in Java, with three more contract files; see [milestones/milestone-35.md](milestones/milestone-35.md). Milestone 36 (approved in outline): accounts and sign-in, Attention Intelligence and feedback in Java.
+`/notify`, the rules API, the durable delivery queue and Redis deduplication in Java, with three more contract files; see [milestones/milestone-35.md](../../milestones/milestone-35.md). Milestone 36 (approved in outline): accounts and sign-in, Attention Intelligence and feedback in Java.
 
 ## Proposed, not started: SDKs for other languages
-**Why:** Agents are written in many languages; today only Python has an SDK ([sdk/python](../sdk/python), milestone 33). Everyone else must hand-write HTTP calls and the trace chaining.
+**Why:** Agents are written in many languages; today only Python has an SDK ([sdk/python](../../../sdk/python), milestone 33). Everyone else must hand-write HTTP calls and the trace chaining.
 **Recorded 2026-11-07 as a documented future feature only. Nothing is built and no language order is chosen.** Like every milestone it needs its AGENTS.md plan and an approval before code.
 
 What an SDK would be, taken from what the Python one does:

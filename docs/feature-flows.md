@@ -1,0 +1,444 @@
+# Feature flows and reverse-engineering report
+
+Written for: you (the project owner) and me, so we share one picture of **what the repository does today, how each feature flows, what is risky, and what we might add**. Everything below was read from the code and configuration on branch `feature/java-parity` (after milestone 35, 2026-11-07); file paths are relative to the repository root. Where I did not run or read something, I say so. The HTML version of this file is [feature-flows.html](feature-flows.html), generated from this file by `scripts/build_feature_flows_html.py`.
+
+**Contents**
+1. [What has been done: the sync summary](#1-what-has-been-done-the-sync-summary)
+2. [Tech stack and infrastructure inventory](#2-tech-stack-and-infrastructure-inventory)
+3. [High-level design and data flow](#3-high-level-design-and-data-flow)
+4. [Low-level design and patterns](#4-low-level-design-and-patterns)
+5. [Feature flows we support today](#5-feature-flows-we-support-today)
+6. [Latency bottlenecks and critical findings](#6-latency-bottlenecks-and-critical-findings)
+7. [Features we may support (not built)](#7-features-we-may-support-not-built)
+
+---
+
+## 1. What has been done: the sync summary
+
+| Phase | Milestones | What exists | Where |
+|---|---|---|---|
+| Foundation | 1 to 14 | Go service, GitHub webhooks, rule engine, PostgreSQL, SMTP and Slack, dedup and threading, first console | `go-server/`, `apps/web/` |
+| Console build-out | 15 to 21 | Inbox, all notifications, analytics, rules, channels, preferences, live updates, help (15 screens) | `apps/web/src/pages/` |
+| Service completion | 22 to 26 | Durable delivery queue, SMS, accounts and OpenID Connect, feedback and overrides, Attention Intelligence, Ollama and Claude adapters | `pkg/delivery`, `pkg/auth`, `pkg/feedback`, `pkg/overrides`, `pkg/attention` |
+| Verification and depth | 27 to 33 | Store contract tests, learning engine, attention budget and async worker, payload predicates, AgentPulse traces and MCP, Novu, cursor pagination, tracing, Python SDK | `pkg/learning`, `pkg/budget`, `pkg/traces`, `pkg/mcp`, `sdk/python` |
+| Java parity | 34 and 35 | Java service with the same core, `/notify`, rules API, durable queue, Redis dedup, and a shared HTTP contract | `java-server/notification-service/`, `docs/contract/` |
+| Documentation | cleanup | Current docs focused, history in `docs/archived/` | `docs/` |
+
+**Proven versus only built** (details in [implementation-sync.md](implementation-sync.md)): CI is green on commit `acc8b8c` for the Go, Java, web and Python SDK jobs, including PostgreSQL 16 and Redis 7 integration tests. Ollama, Claude, Novu, SNS, OpenID Connect and a real MCP client have run only against fakes.
+
+> **Your notes.** Add anything you did outside what is listed here under this heading, so this file stays the shared source of truth.
+
+---
+
+## 2. Tech stack and infrastructure inventory
+
+**Languages and runtimes**
+- Go: `go 1.21` in `go-server/notification-service/go.mod`, toolchain `go1.26.10`.
+- Java: release 17 (`java-server/notification-service/pom.xml`, `maven.compiler.release`), Maven, service version `0.2.0`.
+- TypeScript 5.6 and React 18.3 (`apps/web/package.json`); Python (standard library only) for `sdk/python`.
+
+**Core libraries**
+
+| Category | Go | Java | Web |
+|---|---|---|---|
+| Web server | `net/http` | JDK `com.sun.net.httpserver` | Vite 5.4, React Router 6.30 |
+| Database | `lib/pq` 1.12.3 | PostgreSQL JDBC 42.7.4, HikariCP 5.1.0 | none |
+| Cache and dedup | `go-redis/v9` 9.7.3 | Jedis 5.1.4 | none |
+| Parsing | `yaml.v3` | Jackson (JSON and YAML) | none |
+| Auth and crypto | `golang.org/x/crypto` (argon2id) | API key only | none |
+| Mail | standard library SMTP | angus-mail 2.0.3 | none |
+| Tests | `go test`, golangci-lint, govulncheck | JUnit 5.11.2, JaCoCo 0.8.12 (80 percent gate) | Vitest 2.1 |
+
+**External services and APIs** (all optional, read from environment variables, see the service README): SMTP, Novu trigger API, Slack and Teams incoming webhooks, SMS through a generic HTTP gateway or Amazon SNS, Ollama (`OLLAMA_URL`), the Claude Messages API (`ANTHROPIC_API_KEY`), an OpenID Connect provider (Microsoft Entra ID shortcut), GitHub webhooks (inbound).
+
+**Infrastructure and DevOps**
+- `docker-compose.yml`: `postgres:16-alpine` (health check), `redis:7-alpine`, `go-notification-service`, `java-notification-service`. NATS is **not** in the Compose file and nothing uses it.
+- `.github/workflows/ci.yml`: jobs `go-service` (format, vet, lint, govulncheck, race and integration tests, coverage gate), `java-service` (starts PostgreSQL and Redis, runs the Go migration, `mvn verify`), `web`, `python-sdk`. `pages.yml` deploys the demo console; `publish-image.yml` pushes the image to GitHub Container Registry.
+- `k8s/`: `configmap.yaml`, `deployment.yaml`, `secret.example.yaml`, `service.yaml` (not run in CI). `deploy/docker-compose.local.yml` runs supporting services locally.
+
+---
+
+## 3. High-level design and data flow
+
+**Style:** a layered, modular monolith per service (domain, application, infrastructure, interfaces), two implementations of the same service sharing one PostgreSQL schema, plus a single-page console. It is **not** microservices and not event-driven in the message-broker sense: asynchronous work uses PostgreSQL tables polled by workers. The four product layers sit on top: deterministic event and policy, attention intelligence (the only place AI may run), delivery, feedback.
+
+```mermaid
+flowchart TD
+    GH["GitHub webhooks"] --> API
+    AG["AI agents: REST, MCP, Python SDK"] --> API
+    UI["Web console: React"] --> API
+    API["HTTP API: Go or Java, API key or session"] --> P
+
+    subgraph L1["Layer 1: deterministic, no AI"]
+        P["Pipeline: duplicate check, rules, dedup, threading"]
+    end
+    P -->|"critical: inline"| D
+    P -->|"standard and background"| ATT
+    subgraph L2["Layer 2: attention intelligence"]
+        ATT["Overrides, classifier, preferences, budget"]
+    end
+    ATT -->|"queued"| Q[("delivery_jobs queue")]
+    ATT -->|"held"| DG["Digest"]
+    Q --> DISP["Dispatcher with retries"]
+    subgraph L3["Layer 3: delivery"]
+        D["Providers: SMTP, Novu, Slack, Teams, SMS"]
+        DISP --> D
+    end
+    D --> FB
+    subgraph L4["Layer 4: feedback"]
+        FB["Opened, dismissed, undo, always, never, reply"]
+    end
+    FB -.->|"learning suggestions, admin applies"| P
+
+    P --> PG[("PostgreSQL 16")]
+    Q --- PG
+    DG --- PG
+    FB --- PG
+    P -.-> RD[("Redis 7: dedup, budget")]
+    ATT -.-> RD
+    ATT -.-> LLM["Ollama or Claude, optional"]
+    D --> EXT["Email, Slack, Teams, SMS providers"]
+```
+
+**Primary request lifecycle (GitHub webhook to persistence)**, traced in `go-server/notification-service/pkg/server/handlers.go` and `pkg/pipeline/pipeline.go`:
+1. `/webhooks/github` runs CORS, logging, then the signature check (`pkg/server/webhook_auth.go`: HMAC SHA-256, body limit through `http.MaxBytesReader`).
+2. The handler validates the event and delivery headers, decodes JSON and calls `normalizeGitHubEvent`. The event id embeds GitHub's delivery id (`github-<type>-<delivery>`), so a redelivery maps to the same id.
+3. `Pipeline.Handle` (`pipeline.go:149`) calls `eventRepo.Exists`; an existing id returns `ErrDuplicateDelivery` and the handler answers 200 `duplicate`.
+4. `applyPolicy` evaluates rules (first match wins, locked critical rules first), then `applyDedup` tags the dedup key and thread.
+5. **Critical:** `deliverCritical` sends inline to every configured channel; a failure forgets the dedup key and returns an error (HTTP 500) so GitHub retries.
+6. **Standard or background:** merged if duplicate; otherwise either deferred to the attention worker (`ATTENTION_ASYNC`) or `attend` runs classifier, then overrides and preferences, then the budget. Events still `queued` are written to the delivery queue.
+7. `eventRepo.Save` stores the event with its decision (`INSERT ... ON CONFLICT (id) DO NOTHING`), then the stream publisher notifies the console. The handler answers 202.
+
+---
+
+## 4. Low-level design and patterns
+
+| Pattern | Where |
+|---|---|
+| Repository (interface plus PostgreSQL and in-memory implementations) | `pkg/event` (`Repository`, `PostgresRepository`), `pkg/feedback`, `pkg/overrides`, `pkg/delivery` (`pgqueue.go`), `pkg/attention/postgres.go`; Java `PostgresEventRepository`, `PostgresRuleStore`, `PostgresDeliveryStore` |
+| Strategy / Adapter | `delivery.Provider` implemented by SMTP, Novu, webhook and SMS providers (`pkg/delivery/*_provider.go`, `novu.go`); `attention.Classifier` implemented by the heuristic and the model (`pkg/attention/llm/model.go`); Java `NotificationProvider` |
+| Composite | `delivery/multi_provider.go` fans one message out to all providers in goroutines and joins errors |
+| Builder-style dependency injection | `Pipeline.New(...).WithPreferences(...).WithClassifier(...).WithOverrides(...).WithOutbox(...).WithDeduper(...)` (`pipeline.go:85-148`); Java `Main` is the only place concrete classes are built |
+| Chain of Responsibility / middleware | `corsMiddleware`, `loggingMiddleware`, `authMiddleware`, signature check (`pkg/server/middleware.go`, `webhook_auth.go`) |
+| Worker with leases | `attention.Worker` and the delivery dispatcher claim rows with `FOR UPDATE SKIP LOCKED` and a lease (`pkg/attention/worker.go`, `pkg/delivery/dispatcher.go`, Java `Dispatcher`) |
+| Circuit breaker and rate cap | `pkg/attention/llm/model.go` around Ollama and Claude |
+| Ports for a later implementation | Java `Classifier`, `Preferences`, `Budget`, `Outbox` interfaces, tested by the invariant tests before they have implementations |
+| Shared contract tests | `docs/contract/*.json`, replayed by Go `TestContract` and Java `ContractTest`; store contracts in `pkg/db/dbtest` |
+
+```mermaid
+classDiagram
+    class Event {
+      +id
+      +source
+      +eventType
+      +repository
+      +attentionClass
+      +decisionState
+      +dedupKey
+      +threadId
+      +mergedInto
+    }
+    class Pipeline {
+      +Handle(event) Event
+      +ProcessPending(event) Event
+    }
+    class PolicyEngine {
+      +Evaluate(event) Event
+    }
+    class Deduper {
+      <<interface>>
+      +Check(event) Result
+    }
+    class Classifier {
+      <<interface>>
+      +Classify(event) Classification
+    }
+    class Overrides {
+      <<interface>>
+      +Decide(event) Decision
+    }
+    class Budget {
+      <<interface>>
+      +Take(scope) Result
+    }
+    class Outbox {
+      <<interface>>
+      +Enqueue(event)
+    }
+    class EventRepository {
+      <<interface>>
+      +Exists(id) bool
+      +Save(event)
+    }
+    class Provider {
+      <<interface>>
+      +Send(notification)
+    }
+    Pipeline --> PolicyEngine
+    Pipeline --> Deduper
+    Pipeline --> Classifier
+    Pipeline --> Overrides
+    Pipeline --> Budget
+    Pipeline --> Outbox
+    Pipeline --> EventRepository
+    Pipeline --> Provider
+    Pipeline ..> Event
+    Classifier <|.. Heuristic
+    Classifier <|.. LLMModel
+    Provider <|.. SMTP
+    Provider <|.. Novu
+    Provider <|.. Webhook
+    Provider <|.. SMS
+    Deduper <|.. MemoryDeduper
+    Deduper <|.. RedisDeduper
+    EventRepository <|.. PostgresRepository
+    EventRepository <|.. MemoryRepository
+```
+
+**State.** An event moves through decision statuses recorded on the event (`sent`, `queued`, `merged`, `digest`, `muted`, `budget_exceeded` and others in `pkg/event`). The delivery queue has its own lifecycle: pending, then sent, or retry with doubling backoff, then dead after the attempt limit; a dead job can be retried by hand. Workers hold a lease so a crashed worker's job becomes claimable again.
+
+**Concurrency.** Webhooks are handled on `net/http` goroutines. The multi-provider sends in parallel goroutines with a `sync.WaitGroup`. Background workers (attention worker, delivery dispatcher) poll PostgreSQL; several replicas are safe because of `FOR UPDATE SKIP LOCKED`. Redis shares the dedup window and the attention budget (one atomic Lua script) between replicas.
+
+**Errors.** Fail closed for security (no API key or webhook secret means requests are refused). Fail open for suppression: if dedup, the budget, a classifier or a model fails, the event goes through as unique and unthrottled, so an outage never hides an alert. A critical delivery failure returns 500 and un-records the dedup key so the sender retries. Queue failures for non-critical events are logged and never fail the event.
+
+---
+
+## 5. Feature flows we support today
+
+Each flow names the entry point, the steps and what is stored. "Go" means the Go service; "Java" is marked where it differs. See [implementation-sync.md](implementation-sync.md) for the Go and Java matrix.
+
+### 5.1 Webhook ingestion and the critical path (Go, Java)
+Entry: `POST /webhooks/github`. A critical event is decided by a rule alone and is never touched by AI, merging, muting, delay, budget, deferral or the queue.
+
+```mermaid
+flowchart TD
+    A["POST /webhooks/github"] --> B{"Signature valid?"}
+    B -->|no| X1["401 or 503 if no secret"]
+    B -->|yes| C["Validate headers, normalize to Event"]
+    C --> D{"Event id already stored?"}
+    D -->|yes| X2["200 duplicate"]
+    D -->|no| E["Evaluate rules: first match wins"]
+    E --> F["Dedup check: tag key and thread"]
+    F --> G{"Critical?"}
+    G -->|yes| H["Deliver inline to all channels"]
+    H -->|failed| X3["Forget dedup key, 500, sender retries"]
+    H -->|ok| S["Save event, status sent"]
+    G -->|no| N["Standard or background flow, see 5.3"]
+    N --> S2["Save event with decision"]
+    S --> R["202 accepted, publish to stream"]
+    S2 --> R
+```
+
+### 5.2 Rules and policies (Go, Java for the API; `payloadMatch` and `channels` Go only)
+Entry: `GET`/`POST /api/rules`, `PUT`/`DELETE /api/rules/{id}`, `POST /api/rules/reorder`, `POST /api/rules/test`, `GET /api/policies`. Rules are stored in `policy_rules`, reload at run time and are strictly validated (a misspelt key is an error, never a wider rule). Locked critical rules always run first and cannot be edited.
+
+```mermaid
+flowchart LR
+    ED["Admin edits a rule"] --> V{"Validate"}
+    V -->|invalid| E1["400 with message"]
+    V -->|valid| TX["Save in one transaction to policy_rules"]
+    TX --> RL["Reload policy engine"]
+    RL --> EV["Next event matches the new rules"]
+    DR["Dry run: POST /api/rules/test"] --> ENG["Engine evaluates a sample event"]
+    ENG --> RES["Result: class, reason, rule"]
+```
+
+### 5.3 Standard and background attention flow (Go)
+Entry: any non-critical event. Order inside `attend` (`pipeline.go:416`): classifier, then overrides and preferences, then the budget.
+
+```mermaid
+flowchart TD
+    S["Non-critical event"] --> M{"Duplicate within window?"}
+    M -->|yes| MG["Status merged into original"]
+    M -->|no| AS{"ATTENTION_ASYNC on?"}
+    AS -->|yes| PD["Mark pending: worker decides later"]
+    AS -->|no| CL["Classifier: heuristic or model, may only demote"]
+    CL --> OV{"Override always or never?"}
+    OV -->|never| DG["Background, status digest"]
+    OV -->|always| QU["Keep queued, skip budget"]
+    OV -->|none| PF{"Quiet hours or mute?"}
+    PF -->|yes| HLD["Held or muted"]
+    PF -->|no| BU{"Budget left this hour?"}
+    BU -->|no| BE["Status budget_exceeded, held for digest"]
+    BU -->|yes| QU
+    QU --> EN["Enqueue delivery job"]
+```
+
+### 5.4 Durable delivery (Go, Java)
+Entry: a queued event. Targets and message text are never stored in the database or returned by the API.
+
+```mermaid
+sequenceDiagram
+    participant P as Pipeline
+    participant Q as delivery_jobs
+    participant W as Dispatcher
+    participant PR as Providers
+    P->>Q: enqueue job per channel, idempotent
+    loop every interval
+        W->>Q: claim with lease, FOR UPDATE SKIP LOCKED
+        W->>PR: send
+        alt success
+            W->>Q: mark sent
+        else temporary failure
+            W->>Q: retry with doubling backoff
+        else permanent failure or attempts used
+            W->>Q: mark dead letter
+        end
+    end
+    Note over Q,W: Admin can retry a dead job, an expired lease is reclaimed
+```
+
+### 5.5 Agent events, traces and MCP (Go)
+Entry: `POST /api/events`, `/api/mcp`, the stdio `mcp-server`, the Python SDK. An agent's own severity is data only; only a rule sets the class.
+
+```mermaid
+flowchart TD
+    SDK["Python SDK or REST"] --> EV["POST /api/events"]
+    MCPC["MCP client: Claude Desktop, Cursor"] --> MCP["mcp-server stdio or /api/mcp"]
+    MCP -->|publish_event, notify_user| PIPE
+    EV --> VAL["Validate and cap fields, ignore agent severity"]
+    VAL --> PIPE["Same pipeline as a webhook: rules, dedup, attention"]
+    PIPE --> ST[("events with traceId, parentEventId")]
+    ST --> TR["GET /api/traces and /api/traces/id"]
+    TR --> UI["Traces screen: timeline, retries, tokens, cost"]
+    MCP -->|explain_decision| EXP["/api/explain/id"]
+```
+
+### 5.6 Digests, explanations and Attention Intelligence (Go)
+Entry: `GET /api/digests`, `POST /api/digests/generate`, `GET /api/explain/{id}`, scheduled by `ATTENTION_DIGEST_EVERY`. The model may only supply wording; groups and counts always come from the heuristic. Critical events are never sent to a model.
+
+```mermaid
+flowchart TD
+    H["Held events: digest, budget_exceeded, quiet hours"] --> G["Group and count with the heuristic"]
+    G --> W{"Model configured?"}
+    W -->|no| T["Heuristic wording"]
+    W -->|yes| R["Redact titles, call Ollama or Claude"]
+    R -->|timeout, breaker open, rate cap, invalid answer| T
+    R -->|valid| M["Model wording, source labelled"]
+    T --> ST[("digests table")]
+    M --> ST
+    ST --> DEL{"NOTIFY_DIGEST_CHANNELS set?"}
+    DEL -->|yes| OUT["Deliver as one notification"]
+    DEL -->|no| UI["Readable in the Digests screen"]
+    ME["scope=me"] --> F["Workspace digest filtered by the person's mutes and never choices"]
+```
+
+### 5.7 Feedback, overrides and learning (Go)
+Entry: `POST /feedback`, `GET`/`POST /api/overrides`, `GET /api/learning/suggestions`. Learning is advisory: nothing changes until an admin applies a suggestion, and critical events and locked rules are never touched.
+
+```mermaid
+flowchart TD
+    U["Person: opened, dismissed, undo, reply, always, never"] --> FB["POST /feedback, stored and attributed"]
+    FB -->|always or never| OV["Override created: visible and reversible"]
+    OV --> PIPE["Pipeline applies overrides before quiet hours and mutes"]
+    FB --> LE["Learning engine: counts signals over a lookback window"]
+    LE --> SG["Suggestion: refine, demote, promote or add override"]
+    SG --> AD{"Admin decision"}
+    AD -->|apply, audited| RU["Rule or override changes"]
+    AD -->|dismiss| NO["Nothing changes"]
+```
+
+### 5.8 Accounts and sign-in (Go)
+Entry: `/api/auth/*`, `/api/users`, `/api/audit`. The API key still works for services.
+
+```mermaid
+flowchart TD
+    L["POST /api/auth/login"] --> LK{"Locked out?"}
+    LK -->|yes| X["Refused"]
+    LK -->|no| PW["Verify argon2id password"]
+    PW --> SS["Server-side session in an HttpOnly cookie plus CSRF token"]
+    OI["OpenID Connect: start, authorization code with PKCE, RS256 verify"] --> SS
+    SS --> RL{"Role"}
+    RL -->|admin| AD["Edit rules, preferences, channels, retries, users"]
+    RL -->|member| MB["Read and give feedback"]
+    AD --> AU[("audit_log")]
+```
+
+### 5.9 Console and live updates (Go, console)
+Entry: the React console (`apps/web`), in demo mode or connected to the service. Reads the API, sends feedback and edits, listens to server-sent events.
+
+```mermaid
+sequenceDiagram
+    participant C as Console
+    participant S as Service
+    C->>S: GET /api/notifications with filters and cursor
+    S-->>C: list, nextCursor
+    C->>S: GET /api/stream
+    S-->>C: event messages on new events
+    C->>S: PATCH read, snooze, resolve, bulk actions
+    S-->>C: updated state
+    C->>S: POST /feedback
+    Note over C: Demo mode serves the same screens from sample data with no service
+```
+
+### 5.10 Generic `/notify` (Go, Java)
+Entry: `POST /notify` with the API key. Validated hard: SSRF host allow-list, one-line title, size limits, no caller-chosen SMS numbers.
+
+```mermaid
+flowchart LR
+    A["POST /notify"] --> K{"API key"}
+    K -->|bad| X["401 or 503"]
+    K -->|ok| V["Validate: host allow-list, title, sizes, targets"]
+    V -->|invalid| E["400"]
+    V -->|valid| SEND["Send to the caller's validated targets"]
+    SEND --> RES["202 accepted"]
+```
+
+### 5.11 Operations: metrics, health, retention (Go; Java health only)
+`GET /health` is open and never exposes secrets; `GET /metrics` (Prometheus) is protected; events older than `EVENT_RETENTION` are purged; logs are structured with request ids; `traceparent` is propagated and spans (`pipeline.Handle`, `policy.Evaluate`, `dedup.Check`, `attention.Classify`, `delivery.Send`) are logged, with no exporter.
+
+---
+
+## 6. Latency bottlenecks and critical findings
+
+Every finding below has an ID (F1 to F9, L1 to L5) and is logged in [implementation-sync.md](implementation-sync.md) section 6, with the open questions and the work in [roadmap.md](roadmap.md) ("Hardening backlog").
+
+Method: I read the routing, middleware, pipeline, delivery, migration and configuration code and searched for timeouts, limiters, loops with queries, and secrets. I did **not** read every line or run load tests; each item says what I saw and what I did not verify. No finding rises to CRITICAL in what I inspected.
+
+### HIGH
+
+| Area | Finding | Evidence | Suggested next step |
+|---|---|---|---|
+| Network and resilience | **No inbound rate limiting** on ingestion endpoints (`/webhooks/github`, `/api/events`, `/notify`). Limiters exist only for sign-in (`pkg/auth/limiter.go`), channel tests, model calls and SMS. A leaked key or noisy agent can flood PostgreSQL and the delivery channels. | A search of `pkg/server` finds no limiter; `docs/deployment.md` lists edge rate limiting as planned | Add per-key limits at the edge or in middleware (roadmap: production hardening) |
+| Reliability | **Check-then-act on duplicate deliveries.** `Pipeline.handle` calls `Exists` and later `Save`. Two concurrent deliveries of the same critical event can both pass `Exists` and both send. `Save` is conflict-safe (`ON CONFLICT (id) DO NOTHING`), so storage is fine, but the alert is delivered twice. Critical events are never merged by dedup, so Redis does not help. | `pkg/pipeline/pipeline.go:160-213`, `pkg/event/postgres_repository.go` | Reserve the id first (insert as pending or a short lock) before delivering; not reproduced under load |
+
+### MEDIUM
+
+| Area | Finding | Evidence |
+|---|---|---|
+| Database and I/O latency | **Critical delivery runs inside the request.** A webhook waits for every channel; the webhook provider timeout is 10 s (`pkg/delivery/webhook_provider.go`) and the server write timeout is 40 s (`pkg/server/server.go`). This is deliberate (a failure makes GitHub retry) but ties webhook latency to the slowest channel. Channels run in parallel (`multi_provider.go`), so the worst case is the slowest one, not the sum. |
+| Database and I/O latency | **Polling, not push.** The attention worker and delivery dispatcher poll PostgreSQL on an interval, so deferred or retried work waits up to one interval. NATS is in the intended stack but unused. |
+| Caching and concurrency | **Two dispatchers on one database.** The Go and Java services both claim from `delivery_jobs`; a job can go to a service without the channel configured and be dead-lettered (found end to end in milestone 35). Configure alike or run one. |
+| Network and resilience | **Java SSRF check is pre-flight** (resolve, refuse private addresses, then connect), unlike Go's dial-time check, so a DNS answer that changes in between is not covered. The host allow-list is the first defence in both. |
+| Security and stability | **Fails open by design.** If Redis or the classifier fails the event is treated as unique and unthrottled: no alert is hidden, but duplicates or extra interruptions can occur. Correct for this product; worth knowing. |
+| Security and stability | **Java has no accounts.** Its only gate is the API key; admin-only actions are not separated. |
+| Reliability | **Unverified integrations.** Ollama, Claude, Novu, SNS, OpenID Connect, the SMTP success path in Java and a real MCP client have only run against fakes ([implementation-sync.md](implementation-sync.md)). |
+
+### LOW / observations
+- **Hardcoded local secrets** appear only in `docker-compose.yml` (`local-dev-key`, `local-dev-webhook-secret`, `SMTP_PASSWORD: password`), labelled for local use; production values come from `k8s/secret.example.yaml` and the environment. Constant-time comparison is used for keys and CSRF (`pkg/server/middleware.go:136`, `pkg/auth/service.go:219`).
+- **Pagination:** list endpoints take `limit` (1 to 500) and cursors; I did not audit every query for an unbounded `SELECT`.
+- **N+1:** I saw no loop issuing a query per row in the pipeline path; the inbox and analytics queries were not profiled.
+- **Indexes:** the migration creates 14 indexes (`pkg/db/migrate.go`); a test guards the lookup indexes; heavy-query plans were not inspected.
+- **Swallowed errors:** non-critical queue and publish failures are logged and ignored on purpose; I did not search every `_ =` assignment.
+
+---
+
+## 7. Features we may support (not built)
+
+None of these is started. Each needs its AGENTS.md plan and your approval first; the order is yours. The same list, with open questions, is in [roadmap.md](roadmap.md).
+
+| Candidate | What it would add | How it would flow (sketch) | Depends on |
+|---|---|---|---|
+| **Milestone 36: Java parity part 3** | Accounts, Attention Intelligence, feedback in Java; rule `payloadMatch` and `channels` | Same flows as 5.3, 5.7, 5.8 implemented in Java, with new contract files replayed by both services | Owner plan and approval |
+| **SDKs for other languages** | TypeScript, Go, Java (then .NET, Ruby) clients | Agent code, then SDK (chains `traceId` and `parentEventId`, times tools, never throws), then `POST /api/events`, then flow 5.5 | Decision: hand-written or generated; a shared SDK test contract |
+| **Per-person delivery** | Deliver personal digests and per-person budgets and schedules | Resolve a person's address at send time (never stored in jobs), then flow 5.4 | Recipient model; its own milestone |
+| **Inbound rate limiting** | Per-key limits on ingestion | Request, then limiter middleware, then flow 5.1 or 5.5, with 429 on excess | Closes the HIGH finding above |
+| **Reserve-before-deliver for critical events** | No double send on concurrent redelivery | Insert event as pending, deliver, then mark sent | Closes the second HIGH finding |
+| **Real-service verification** | Run Ollama, Claude, Novu, SNS, OIDC and a real MCP client; record results | CI or manual jobs against real endpoints, results written to the status file | Credentials and endpoints |
+| **Queue instead of polling (NATS)** | Lower latency for the worker and delivery | Publish on enqueue, workers subscribe; the table stays the source of truth | Only if polling stops being enough |
+| **OpenTelemetry exporter** | Real tracing backend | Existing spans exported through OTLP | A collector |
+| **More providers** | Courier, Knock, custom behind `NotificationProvider` | New `Provider` implementations selected by configuration | Demand |
+| **Console completeness** | Screens for predicates, per-rule channels, personal preferences, "my digest"; translations | UI over APIs that already exist (5.2, 5.6) | None |
+| **Java retention and a dispatcher switch** | Purge old events in Java; turn a service's dispatcher off | Settings plus a scheduled purge; flow 5.4 with one dispatcher | Owner decision on the open questions |
+| **Product: replay, agent registry, multi-tenancy, billing** | Hosted offering features | Not designed yet | A tenancy model |
+| **Production hardening** | AWS deployment, backups and restore drills, secret management, SLO dashboard, security review, load tests | Deployment guide plus drills, with results recorded | Cloud account |
