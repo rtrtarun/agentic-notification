@@ -9,6 +9,7 @@ docs/
 ├── README.md                this index
 ├── architecture.md          the checked reference: layers, flows, contracts, endpoints, status
 ├── implementation-sync.md   what is built, proven, open and decided (read this first for status)
+├── feature-flows.md/.html   every feature as a flow diagram, tech stack, audit findings, planned features
 ├── roadmap.md               what is not built yet
 ├── java-service.md          the Java service: scope, layout, config, tests
 ├── frontend.md              the web console
@@ -30,6 +31,7 @@ docs/
 |---|---|
 | Know what the project is and run it | [Root README](../README.md) |
 | Know what is built and what was proven | [implementation-sync.md](implementation-sync.md) |
+| See how each feature flows, and the risks | [feature-flows.md](feature-flows.md) or [feature-flows.html](feature-flows.html) |
 | Understand the design | [architecture.md](architecture.md) |
 | Know what comes next | [roadmap.md](roadmap.md) |
 | Work on the Java service | [java-service.md](java-service.md), [contract/](contract/README.md), [milestones/](milestones/README.md) |
