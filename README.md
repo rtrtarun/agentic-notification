@@ -153,7 +153,7 @@ Dependencies are deliberately few: the Go module uses `lib/pq`, `go-redis`, `gol
 ├── docs/                             All documentation (start at docs/README.md)
 ├── deploy/  k8s/                     Local and Kubernetes deployment files
 ├── .github/workflows/                CI, GitHub Pages, GHCR image
-├── java-server/                      A parallel, unreviewed Java implementation
+├── java-server/                      A parallel Java implementation; to be brought to parity with the Go service (planned, not started)
 ├── docker-compose.yml
 └── AGENTS.md                         The design brief this project is built from
 ```
@@ -371,15 +371,16 @@ Everything lives in [`docs/`](docs/), grouped by what you want to do. **[docs/RE
 **Next** (details in [architecture.md section 13](docs/architecture.md#13-forward-roadmap)):
 
 1. **Prove it against real services**: PostgreSQL, Redis, Ollama, Claude, Novu, SNS, an OpenID provider and a real MCP client; get CI green end to end.
-2. **Per-person delivery**: resolve a person's address at send time and deliver personal digests, schedules and budgets.
-3. **Console completeness**: screens for rule predicates, per-rule channels and personal preferences; translations for the newer screens.
-4. **Scale**: a real queue instead of polling if needed; a shared circuit breaker; an OpenTelemetry exporter.
-5. **Product**: event replay, an agent registry, multi-tenancy and billing for a hosted offering.
+2. **Java parity**: implement the Java service the same way the Go service was built, milestone by milestone, and make its CI job green. Decided by the project owner; not started.
+3. **Per-person delivery**: resolve a person's address at send time and deliver personal digests, schedules and budgets.
+4. **Console completeness**: screens for rule predicates, per-rule channels and personal preferences; translations for the newer screens.
+5. **Scale**: a real queue instead of polling if needed; a shared circuit breaker; an OpenTelemetry exporter.
+6. **Product**: event replay, an agent registry, multi-tenancy and billing for a hosted offering.
 
 **Known issues**
 
 - `docker compose up --build` fails on the Java service (missing build folder); name the services as shown in [Running the service](#running-the-service).
-- The `java-service` CI job fails; the Java implementation was not part of this work.
+- The `java-service` CI job fails. The Java implementation is **to be brought to parity with the Go service** (everything built in milestones 1 to 33); that work is planned but not started, and the job will stay red until it is.
 - NATS is part of the intended stack but is not used; the worker and delivery poll PostgreSQL.
 - Personal digests are stored and readable but not delivered.
 - Parts that have run only against fakes: PostgreSQL stores (CI only), the Redis budget script (CI only), Ollama, Claude, Novu, SNS, OpenID Connect, the MCP server.
