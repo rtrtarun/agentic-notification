@@ -43,6 +43,9 @@ class InfrastructureTest {
         assertEquals("", c.apiKey());
         assertFalse(c.allowUnauthenticated());
         assertFalse(c.allowUnsignedWebhooks());
+        assertTrue(c.dispatcherEnabled());
+        assertFalse(Config.load(Map.of("DISPATCHER_ENABLED", "false")).dispatcherEnabled());
+        assertThrows(Config.InvalidConfigException.class, () -> Config.load(Map.of("DISPATCHER_ENABLED", "maybe")));
         assertEquals(Duration.ZERO, c.dedupWindow());
         assertEquals(Duration.ofDays(90), c.eventRetention());
         assertEquals(Config.DEFAULT_MAX_BODY_BYTES, c.maxBodyBytes());

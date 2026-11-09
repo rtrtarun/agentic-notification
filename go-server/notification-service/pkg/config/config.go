@@ -128,6 +128,9 @@ type Config struct {
 	DigestChannels        []string
 	GitHubWebhookSecret   string
 	AllowUnsignedWebhooks bool
+	// DispatcherDisabled stops this process claiming queued deliveries (DISPATCHER_ENABLED=false), so one
+	// service can own the queue when two share a database. Critical delivery is inline and unaffected.
+	DispatcherDisabled bool
 	MaxBodyBytes          int64
 	RequestTimeout        time.Duration
 	CORSAllowedOrigins    []string
@@ -195,6 +198,13 @@ func LoadConfig() (*Config, error) {
 	if cfg.AllowUnauthenticated, err = envBool("ALLOW_UNAUTHENTICATED_API"); err != nil {
 		return nil, err
 	}
+	dispatcherOn := true
+	if os.Getenv("DISPATCHER_ENABLED") != "" {
+		if dispatcherOn, err = envBool("DISPATCHER_ENABLED"); err != nil {
+			return nil, err
+		}
+	}
+	cfg.DispatcherDisabled = !dispatcherOn
 
 	cfg.APIKey = os.Getenv("API_KEY")
 	cfg.DatabaseURL = os.Getenv("DATABASE_URL")

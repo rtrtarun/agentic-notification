@@ -108,7 +108,7 @@ func (s *Server) Run(ctx context.Context) error {
 		}()
 	}
 
-	if s.dispatcher != nil {
+	if s.dispatcher != nil && !s.cfg.DispatcherDisabled {
 		background.Add(1)
 		go func() {
 			defer background.Done()

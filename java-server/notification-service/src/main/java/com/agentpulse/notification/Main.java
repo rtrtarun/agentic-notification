@@ -132,7 +132,11 @@ public final class Main {
         Notify.Service notify = new Notify.Service(config.notifyLimits(), provider);
         HttpServer server = new HttpApi(config, pipeline, repository, notify, rules, deliveryStore, clock, accounts)
                 .start(config.port());
-        dispatcher.start();
+        if (config.dispatcherEnabled()) {
+            dispatcher.start();
+        } else {
+            LOG.warn("DISPATCHER_ENABLED=false; this process will not claim queued deliveries");
+        }
         LOG.info("notification service listening port={} rules={}", config.port(), rules.list().size());
 
         HikariDataSource db = database;
