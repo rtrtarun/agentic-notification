@@ -21,6 +21,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if cfg.AllowUnsignedWebhooks || cfg.GitHubWebhookSecret != "" {
 		t.Fatal("webhooks must be locked down by default")
 	}
+	if cfg.DispatcherDisabled {
+		t.Fatal("the dispatcher must run by default")
+	}
 }
 
 func TestLoadConfigReadsEnvironment(t *testing.T) {
@@ -56,6 +59,7 @@ func TestLoadConfigRejectsInvalidValues(t *testing.T) {
 		{"MAX_BODY_BYTES", "lots"},
 		{"LOG_LEVEL", "loud"},
 		{"ALLOW_UNSIGNED_WEBHOOKS", "maybe"},
+		{"DISPATCHER_ENABLED", "maybe"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.env+"="+tt.value, func(t *testing.T) {
@@ -252,5 +256,16 @@ func TestSMTPRequireSTARTTLSSetting(t *testing.T) {
 	t.Setenv("SMTP_REQUIRE_STARTTLS", "sometimes")
 	if _, err := LoadConfig(); err == nil {
 		t.Fatal("an unreadable value must be refused")
+	}
+}
+
+func TestLoadConfigCanDisableTheDispatcher(t *testing.T) {
+	t.Setenv("DISPATCHER_ENABLED", "false")
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if !cfg.DispatcherDisabled {
+		t.Fatal("DISPATCHER_ENABLED=false must disable the dispatcher")
 	}
 }
