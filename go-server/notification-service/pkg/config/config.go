@@ -130,17 +130,17 @@ type Config struct {
 	AllowUnsignedWebhooks bool
 	// DispatcherDisabled stops this process claiming queued deliveries (DISPATCHER_ENABLED=false), so one
 	// service can own the queue when two share a database. Critical delivery is inline and unaffected.
-	DispatcherDisabled bool
-	MaxBodyBytes          int64
-	RequestTimeout        time.Duration
-	CORSAllowedOrigins    []string
-	AllowedWebhookHosts   []string
-	AllowedEmailDomains   []string
-	EventRetention        time.Duration
-	DBMaxOpenConns        int
-	DBMaxIdleConns        int
-	DBConnMaxLifetime     time.Duration
-	LogLevel              slog.Level
+	DispatcherDisabled  bool
+	MaxBodyBytes        int64
+	RequestTimeout      time.Duration
+	CORSAllowedOrigins  []string
+	AllowedWebhookHosts []string
+	AllowedEmailDomains []string
+	EventRetention      time.Duration
+	DBMaxOpenConns      int
+	DBMaxIdleConns      int
+	DBConnMaxLifetime   time.Duration
+	LogLevel            slog.Level
 }
 
 // LoadConfig reads configuration from the environment and validates it.
