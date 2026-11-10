@@ -155,6 +155,24 @@ class SacredInvariantTest {
     }
 
     @Test
+    void preferencesAndOverridesRefuseACriticalEventEvenIfCalledDirectly() {
+        var overrides = new Overrides.Service(new com.agentpulse.notification.infrastructure.FeedbackStores.MemoryOverrides(), Clock.systemUTC());
+        overrides.upsert(new Overrides.Override("", "github", "", "", "never", "sam", "", null));
+        preferences.answer = new Adjustment("background", Status.DELAYED, "quiet hours");
+        Pipeline pipeline = armed().withOverrides(overrides);
+        Event critical = Fakes.event("c6", "security_advisory");
+        critical.setAttentionClass("critical");
+        critical.setDecisionState(new com.agentpulse.notification.domain.DecisionState("security", "advisory"));
+
+        assertFalse(pipeline.applyPreferences(critical), "no override or preference decided a critical event");
+
+        assertEquals("critical", critical.getAttentionClass());
+        assertEquals("", critical.getDecisionState().getStatus(), "not delayed, not sent to the digest");
+        assertEquals("security", critical.getDecisionState().getReason());
+        assertEquals(0, preferences.calls, "quiet hours were never even consulted");
+    }
+
+    @Test
     void aCriticalRuleCanNeverNarrowWhereACriticalEventGoes() {
         // Even a stored rule that wrongly carries a channel override cannot narrow a critical event.
         Rule bad = new Rule("1", "bad", "", new Rule.Condition("github", "security_advisory", ""),

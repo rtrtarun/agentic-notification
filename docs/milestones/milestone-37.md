@@ -35,8 +35,8 @@ Java: `Predicate`, `Predicates`, `Overrides`, `Feedback`, `Heuristic`, `GuardedC
 ## 7. Tests
 - Contract: files 11, 12 and 13 pass in Go (`TestContract`) and Java (`ContractTest`); 13 files in all.
 - Java unit and API tests added: `PredicatesTest`, `FeedbackTest`, `FeedbackApiTest`, `HeuristicTest`, `DigestsTest`, `AttentionPipelineTest`, `AttentionApiTest`, queue, pipeline, loader and config tests; Postgres tests `PostgresFeedbackStoresTest`, `PostgresDigestStoresTest` (including a digest written the way Go writes one); Redis tests for the sliding window and a budget shared by two replicas.
-- Invariant tests: 9 before this milestone, 12 now (a critical rule never narrows channels, an override never touches critical, feedback cannot mute critical, the real heuristic never judges critical and a digest never contains it).
-- Totals: 251 tests offline (5 skipped), 272 with PostgreSQL and Redis, none skipped; offline line coverage about 92 percent (gate 80). Go: `TestContract` passes; no Go code changed in this milestone.
+- Invariant tests: 9 before this milestone, 13 now (preferences and overrides refuse a critical event even if called directly, a critical rule never narrows channels, an override never touches critical, feedback cannot mute critical, the real heuristic never judges critical and a digest never contains it).
+- Totals: 252 tests offline (5 skipped), 273 with PostgreSQL and Redis, none skipped; offline line coverage about 92 percent (gate 80). Go: `TestContract` passes; no Go code changed in this milestone.
 - Real stack (PostgreSQL 16, Redis 7, the Go binary and the Java jar on one database): overrides made by one service are listed and applied by the other with the same reason; Go undid an override Java made; Go and Java counted one budget (events 1 and 2 queued across both, 3 and 4 held); a digest made by Java was listed by Go and Go then made none; Java explained a Go-made event; a critical event stayed critical and was sent.
 
 ## 8. Acceptance criteria

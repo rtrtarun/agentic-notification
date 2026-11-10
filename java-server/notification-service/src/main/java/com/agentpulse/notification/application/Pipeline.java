@@ -246,8 +246,15 @@ public final class Pipeline {
         }
     }
 
-    /** Returns true when a person's override decided the event, which also exempts it from the budget. */
-    private boolean applyPreferences(Event event) {
+    /**
+     * Returns true when a person's override decided the event, which also exempts it from the budget. It never
+     * runs for a critical event: {@link #handle} only calls it from the non-critical branch, and this refuses a
+     * critical event too, so quiet hours, mutes and overrides cannot capture one even if that branch is refactored.
+     */
+    boolean applyPreferences(Event event) {
+        if (event.isCritical()) {
+            return false;
+        }
         // A person's explicit choice outranks quiet hours and mutes: "never" sends the event to the digest, and
         // "always" keeps it queued whatever the preferences say.
         if (overrides != null) {
