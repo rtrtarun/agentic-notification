@@ -34,12 +34,22 @@ public final class QueueOutbox implements Outbox {
     }
 
     @Override
+    public boolean routed(String attentionClass, List<String> override) {
+        return channelsFor(attentionClass, override).stream().anyMatch(c -> !targets.forChannel(c).isEmpty());
+    }
+
+    /** A rule's own channels when it names any, otherwise the channels the class is routed to. */
+    private List<String> channelsFor(String attentionClass, List<String> override) {
+        return override.isEmpty() ? routes.getOrDefault(attentionClass, List.of()) : override;
+    }
+
+    @Override
     public void enqueue(Event event) {
         if (Attention.CRITICAL.equals(event.getAttentionClass())) {
             return;
         }
         Instant now = clock.instant();
-        for (String channel : routes.getOrDefault(event.getAttentionClass(), List.of())) {
+        for (String channel : channelsFor(event.getAttentionClass(), event.getRouteChannels())) {
             if (targets.forChannel(channel).isEmpty()) {
                 continue;
             }

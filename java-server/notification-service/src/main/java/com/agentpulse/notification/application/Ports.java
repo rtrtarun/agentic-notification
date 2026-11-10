@@ -46,7 +46,12 @@ public final class Ports {
     }
 
     /** What Attention Intelligence decided for one event. */
-    public record Classification(String attentionClass, String model, double confidence, String reason) {}
+    public record Classification(String attentionClass, String model, double confidence, String reason, int score) {
+        /** A classification that carries no score (0). */
+        public Classification(String attentionClass, String model, double confidence, String reason) {
+            this(attentionClass, model, confidence, reason, 0);
+        }
+    }
 
     /** Layer 2. The pipeline never calls it for a critical event and only accepts "background" back. */
     public interface Classifier {
@@ -73,6 +78,11 @@ public final class Ports {
     public interface Outbox {
         /** Reports whether a class has a configured channel to be delivered to. */
         boolean routed(String attentionClass);
+
+        /** As {@link #routed(String)}, but a rule's channel override, when it has one, replaces the class's channels. */
+        default boolean routed(String attentionClass, List<String> override) {
+            return routed(attentionClass);
+        }
 
         /** Queues the event for the channels its class is routed to. Never called for a critical event. */
         void enqueue(Event event);

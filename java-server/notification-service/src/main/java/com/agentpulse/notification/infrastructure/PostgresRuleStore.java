@@ -17,8 +17,7 @@ import java.util.List;
 
 /**
  * Keeps rules in the {@code policy_rules} table the Go service migrates and also reads. A stored rule that uses a
- * field this service does not support yet ({@code payloadMatch}, {@code channels}) is refused loudly: ignoring it
- * would silently widen the rule.
+ * field this service does not know is refused loudly: ignoring it could silently widen the rule.
  */
 public final class PostgresRuleStore implements RuleStore {
     private static final ObjectMapper JSON = new ObjectMapper()
@@ -41,7 +40,7 @@ public final class PostgresRuleStore implements RuleStore {
             }
             return out;
         } catch (JsonProcessingException e) {
-            throw new PortException("a stored rule uses a feature this service does not support yet: " + e.getOriginalMessage(), e);
+            throw new PortException("a stored rule uses a field this service does not know: " + e.getOriginalMessage(), e);
         } catch (SQLException e) {
             throw new PortException("list rules: " + e.getMessage(), e);
         }

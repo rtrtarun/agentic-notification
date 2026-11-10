@@ -1,0 +1,136 @@
+{
+  "name": "digests are made from what was held back, never from critical events or merged repeats; the heuristic highlights what matters; every decision can be explained in plain language",
+  "steps": [
+    {
+      "name": "the attention status needs the key and says the built-in heuristic is the engine",
+      "request": { "method": "GET", "path": "/api/attention/status" },
+      "expect": { "status": 401, "json": { "error": "missing or invalid api key" } }
+    },
+    {
+      "name": "the heuristic is the engine",
+      "request": { "method": "GET", "path": "/api/attention/status", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "provider": "heuristic", "model": "heuristic-v1", "breaker": "closed", "calls": 0, "fallbacks": 0 } }
+    },
+    {
+      "name": "the status endpoint only answers GET",
+      "request": { "method": "POST", "path": "/api/attention/status", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 405, "json": { "error": "method not allowed" } }
+    },
+    {
+      "name": "there are no digests yet, and none is scheduled",
+      "request": { "method": "GET", "path": "/api/digests", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "digests": [], "every": "0s" } }
+    },
+    {
+      "name": "nothing is held back, so nothing is generated",
+      "request": { "method": "POST", "path": "/api/digests/generate", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "generated": false, "digest": null } }
+    },
+    {
+      "name": "a star is background and held for the digest",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "star", "X-GitHub-Delivery": "att-star-1" }, "body": { "action": "created", "repository": { "full_name": "acme/web" } }, "sign": true },
+      "expect": { "status": 202, "json": { "eventId": "github-star-att-star-1", "attentionClass": "background", "decisionState": { "status": "digest" } } }
+    },
+    {
+      "name": "another star from another repository",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "star", "X-GitHub-Delivery": "att-star-2" }, "body": { "action": "created", "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "decisionState": { "status": "digest" } } }
+    },
+    {
+      "name": "an override makes pull requests held too, so there is a standard event worth leading with",
+      "request": { "method": "POST", "path": "/api/overrides", "headers": { "X-API-Key": "contract-key" }, "body": { "mode": "never", "eventType": "pull_request" } },
+      "expect": { "status": 201 }
+    },
+    {
+      "name": "a newly opened pull request is held",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "att-pr-1" }, "body": { "action": "opened", "number": 42, "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "eventId": "github-pull_request-att-pr-1", "attentionClass": "background", "decisionState": { "status": "digest", "reason": "never notify override for pull_request" } } }
+    },
+    {
+      "name": "the same pull request again is merged into the first and never counted twice",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "att-pr-2" }, "body": { "action": "opened", "number": 42, "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "decisionState": { "status": "merged" } } }
+    },
+    {
+      "name": "a critical event is sent at once and is never part of a digest",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "security_advisory", "X-GitHub-Delivery": "att-crit-1" }, "body": { "action": "published", "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "critical", "decisionState": { "status": "sent" } } }
+    },
+    {
+      "name": "a digest covers the three held events, grouped by repository, busiest first, and leads with the pull request",
+      "request": { "method": "POST", "path": "/api/digests/generate", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 201, "json": { "generated": true, "digest": {
+        "count": 3,
+        "title": "3 notifications held back",
+        "summary": "3 notifications held back, from 3 github. Busiest: acme/api (github) with 2.",
+        "groups": [
+          { "key": "github/acme/api", "title": "acme/api (github)", "summary": "2 notifications: 1 pull_request, 1 star", "count": 2, "eventIds": [ "github-star-att-star-2", "github-pull_request-att-pr-1" ] },
+          { "key": "github/acme/web", "title": "acme/web (github)", "summary": "1 notification: 1 star", "count": 1, "eventIds": [ "github-star-att-star-1" ] }
+        ],
+        "highlights": [ { "eventId": "github-pull_request-att-pr-1", "title": "github pull_request in acme/api", "reason": "scored 60: something new was opened", "score": 60 } ],
+        "model": "heuristic-v1", "source": "heuristic", "createdBy": "api-key" } },
+        "present": ["generated"] },
+      "save": { "digest": "digest.id" }
+    },
+    {
+      "name": "nothing new was held since, so no second digest",
+      "request": { "method": "POST", "path": "/api/digests/generate", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "generated": false, "digest": null } }
+    },
+    {
+      "name": "the digest is listed and can be read by id",
+      "request": { "method": "GET", "path": "/api/digests", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "digests": [ { "count": 3, "title": "3 notifications held back" } ], "every": "0s" } }
+    },
+    {
+      "name": "one digest by id",
+      "request": { "method": "GET", "path": "/api/digests/{{digest}}", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "count": 3, "title": "3 notifications held back", "model": "heuristic-v1" } }
+    },
+    {
+      "name": "an unknown digest is not found",
+      "request": { "method": "GET", "path": "/api/digests/nope", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 404, "json": { "error": "digest not found" } }
+    },
+    {
+      "name": "the limit is checked",
+      "request": { "method": "GET", "path": "/api/digests?limit=0", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 400, "json": { "error": "limit must be between 1 and 100" } }
+    },
+    {
+      "name": "the digests API refuses other methods",
+      "request": { "method": "PUT", "path": "/api/digests", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 405, "json": { "error": "method not allowed" } }
+    },
+    {
+      "name": "a held event is explained: held for the digest, by a person's choice, with no model involved",
+      "request": { "method": "GET", "path": "/api/explain/github-pull_request-att-pr-1", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "eventId": "github-pull_request-att-pr-1", "explanation": "It was held for your digest instead of being sent now. The rule \"default-github\" applied: never notify override for pull_request. A rule or a choice decided this; Attention Intelligence was not used.", "model": "heuristic-v1", "source": "heuristic" } }
+    },
+    {
+      "name": "a merged repeat is explained",
+      "request": { "method": "GET", "path": "/api/explain/github-pull_request-att-pr-2", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "explanation": "This repeated an earlier notification, so it was merged into it instead of interrupting you again. The first one is github-pull_request-att-pr-1. A rule or a choice decided this; Attention Intelligence was not used." } }
+    },
+    {
+      "name": "a critical event is explained as sent at once with no judgement",
+      "request": { "method": "GET", "path": "/api/explain/github-security_advisory-att-crit-1", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "explanation": "This is critical, so it was sent to every channel at once. No judgement was involved and nothing can mute it. The rule \"github-security-advisory\" applied: security vulnerability detected." } }
+    },
+    {
+      "name": "an unknown event is not found",
+      "request": { "method": "GET", "path": "/api/explain/nope", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 404, "json": { "error": "event not found" } }
+    },
+    {
+      "name": "explain only answers GET",
+      "request": { "method": "POST", "path": "/api/explain/github-star-att-star-1", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 405, "json": { "error": "method not allowed" } }
+    },
+    {
+      "name": "the explanation needs the key",
+      "request": { "method": "GET", "path": "/api/explain/github-star-att-star-1" },
+      "expect": { "status": 401, "json": { "error": "missing or invalid api key" } }
+    }
+  ]
+}

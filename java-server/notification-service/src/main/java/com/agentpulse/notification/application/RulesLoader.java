@@ -14,8 +14,8 @@ import java.util.List;
 
 /**
  * Reads the same {@code rules.yaml} the Go service reads. Decoding is strict: a misspelt key fails at load time
- * instead of silently widening a rule to match everything. Keys the Java service does not support yet
- * ({@code payloadMatch}, {@code channels}) are therefore refused rather than ignored.
+ * instead of silently widening a rule to match everything. Payload predicates and channel overrides are checked
+ * with the same rules the API applies.
  */
 public final class RulesLoader {
     private static final ObjectMapper YAML = new ObjectMapper(new YAMLFactory())
@@ -73,6 +73,14 @@ public final class RulesLoader {
         if (!Attention.isKnown(rule.then().attentionClass())) {
             throw new InvalidRulesException("rule \"" + name + "\" has unknown attentionClass \""
                     + rule.then().attentionClass() + "\"");
+        }
+        String badPredicate = Predicates.validate(rule.when().payloadMatch());
+        if (badPredicate != null) {
+            throw new InvalidRulesException("rule \"" + name + "\": " + badPredicate);
+        }
+        String badChannels = Predicates.validateChannels(rule.then().attentionClass(), rule.then().channels());
+        if (badChannels != null) {
+            throw new InvalidRulesException("rule \"" + name + "\": " + badChannels);
         }
         for (String pattern : List.of(rule.when().source(), rule.when().eventType(), rule.when().repository())) {
             String problem = Glob.validate(pattern);

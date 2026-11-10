@@ -1,0 +1,167 @@
+{
+  "name": "feedback is recorded; always and never become visible overrides; a never reaches only non-critical events; undo reverts; critical events are never muted",
+  "steps": [
+    {
+      "name": "feedback needs the key",
+      "request": { "method": "POST", "path": "/feedback", "body": { "eventId": "x", "action": "opened" } },
+      "expect": { "status": 401, "json": { "error": "missing or invalid api key" } }
+    },
+    {
+      "name": "a standard event and a critical event to give feedback on",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "fb-std" }, "body": { "action": "opened", "number": 501, "repository": { "full_name": "acme/feedback" } }, "sign": true },
+      "expect": { "status": 202, "json": { "eventId": "github-pull_request-fb-std", "attentionClass": "standard", "decisionState": { "status": "queued" } } }
+    },
+    {
+      "name": "a critical event",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "security_advisory", "X-GitHub-Delivery": "fb-crit" }, "body": { "action": "published", "repository": { "full_name": "acme/feedback" } }, "sign": true },
+      "expect": { "status": 202, "json": { "eventId": "github-security_advisory-fb-crit", "attentionClass": "critical", "decisionState": { "status": "sent" } } }
+    },
+    {
+      "name": "a bad action is refused",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-fb-std", "action": "love" } },
+      "expect": { "status": 400, "json": { "error": "invalid feedback: action must be opened, dismissed, undo, always, never or reply" } }
+    },
+    {
+      "name": "an event id is required",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "action": "opened" } },
+      "expect": { "status": 400, "json": { "error": "invalid feedback: event id is required" } }
+    },
+    {
+      "name": "a scope only means something for always and never",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-fb-std", "action": "opened", "scope": "source" } },
+      "expect": { "status": 400, "json": { "error": "invalid feedback: scope only applies to always and never" } }
+    },
+    {
+      "name": "an unknown scope is refused",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-fb-std", "action": "never", "scope": "planet" } },
+      "expect": { "status": 400, "json": { "error": "invalid feedback: scope must be type, repository or source" } }
+    },
+    {
+      "name": "a reply needs text",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-fb-std", "action": "reply", "reason": "   " } },
+      "expect": { "status": 400, "json": { "error": "invalid feedback: a reply needs text" } }
+    },
+    {
+      "name": "text is bounded",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-fb-std", "action": "reply", "reason": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" } },
+      "expect": { "status": 400, "json": { "error": "invalid feedback: text must be at most 1000 characters" } }
+    },
+    {
+      "name": "an unknown event is not found",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "nope", "action": "opened" } },
+      "expect": { "status": 404, "json": { "error": "event not found" } }
+    },
+    {
+      "name": "opened, dismissed and a reply are only signals",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-fb-std", "action": "dismissed" } },
+      "expect": { "status": 202, "json": { "status": "accepted", "override": null, "overrideSkipped": false, "reverted": false } }
+    },
+    {
+      "name": "a critical event can never be muted",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-security_advisory-fb-crit", "action": "never" } },
+      "expect": { "status": 400, "json": { "error": "invalid feedback: critical events cannot be muted" } }
+    },
+    {
+      "name": "there are no overrides yet",
+      "request": { "method": "GET", "path": "/api/overrides", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "overrides": [], "adminOnly": false } }
+    },
+    {
+      "name": "never, for everything from this source, creates a visible override",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-fb-std", "action": "never", "scope": "source" } },
+      "expect": { "status": 202, "json": { "status": "accepted", "override": { "mode": "never", "source": "github", "createdBy": "api-key" }, "overrideSkipped": false, "reverted": false } }
+    },
+    {
+      "name": "the override is listed",
+      "request": { "method": "GET", "path": "/api/overrides", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "overrides": [ { "mode": "never", "source": "github", "createdBy": "api-key" } ], "adminOnly": false } }
+    },
+    {
+      "name": "the next standard event from that source is held for the digest, and the reason names the override",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "fb-std-2" }, "body": { "action": "opened", "number": 502, "repository": { "full_name": "acme/feedback" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "background", "decisionState": { "status": "digest", "reason": "never notify override for github" } } }
+    },
+    {
+      "name": "a critical event from the same source is untouched by the override",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "security_advisory", "X-GitHub-Delivery": "fb-crit-2" }, "body": { "action": "published", "repository": { "full_name": "acme/feedback-2" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "critical", "decisionState": { "status": "sent" } } }
+    },
+    {
+      "name": "undo removes the override this person's latest never created",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-fb-std", "action": "undo" } },
+      "expect": { "status": 202, "json": { "status": "accepted", "reverted": true } }
+    },
+    {
+      "name": "undoing again changes nothing",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-fb-std", "action": "undo" } },
+      "expect": { "status": 202, "json": { "status": "accepted", "reverted": false } }
+    },
+    {
+      "name": "the override is gone and standard events are queued again",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "fb-std-3" }, "body": { "action": "opened", "number": 503, "repository": { "full_name": "acme/feedback" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "standard", "decisionState": { "status": "queued" } } }
+    },
+    {
+      "name": "always, for this event type, creates an override that keeps events queued and is more specific than a source-wide never",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-fb-std", "action": "always" } },
+      "expect": { "status": 202, "json": { "override": { "mode": "always", "source": "github", "eventType": "pull_request" } } },
+      "save": { "always": "override.id" }
+    },
+    {
+      "name": "overrides can also be made directly: a mode is required",
+      "request": { "method": "POST", "path": "/api/overrides", "headers": { "X-API-Key": "contract-key" }, "body": { "mode": "sometimes", "source": "github" } },
+      "expect": { "status": 400, "json": { "error": "invalid override: mode must be always or never" } }
+    },
+    {
+      "name": "an override needs something to match",
+      "request": { "method": "POST", "path": "/api/overrides", "headers": { "X-API-Key": "contract-key" }, "body": { "mode": "never" } },
+      "expect": { "status": 400, "json": { "error": "invalid override: choose a source, an event type or a repository" } }
+    },
+    {
+      "name": "a malformed repository pattern is refused",
+      "request": { "method": "POST", "path": "/api/overrides", "headers": { "X-API-Key": "contract-key" }, "body": { "mode": "never", "repository": "acme/[" } },
+      "expect": { "status": 400, "json": { "error": "invalid override: the repository pattern is malformed" } }
+    },
+    {
+      "name": "a direct override for a repository pattern is created",
+      "request": { "method": "POST", "path": "/api/overrides", "headers": { "X-API-Key": "contract-key" }, "body": { "mode": "never", "repository": " acme/* ", "note": " noisy " } },
+      "expect": { "status": 201, "json": { "mode": "never", "repository": "acme/*", "note": "noisy", "createdBy": "api-key" }, "present": ["id", "createdAt"] },
+      "save": { "pattern": "id" }
+    },
+    {
+      "name": "the same scope replaces the earlier choice and keeps its id",
+      "request": { "method": "POST", "path": "/api/overrides", "headers": { "X-API-Key": "contract-key" }, "body": { "mode": "always", "repository": "ACME/*" } },
+      "expect": { "status": 201, "json": { "mode": "always" } }
+    },
+    {
+      "name": "two overrides are listed",
+      "request": { "method": "GET", "path": "/api/overrides", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "present": ["overrides", "adminOnly"] }
+    },
+    {
+      "name": "a deleted override is gone",
+      "request": { "method": "DELETE", "path": "/api/overrides/{{always}}", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 204 }
+    },
+    {
+      "name": "deleting it again is not found",
+      "request": { "method": "DELETE", "path": "/api/overrides/{{always}}", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 404, "json": { "error": "override not found" } }
+    },
+    {
+      "name": "the pattern override is deleted too",
+      "request": { "method": "DELETE", "path": "/api/overrides/{{pattern}}", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 204 }
+    },
+    {
+      "name": "the overrides API refuses other methods",
+      "request": { "method": "PUT", "path": "/api/overrides", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 405, "json": { "error": "method not allowed" } }
+    },
+    {
+      "name": "feedback refuses other methods",
+      "request": { "method": "GET", "path": "/feedback", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 405, "json": { "error": "method not allowed" } }
+    }
+  ]
+}

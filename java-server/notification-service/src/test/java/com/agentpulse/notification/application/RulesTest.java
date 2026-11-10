@@ -93,16 +93,41 @@ class RulesTest {
     }
 
     @Test
-    void keysTheJavaServiceDoesNotSupportYetAreRefusedNotIgnored() {
+    void payloadMatchAndChannelsAreReadFromTheRulesFile() {
         String yaml = """
                 rules:
-                  - name: later
+                  - name: storm
                     when:
-                      payloadMatch: []
+                      source: app
+                      payloadMatch:
+                        - field: metadata.attempt
+                          op: gt
+                          value: 3
+                        - field: draft
+                          op: exists
+                          value: false
                     then:
                       attentionClass: standard
+                      channels: [slack, email]
                 """;
-        assertThrows(RulesLoader.InvalidRulesException.class, () -> RulesLoader.parse(yaml));
+        Rule rule = RulesLoader.parse(yaml).get(0);
+        assertEquals(2, rule.when().payloadMatch().size());
+        assertEquals("gt", rule.when().payloadMatch().get(0).op());
+        assertEquals(3, rule.when().payloadMatch().get(0).value());
+        assertEquals(false, rule.when().payloadMatch().get(1).value());
+        assertEquals(List.of("slack", "email"), rule.then().channels());
+    }
+
+    @Test
+    void aBadPredicateOrChannelInTheRulesFileFailsAtLoadAndNamesTheRule() {
+        String badOp = "rules: [ {name: a, when: {payloadMatch: [ {field: x, op: between, value: 1} ]}, then: {attentionClass: standard}} ]";
+        var e = assertThrows(RulesLoader.InvalidRulesException.class, () -> RulesLoader.parse(badOp));
+        assertTrue(e.getMessage().contains("rule \"a\"") && e.getMessage().contains("between"), e.getMessage());
+        String critical = "rules: [ {name: b, then: {attentionClass: critical, channels: [slack]}} ]";
+        var c = assertThrows(RulesLoader.InvalidRulesException.class, () -> RulesLoader.parse(critical));
+        assertTrue(c.getMessage().contains("critical rule cannot choose channels"), c.getMessage());
+        String typo = "rules: [ {name: c, when: {payloadMatch: [ {feild: x, value: 1} ]}, then: {attentionClass: standard}} ]";
+        assertThrows(RulesLoader.InvalidRulesException.class, () -> RulesLoader.parse(typo));
     }
 
     @Test

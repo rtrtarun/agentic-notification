@@ -160,13 +160,20 @@ final class RulesApi {
             return;
         }
         JsonNode n = body.get();
-        RulesService.Result r = rules.test(new RulesService.Sample(text(n, "source"), text(n, "eventType"), text(n, "repository")));
+        Map<String, Object> payload = null;
+        if (n.path("payload").isObject()) {
+            payload = ApiSupport.JSON.convertValue(n.get("payload"), new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        }
+        RulesService.Result r = rules.test(new RulesService.Sample(text(n, "source"), text(n, "eventType"), text(n, "repository"), payload));
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("matched", r.matched());
         out.put("attentionClass", r.attentionClass());
         out.put("reason", r.reason());
         if (!r.matchedRule().isEmpty()) {
             out.put("matchedRule", r.matchedRule());
+        }
+        if (!r.channels().isEmpty()) {
+            out.put("channels", r.channels());
         }
         out.put("aiBypassed", r.aiBypassed());
         List<Map<String, Object>> steps = new ArrayList<>();
@@ -191,10 +198,7 @@ final class RulesApi {
         return n.path(field).isTextual() ? n.get(field).asText() : "";
     }
 
-    /**
-     * Reads a rule from the request. {@code payloadMatch} and per-rule {@code channels} are not supported by this
-     * service yet; they are refused instead of dropped, because dropping a condition would widen the rule.
-     */
+    /** Reads a rule from the request, including its payload predicates and channel override. */
     private Optional<Rule> readRule(HttpExchange x) throws IOException {
         Optional<JsonNode> body = api.readJson(x);
         if (body.isEmpty()) {
@@ -205,19 +209,11 @@ final class RulesApi {
             api.error(x, 400, "invalid request payload");
             return Optional.empty();
         }
-        if (isSet(n.path("when").path("payloadMatch")) || isSet(n.path("then").path("channels"))) {
-            api.error(x, 400, "invalid rule: payloadMatch and channels are not supported by this service yet");
-            return Optional.empty();
-        }
         try {
             return Optional.of(ApiSupport.JSON.treeToValue(n, Rule.class));
         } catch (JsonProcessingException e) {
             api.error(x, 400, "invalid request payload");
             return Optional.empty();
         }
-    }
-
-    private static boolean isSet(JsonNode n) {
-        return !n.isMissingNode() && !n.isNull() && !(n.isArray() && n.isEmpty());
     }
 }

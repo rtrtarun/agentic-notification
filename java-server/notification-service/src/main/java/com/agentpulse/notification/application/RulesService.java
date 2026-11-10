@@ -3,6 +3,7 @@ package com.agentpulse.notification.application;
 import com.agentpulse.notification.application.Ports.RuleStore;
 import com.agentpulse.notification.domain.Attention;
 import com.agentpulse.notification.domain.Event;
+import com.agentpulse.notification.domain.Predicate;
 import com.agentpulse.notification.domain.Rule;
 
 import java.security.SecureRandom;
@@ -225,6 +226,16 @@ public final class RulesService {
         String repository = in.when().repository().trim();
         String attentionClass = in.then() == null ? null : in.then().attentionClass();
         boolean adaptive = in.then() != null && in.then().adaptive();
+        List<Predicate> predicates = new ArrayList<>();
+        for (Predicate x : in.when().payloadMatch()) {
+            predicates.add(new Predicate(x.field().trim(), x.op().trim().toLowerCase(Locale.ROOT), x.value()));
+        }
+        List<String> channels = new ArrayList<>();
+        if (in.then() != null) {
+            for (String c : in.then().channels()) {
+                channels.add(c == null ? "" : c.trim().toLowerCase(Locale.ROOT));
+            }
+        }
 
         if (name.isEmpty() || cp(name) > MAX_NAME) {
             throw new InvalidException("name is required and at most " + MAX_NAME + " characters");
@@ -261,9 +272,17 @@ public final class RulesService {
                 throw new InvalidException(p.getKey() + " is not a valid pattern");
             }
         }
+        String badPredicate = Predicates.validate(predicates);
+        if (badPredicate != null) {
+            throw new InvalidException(badPredicate);
+        }
+        String badChannels = Predicates.validateChannels(attentionClass, channels);
+        if (badChannels != null) {
+            throw new InvalidException(badChannels);
+        }
         // Only seeds and the rules file can lock a rule.
-        return new Rule("", name, description, new Rule.Condition(source, eventType, repository),
-                new Rule.Outcome(attentionClass, reason, adaptive), in.disabled(), false);
+        return new Rule("", name, description, new Rule.Condition(source, eventType, repository, predicates),
+                new Rule.Outcome(attentionClass, reason, adaptive, channels), in.disabled(), false);
     }
 
     private static int cp(String s) {
@@ -272,12 +291,17 @@ public final class RulesService {
 
     // ---- dry run ------------------------------------------------------------------------------------------
 
-    /** An event described by the three fields rules look at. */
-    public record Sample(String source, String eventType, String repository) {
+    /** An event described by the three fields rules look at, plus optional sample content for payload predicates. */
+    public record Sample(String source, String eventType, String repository, Map<String, Object> payload) {
         public Sample {
             source = source == null ? "" : source;
             eventType = eventType == null ? "" : eventType;
             repository = repository == null ? "" : repository;
+            payload = payload == null ? Map.of() : payload;
+        }
+
+        public Sample(String source, String eventType, String repository) {
+            this(source, eventType, repository, null);
         }
     }
 
@@ -286,7 +310,7 @@ public final class RulesService {
 
     /** What a dry run decided. */
     public record Result(boolean matched, String attentionClass, String reason, String matchedRule, boolean aiBypassed,
-                         List<Step> steps) {}
+                         List<Step> steps, List<String> channels) {}
 
     /** Dry-runs the sample through the current rules. Nothing is stored or delivered. */
     public Result test(Sample in) {
@@ -295,11 +319,12 @@ public final class RulesService {
 
     /** The pure dry run. An unmatched event falls back to standard, exactly as the pipeline does. */
     static Result evaluate(List<Rule> list, Sample in) {
-        Event evt = new Event("", in.source(), in.eventType(), in.repository(), null);
+        Event evt = new Event("", in.source(), in.eventType(), in.repository(), new LinkedHashMap<>(in.payload()));
         boolean matched = false;
         String cls = Attention.STANDARD;
         String reason = "no matching rule, default standard";
         String matchedRule = "";
+        List<String> channels = List.of();
         List<Step> steps = new ArrayList<>();
         for (Rule r : list) {
             boolean hit = !r.disabled() && PolicyEngine.matches(r.when(), evt);
@@ -309,9 +334,10 @@ public final class RulesService {
                 cls = r.then().attentionClass();
                 reason = r.then().reason();
                 matchedRule = r.name();
+                channels = Attention.CRITICAL.equals(cls) ? List.of() : r.then().channels();
             }
             steps.add(new Step(r.id(), r.name(), r.disabled(), hit, winner));
         }
-        return new Result(matched, cls, reason, matchedRule, Attention.CRITICAL.equals(cls), steps);
+        return new Result(matched, cls, reason, matchedRule, Attention.CRITICAL.equals(cls), steps, channels);
     }
 }

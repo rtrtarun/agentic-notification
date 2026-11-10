@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /** A normalised event. The pipeline fills in the attention class, decision, dedup key and thread. */
@@ -21,6 +22,7 @@ public final class Event {
     private String threadId = "";
     private String mergedInto = "";
     private Instant createdAt;
+    private List<String> routeChannels = List.of();
 
     public Event(String id, String source, String eventType, String repository, Map<String, Object> payload) {
         this.id = id;
@@ -39,6 +41,7 @@ public final class Event {
         c.threadId = threadId;
         c.mergedInto = mergedInto;
         c.createdAt = createdAt;
+        c.routeChannels = routeChannels;
         return c;
     }
 
@@ -59,6 +62,13 @@ public final class Event {
     public void setMergedInto(String mergedInto) { this.mergedInto = mergedInto == null ? "" : mergedInto; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
+
+    /** The matched rule's channel override, set while the pipeline runs; never stored or serialised. Empty routes by class. */
+    @JsonIgnore
+    public List<String> getRouteChannels() { return routeChannels; }
+
+    @JsonIgnore
+    public void setRouteChannels(List<String> channels) { this.routeChannels = channels == null ? List.of() : List.copyOf(channels); }
 
     /** True for an event the rules classed as critical. */
     @JsonIgnore

@@ -452,6 +452,11 @@ public final class Accounts {
             return new Login(token, session, user);
         }
 
+        /** Records an entry for an action taken elsewhere (for example an override), so the security log has one place. */
+        public void auditEvent(String actor, String action, String target, String ip, String detail) {
+            audit(actor, action, target, ip, detail);
+        }
+
         private void audit(String actor, String action, String target, String ip, String detail) {
             try {
                 store.addAudit(new AuditEntry(clock.instant(), actor, action, target, ip, detail));

@@ -1,12 +1,19 @@
 package com.agentpulse.notification;
 
 import com.agentpulse.notification.application.Accounts;
+import com.agentpulse.notification.application.Budgets;
 import com.agentpulse.notification.application.Dedup;
+import com.agentpulse.notification.application.Digests;
+import com.agentpulse.notification.application.Feedback;
+import com.agentpulse.notification.application.Overrides;
 import com.agentpulse.notification.application.Dispatcher;
+import com.agentpulse.notification.application.GuardedClassifier;
+import com.agentpulse.notification.application.Heuristic;
 import com.agentpulse.notification.application.MemoryDeduper;
 import com.agentpulse.notification.application.Notify;
 import com.agentpulse.notification.application.Pipeline;
 import com.agentpulse.notification.application.PolicyEngine;
+import com.agentpulse.notification.application.Ports.Budget;
 import com.agentpulse.notification.application.Ports.DeliveryStore;
 import com.agentpulse.notification.application.Ports.EventRepository;
 import com.agentpulse.notification.application.Ports.NotificationProvider;
@@ -18,6 +25,8 @@ import com.agentpulse.notification.application.Targets;
 import com.agentpulse.notification.domain.Rule;
 import com.agentpulse.notification.infrastructure.Config;
 import com.agentpulse.notification.infrastructure.Database;
+import com.agentpulse.notification.infrastructure.DigestStores;
+import com.agentpulse.notification.infrastructure.FeedbackStores;
 import com.agentpulse.notification.infrastructure.InMemoryEventRepository;
 import com.agentpulse.notification.infrastructure.JedisKeyStore;
 import com.agentpulse.notification.infrastructure.MemoryAccountStore;
@@ -46,6 +55,8 @@ import java.util.Map;
 public final class Main {
     private static final Logger LOG = LoggerFactory.getLogger(Main.class);
     private static final Duration SCHEMA_WAIT = Duration.ofSeconds(60);
+    /** How many recent events feedback looks through to find the one it is about, as in the Go service. */
+    private static final int FEEDBACK_LOOKUP_WINDOW = 1000;
     private static final int SHUTDOWN_SECONDS = 5;
 
     private Main() {}
@@ -61,12 +72,18 @@ public final class Main {
         RuleStore ruleStore;
         DeliveryStore deliveryStore;
         Accounts.Store accountStore;
+        Overrides.Store overrideStore;
+        Feedback.Store feedbackStore;
+        Digests.Store digestStore;
         if (config.databaseUrl().isEmpty()) {
             LOG.warn("DATABASE_URL unset; events, rules and deliveries are kept in memory and lost on restart");
             repository = new InMemoryEventRepository(clock);
             ruleStore = new MemoryStores.Rules();
             deliveryStore = new MemoryStores.Deliveries();
             accountStore = new MemoryAccountStore();
+            overrideStore = new FeedbackStores.MemoryOverrides();
+            feedbackStore = new FeedbackStores.MemoryFeedback();
+            digestStore = new DigestStores.Memory();
         } else {
             database = Database.connect(config.databaseUrl());
             Database.waitForSchema(database, SCHEMA_WAIT);
@@ -74,6 +91,9 @@ public final class Main {
             ruleStore = new PostgresRuleStore(database);
             deliveryStore = new PostgresDeliveryStore(database);
             accountStore = new PostgresAccountStore(database);
+            overrideStore = new FeedbackStores.PostgresOverrides(database);
+            feedbackStore = new FeedbackStores.PostgresFeedback(database);
+            digestStore = new DigestStores.Postgres(database);
         }
         Accounts.Service accounts = new Accounts.Service(accountStore, config.authSessionTtl(), clock)
                 .withSignup("approval".equals(config.authSignup()));
@@ -115,10 +135,30 @@ public final class Main {
         Map<String, List<String>> routes = Map.of("standard", config.standardChannels(),
                 "background", config.backgroundChannels());
         QueueOutbox outbox = new QueueOutbox(deliveryStore, targets, routes, clock);
+        Overrides.Service overrides = new Overrides.Service(overrideStore, clock);
+        Heuristic heuristic = new Heuristic();
+        Budget budget = null;
+        if (config.attentionBudgetPerHour() > 0) {
+            budget = redis == null
+                    ? new Budgets.Memory(config.attentionBudgetPerHour(), Budgets.DEFAULT_WINDOW, clock)
+                    : new Budgets.Redis(redis, config.attentionBudgetPerHour(), Budgets.DEFAULT_WINDOW, clock);
+        }
+        EventRepository eventsForLookup = repository;
+        Feedback.Service feedback = new Feedback.Service(feedbackStore,
+                id -> eventsForLookup.listRecent(FEEDBACK_LOOKUP_WINDOW).stream().filter(e -> e.getId().equals(id)).findFirst(),
+                overrides, clock);
         Pipeline pipeline = new Pipeline(engine, provider, repository)
                 .withDeduper(deduper)
+                .withOverrides(overrides)
+                .withBudget(budget)
                 .withOutbox(outbox)
                 .withCriticalTargets(targets);
+        if (config.attentionClassify()) {
+            pipeline.withClassifier(GuardedClassifier.of(heuristic));
+        }
+        Digests.Generator digests = new Digests.Generator(() -> eventsForLookup.listRecent(FEEDBACK_LOOKUP_WINDOW), digestStore,
+                heuristic, heuristic, clock);
+        Digests.Scheduler digestScheduler = new Digests.Scheduler(digests, config.attentionDigestEvery());
         Dispatcher dispatcher = new Dispatcher(deliveryStore, targets, byChannel, clock,
                 Dispatcher.DEFAULT_MAX_ATTEMPTS, Dispatcher.DEFAULT_BACKOFF_BASE);
 
@@ -130,8 +170,11 @@ public final class Main {
         }
 
         Notify.Service notify = new Notify.Service(config.notifyLimits(), provider);
-        HttpServer server = new HttpApi(config, pipeline, repository, notify, rules, deliveryStore, clock, accounts)
+        HttpServer server = new HttpApi(config, pipeline, repository, notify, rules, deliveryStore, clock, accounts, overrides, feedback)
+                .withAttention(digests, digestStore, id -> eventsForLookup.listRecent(FEEDBACK_LOOKUP_WINDOW).stream()
+                        .filter(e -> e.getId().equals(id)).findFirst(), config.attentionDigestEvery(), accounts)
                 .start(config.port());
+        digestScheduler.start();
         if (config.dispatcherEnabled()) {
             dispatcher.start();
         } else {
@@ -143,6 +186,7 @@ public final class Main {
         JedisKeyStore cache = redis;
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             dispatcher.stop();
+            digestScheduler.stop();
             server.stop(SHUTDOWN_SECONDS);
             if (cache != null) {
                 cache.close();

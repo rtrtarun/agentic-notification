@@ -44,6 +44,38 @@ class PipelineTest {
     }
 
     @Test
+    void aRulesPayloadPredicatesDecideAndItsChannelsTravelWithTheEvent() {
+        Rule storm = new Rule("1", "storm", "", new Rule.Condition("github", "", "", List.of(new com.agentpulse.notification.domain.Predicate("attempt", "gt", 3))),
+                new Rule.Outcome("standard", "retries", false, List.of("slack")), false, false);
+        Rule rest = new Rule("2", "rest", "", new Rule.Condition("github", "", ""),
+                new Rule.Outcome("standard", "rest", false), false, false);
+        Pipeline p = new Pipeline(new PolicyEngine(List.of(storm, rest)), provider, repository).withBudget(budget).withOutbox(outbox);
+
+        java.util.Map<String, Object> many = new java.util.LinkedHashMap<>();
+        many.put("attempt", 5);
+        Event hit = p.handle(Fakes.event("p1", "job", many));
+        assertEquals("storm", hit.getDecisionState().getMatchedRule());
+        assertEquals(List.of("slack"), hit.getRouteChannels());
+        assertEquals(List.of("slack"), outbox.lastOverride, "the outbox is asked about the rule's channels, not the class's");
+        assertEquals(Status.QUEUED, hit.getDecisionState().getStatus());
+
+        Event miss = p.handle(Fakes.event("p2", "job"));
+        assertEquals("rest", miss.getDecisionState().getMatchedRule());
+        assertTrue(miss.getRouteChannels().isEmpty());
+    }
+
+    @Test
+    void aBackgroundRuleWhoseChannelsHaveNoTargetIsHeldForTheDigest() {
+        Rule quiet = new Rule("1", "quiet", "", new Rule.Condition("github", "", ""),
+                new Rule.Outcome("background", "quiet", false, List.of("sms")), false, false);
+        outbox.routedBackground = false;
+        Event e = new Pipeline(new PolicyEngine(List.of(quiet)), provider, repository).withOutbox(outbox)
+                .handle(Fakes.event("q1", "job"));
+        assertEquals(Status.DIGEST, e.getDecisionState().getStatus());
+        assertEquals(0, outbox.enqueued);
+    }
+
+    @Test
     void aStandardEventIsQueuedAndEnqueued() {
         classifier.answer = "standard";
         Event result = pipeline.handle(Fakes.pullRequest("e1", 1));

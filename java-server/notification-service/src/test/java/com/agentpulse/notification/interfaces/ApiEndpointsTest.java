@@ -178,12 +178,20 @@ class ApiEndpointsTest {
         assertEquals(400, call("POST", base + "/api/rules", "[1]").statusCode());
         assertEquals(400, call("POST", base + "/api/rules", "not json").statusCode());
         assertEquals(400, call("POST", base + "/api/rules", "{\"name\":\"x\",\"then\":{\"attentionClass\":\"urgent\"}}").statusCode());
-        HttpResponse<String> unsupported = call("POST", base + "/api/rules",
-                "{\"name\":\"x\",\"when\":{\"payloadMatch\":[{\"field\":\"a\",\"op\":\"eq\",\"value\":1}]},\"then\":{\"attentionClass\":\"standard\"}}");
-        assertEquals(400, unsupported.statusCode(), "dropping the condition would widen the rule, so it is refused");
-        assertTrue(unsupported.body().contains("not supported"));
+        HttpResponse<String> badOp = call("POST", base + "/api/rules",
+                "{\"name\":\"x\",\"when\":{\"payloadMatch\":[{\"field\":\"a\",\"op\":\"between\",\"value\":1}]},\"then\":{\"attentionClass\":\"standard\"}}");
+        assertEquals(400, badOp.statusCode());
+        assertTrue(badOp.body().contains("unknown operator"), badOp.body());
         assertEquals(400, call("POST", base + "/api/rules",
-                "{\"name\":\"x\",\"then\":{\"attentionClass\":\"standard\",\"channels\":[\"slack\"]}}").statusCode());
+                "{\"name\":\"x\",\"then\":{\"attentionClass\":\"standard\",\"channels\":[\"pager\"]}}").statusCode());
+        assertEquals(400, call("POST", base + "/api/rules",
+                "{\"name\":\"x\",\"when\":{\"payloadMatch\":[{\"feild\":\"a\",\"value\":1}]},\"then\":{\"attentionClass\":\"standard\"}}").statusCode(),
+                "a misspelt key is refused, never dropped");
+        HttpResponse<String> good = call("POST", base + "/api/rules",
+                "{\"name\":\"quiet\",\"when\":{\"payloadMatch\":[{\"field\":\"a\",\"op\":\"gt\",\"value\":1}]},\"then\":{\"attentionClass\":\"standard\",\"channels\":[\"slack\"]}}");
+        assertEquals(201, good.statusCode(), good.body());
+        assertTrue(good.body().contains("payloadMatch") && good.body().contains("slack"), good.body());
+        assertEquals(400, call("POST", base + "/api/rules/test", "[1]").statusCode());
 
         HttpResponse<String> patch = call("PATCH", base + "/api/rules", "{}");
         assertEquals(405, patch.statusCode());

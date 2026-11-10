@@ -153,9 +153,17 @@ final class Fakes {
         boolean routedBackground = true;
         boolean fail;
 
+        List<String> lastOverride = List.of();
+
         @Override
         public boolean routed(String attentionClass) {
             return "background".equals(attentionClass) ? routedBackground : routedStandard;
+        }
+
+        @Override
+        public boolean routed(String attentionClass, List<String> override) {
+            lastOverride = override;
+            return routed(attentionClass);
         }
 
         @Override

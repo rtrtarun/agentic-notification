@@ -90,16 +90,35 @@ class PostgresStoresTest {
     }
 
     @Test
-    void aStoredRuleUsingAFeatureTheJavaServiceLacksIsRefusedNotIgnored() throws Exception {
+    void aStoredGoRuleWithPayloadMatchAndChannelsIsReadAndWrittenBackUnchanged() throws Exception {
+        PostgresRuleStore store = new PostgresRuleStore(source);
+        List<Rule> before = store.list();
+        try (Connection c = source.getConnection(); Statement s = c.createStatement()) {
+            store.replace(List.of());
+            s.execute("INSERT INTO policy_rules (position, id, body) VALUES (0, 'java-go2-" + run + "', "
+                    + "'{\"id\":\"java-go2-" + run + "\",\"name\":\"go rule\",\"when\":{\"payloadMatch\":[{\"field\":\"a\",\"op\":\"gt\",\"value\":1}]},"
+                    + "\"then\":{\"attentionClass\":\"standard\",\"reason\":\"r\",\"channels\":[\"slack\"]}}'::jsonb)");
+            List<Rule> read = store.list();
+            assertEquals("gt", read.get(0).when().payloadMatch().get(0).op());
+            assertEquals(List.of("slack"), read.get(0).then().channels());
+            store.replace(read);
+            assertEquals(read, store.list());
+        } finally {
+            store.replace(before);
+        }
+    }
+
+    @Test
+    void aStoredRuleUsingAFieldTheJavaServiceDoesNotKnowIsRefusedNotIgnored() throws Exception {
         PostgresRuleStore store = new PostgresRuleStore(source);
         List<Rule> before = store.list();
         try (Connection c = source.getConnection(); Statement s = c.createStatement()) {
             store.replace(List.of());
             s.execute("INSERT INTO policy_rules (position, id, body) VALUES (0, 'java-go-" + run + "', "
-                    + "'{\"id\":\"java-go-" + run + "\",\"name\":\"go rule\",\"when\":{\"payloadMatch\":[{\"field\":\"a\",\"op\":\"eq\",\"value\":1}]},"
+                    + "'{\"id\":\"java-go-" + run + "\",\"name\":\"go rule\",\"when\":{\"someFutureCondition\":[1]},"
                     + "\"then\":{\"attentionClass\":\"standard\",\"reason\":\"r\"}}'::jsonb)");
             var e = assertThrows(com.agentpulse.notification.application.Ports.PortException.class, store::list);
-            assertTrue(e.getMessage().contains("does not support"), e.getMessage());
+            assertTrue(e.getMessage().contains("does not know"), e.getMessage());
         } finally {
             store.replace(before);
         }
