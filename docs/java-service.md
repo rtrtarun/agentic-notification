@@ -11,7 +11,7 @@ The Java implementation of the Attention Orchestration core (`java-server/notifi
 - **API:** `GET /health` (returns `version`), `GET /events` (cursor-compatible with Go), `GET` and `POST /api/rules`, `PUT` and `DELETE /api/rules/{id}`, `POST /api/rules/reorder`, `POST /api/rules/test`, `GET /api/policies`, `GET /api/deliveries`, `POST /api/deliveries/{id}/retry`.
 
 ## What it does not do yet (Go only)
-SMS, Novu, metrics, inbox, channels API, single sign-on, Attention Intelligence, feedback, learning, traces, MCP, CORS, streaming, and event retention (shown by `/api/policies`, not enforced). Rules with `payloadMatch` or per-rule `channels` are **refused** at the API and at start-up, never ignored.
+SMS, Novu, metrics, inbox, channels API, single sign-on, Attention Intelligence, feedback, learning, traces, MCP, CORS, streaming, and event retention (shown by `/api/policies`, not enforced). Rule `payloadMatch` (up to five predicates: eq, ne, gt, gte, lt, lte, exists over a dotted path, with `branch`, `author` and `severity` aliases) and per-rule `channels` work as in Go (milestone 37a, contract file 11). A critical rule cannot choose channels. A misspelt key in a rule is still refused, never ignored.
 
 ## Architecture
 ```text

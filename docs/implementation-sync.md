@@ -18,7 +18,7 @@ The single place that says **what is built, what was proven, what is open and wh
 | Dedup and threading (memory, or Redis shared across replicas and services) | Yes | Yes | |
 | Critical path (inline, never suppressed) | Yes | Yes (9 invariant tests) | |
 | `/notify`, rules and policies API, durable delivery queue | Yes | Yes | [contract/](contract/README.md) |
-| Rule `payloadMatch` and per-rule `channels` | Yes | **No** (refused, not ignored) | |
+| Rule `payloadMatch` and per-rule `channels` | Yes | Yes (M37a, contract 11) | |
 | SMS, Novu, metrics, inbox, channels API, retention | Yes | **No** | |
 | Accounts, sessions, roles | Yes | Yes (milestone 36) | [milestones/milestone-36.md](milestones/milestone-36.md) |
 | Sign-up with admin approval (`AUTH_SIGNUP=approval`, default off) | Yes | Yes | same |
@@ -41,7 +41,7 @@ Milestones 1 to 33 (Go, console, SDK) are recorded in [archived/milestones/](arc
 | Java: plain JDK, Jackson, HikariCP, no Spring; Go owns the schema; Java never migrates | Fast start; two migrators on one schema drift | M34 |
 | Java: PostgreSQL classes and the Redis adapter sit outside the 80 percent coverage gate | Owner decision: `mvn verify` must pass with no database; CI runs the integration tests | M35 |
 | Java: critical delivery fails if any channel fails | A partly delivered security alert must be retried, not recorded as sent | M35 |
-| Java: `payloadMatch` and `channels` rules are refused | Ignoring a condition would widen a rule | M35 |
+| Java: `payloadMatch` and `channels` rules were refused until M37a | Ignoring a condition would widen a rule; now ported with shared fixtures | M35, M37a |
 | Java SSRF check resolves and refuses private addresses just before connecting | The JDK HTTP client has no dial hook | M35 |
 | Two services on one database must be configured alike | Both run a dispatcher on `delivery_jobs`; found end to end | M35 |
 | Sign-up is off by default; when on, an account starts **pending** and an admin must approve it | One workspace: everyone signed in sees every event, so sign-up cannot grant access by itself | M36 |

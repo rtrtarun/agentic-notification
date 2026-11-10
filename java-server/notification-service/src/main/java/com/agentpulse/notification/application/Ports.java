@@ -74,6 +74,11 @@ public final class Ports {
         /** Reports whether a class has a configured channel to be delivered to. */
         boolean routed(String attentionClass);
 
+        /** As {@link #routed(String)}, but a rule's channel override, when it has one, replaces the class's channels. */
+        default boolean routed(String attentionClass, List<String> override) {
+            return routed(attentionClass);
+        }
+
         /** Queues the event for the channels its class is routed to. Never called for a critical event. */
         void enqueue(Event event);
 

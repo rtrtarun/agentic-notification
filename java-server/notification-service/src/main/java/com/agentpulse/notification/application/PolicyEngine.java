@@ -29,15 +29,17 @@ public final class PolicyEngine {
             }
             Rule.Outcome then = rule.then();
             boolean adaptive = then.adaptive() && !Attention.CRITICAL.equals(then.attentionClass());
-            return Optional.of(new PolicyDecision(then.attentionClass(), then.reason(), rule.name(), adaptive));
+            List<String> channels = Attention.CRITICAL.equals(then.attentionClass()) ? List.of() : then.channels();
+            return Optional.of(new PolicyDecision(then.attentionClass(), then.reason(), rule.name(), adaptive, channels));
         }
         return Optional.empty();
     }
 
-    /** True when the event satisfies every field the condition sets. */
+    /** True when the event satisfies every field and payload predicate the condition sets. */
     public static boolean matches(Rule.Condition c, Event event) {
         return Glob.matches(c.source(), event.getSource())
                 && Glob.matches(c.eventType(), event.getEventType())
-                && Glob.matches(c.repository(), event.getRepository());
+                && Glob.matches(c.repository(), event.getRepository())
+                && Predicates.matchAll(c.payloadMatch(), event);
     }
 }

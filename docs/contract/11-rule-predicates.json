@@ -1,0 +1,121 @@
+{
+  "name": "a rule can match on the contents of an event and choose its own channels; mistakes are refused when the rule is saved; a critical rule never chooses channels",
+  "steps": [
+    {
+      "name": "a rule with payload predicates and a channel override is stored; names are tidied the way Go tidies them",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "retry storm", "when": { "source": "contract-app", "eventType": "job.failed", "payloadMatch": [ { "field": " metadata.attempt ", "op": "GT", "value": 3 }, { "field": "severity", "value": "high" } ] }, "then": { "attentionClass": "standard", "reason": "many retries", "channels": [ " Slack " ] } } },
+      "expect": { "status": 201, "json": { "name": "retry storm", "when": { "source": "contract-app", "eventType": "job.failed", "payloadMatch": [ { "field": "metadata.attempt", "op": "gt", "value": 3 }, { "field": "severity", "value": "high" } ] }, "then": { "attentionClass": "standard", "reason": "many retries", "channels": [ "slack" ] } }, "present": ["id"] },
+      "save": { "storm": "id" }
+    },
+    {
+      "name": "a rule that exists only to test a second predicate form",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "has an owner", "when": { "source": "contract-app", "eventType": "ticket", "payloadMatch": [ { "field": "metadata.owner", "op": "exists" }, { "field": "pull_request.draft", "op": "eq", "value": false } ] }, "then": { "attentionClass": "background" } } },
+      "expect": { "status": 201, "json": { "when": { "payloadMatch": [ { "field": "metadata.owner", "op": "exists" }, { "field": "pull_request.draft", "op": "eq", "value": false } ] } } }
+    },
+    {
+      "name": "the dry run matches when every predicate holds, and reports the rule's channels",
+      "request": { "method": "POST", "path": "/api/rules/test", "headers": { "X-API-Key": "contract-key" }, "body": { "source": "contract-app", "eventType": "job.failed", "payload": { "metadata": { "attempt": 5 }, "severity": "high" } } },
+      "expect": { "status": 200, "json": { "matched": true, "matchedRule": "retry storm", "attentionClass": "standard", "channels": [ "slack" ] } }
+    },
+    {
+      "name": "gt is strict: 3 is not greater than 3, so the rule does not match",
+      "request": { "method": "POST", "path": "/api/rules/test", "headers": { "X-API-Key": "contract-key" }, "body": { "source": "contract-app", "eventType": "job.failed", "payload": { "metadata": { "attempt": 3 }, "severity": "high" } } },
+      "expect": { "status": 200, "json": { "matched": false, "attentionClass": "standard", "reason": "no matching rule, default standard" }, "absent": ["channels", "matchedRule"] }
+    },
+    {
+      "name": "numbers sent as strings count, and text comparison ignores case",
+      "request": { "method": "POST", "path": "/api/rules/test", "headers": { "X-API-Key": "contract-key" }, "body": { "source": "contract-app", "eventType": "job.failed", "payload": { "metadata": { "attempt": " 7 " }, "severity": "HIGH" } } },
+      "expect": { "status": 200, "json": { "matched": true, "matchedRule": "retry storm" } }
+    },
+    {
+      "name": "severity is also found under alert.severity",
+      "request": { "method": "POST", "path": "/api/rules/test", "headers": { "X-API-Key": "contract-key" }, "body": { "source": "contract-app", "eventType": "job.failed", "payload": { "metadata": { "attempt": 9 }, "alert": { "severity": "high" } } } },
+      "expect": { "status": 200, "json": { "matched": true, "matchedRule": "retry storm" } }
+    },
+    {
+      "name": "a field the event does not have never matches",
+      "request": { "method": "POST", "path": "/api/rules/test", "headers": { "X-API-Key": "contract-key" }, "body": { "source": "contract-app", "eventType": "job.failed", "payload": { "severity": "high" } } },
+      "expect": { "status": 200, "json": { "matched": false } }
+    },
+    {
+      "name": "a sample with no payload does not match a rule that needs one",
+      "request": { "method": "POST", "path": "/api/rules/test", "headers": { "X-API-Key": "contract-key" }, "body": { "source": "contract-app", "eventType": "job.failed" } },
+      "expect": { "status": 200, "json": { "matched": false } }
+    },
+    {
+      "name": "exists true needs the field, and a boolean value must be a boolean",
+      "request": { "method": "POST", "path": "/api/rules/test", "headers": { "X-API-Key": "contract-key" }, "body": { "source": "contract-app", "eventType": "ticket", "payload": { "metadata": { "owner": "sam" }, "pull_request": { "draft": false } } } },
+      "expect": { "status": 200, "json": { "matched": true, "matchedRule": "has an owner", "attentionClass": "background" }, "absent": ["channels"] }
+    },
+    {
+      "name": "a boolean predicate does not match the text false",
+      "request": { "method": "POST", "path": "/api/rules/test", "headers": { "X-API-Key": "contract-key" }, "body": { "source": "contract-app", "eventType": "ticket", "payload": { "metadata": { "owner": "sam" }, "pull_request": { "draft": "false" } } } },
+      "expect": { "status": 200, "json": { "matched": false } }
+    },
+    {
+      "name": "the rule can be edited and the predicates change with it",
+      "request": { "method": "PUT", "path": "/api/rules/{{storm}}", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "retry storm", "when": { "source": "contract-app", "eventType": "job.failed", "payloadMatch": [ { "field": "metadata.attempt", "op": "gte", "value": 3 } ] }, "then": { "attentionClass": "standard", "channels": [ "email", "slack" ] } } },
+      "expect": { "status": 200, "json": { "when": { "payloadMatch": [ { "field": "metadata.attempt", "op": "gte", "value": 3 } ] }, "then": { "channels": [ "email", "slack" ] } } }
+    },
+    {
+      "name": "now 3 matches, with both channels",
+      "request": { "method": "POST", "path": "/api/rules/test", "headers": { "X-API-Key": "contract-key" }, "body": { "source": "contract-app", "eventType": "job.failed", "payload": { "metadata": { "attempt": 3 } } } },
+      "expect": { "status": 200, "json": { "matched": true, "channels": [ "email", "slack" ] } }
+    },
+    {
+      "name": "an unknown operator is refused when the rule is saved",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "bad op", "when": { "source": "x", "payloadMatch": [ { "field": "a", "op": "between", "value": 1 } ] }, "then": { "attentionClass": "standard" } } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: payload predicate 1: unknown operator \"between\" (use eq, ne, gt, gte, lt, lte or exists)" } }
+    },
+    {
+      "name": "a field must be a dotted name",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "bad field", "when": { "source": "x", "payloadMatch": [ { "field": "a b", "value": 1 } ] }, "then": { "attentionClass": "standard" } } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: payload predicate 1: field must be a dotted name such as metadata.attempt" } }
+    },
+    {
+      "name": "gt needs a number",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "bad gt", "when": { "source": "x", "payloadMatch": [ { "field": "a", "op": "gt", "value": "many" } ] }, "then": { "attentionClass": "standard" } } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: payload predicate 1: gt needs a number" } }
+    },
+    {
+      "name": "eq needs a scalar value",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "bad eq", "when": { "source": "x", "payloadMatch": [ { "field": "a" } ] }, "then": { "attentionClass": "standard" } } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: payload predicate 1: eq needs a string, number or true/false value" } }
+    },
+    {
+      "name": "exists takes true or false only",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "bad exists", "when": { "source": "x", "payloadMatch": [ { "field": "a", "op": "exists", "value": "yes" } ] }, "then": { "attentionClass": "standard" } } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: payload predicate 1: exists takes true or false" } }
+    },
+    {
+      "name": "at most five predicates",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "too many", "when": { "source": "x", "payloadMatch": [ { "field": "a", "value": 1 }, { "field": "b", "value": 1 }, { "field": "c", "value": 1 }, { "field": "d", "value": 1 }, { "field": "e", "value": 1 }, { "field": "f", "value": 1 } ] }, "then": { "attentionClass": "standard" } } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: a rule can have at most 5 payload predicates" } }
+    },
+    {
+      "name": "an unknown channel is refused",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "bad channel", "when": { "source": "x" }, "then": { "attentionClass": "standard", "channels": [ "pager" ] } } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: unknown channel \"pager\" (use email, slack, teams or sms)" } }
+    },
+    {
+      "name": "a channel cannot be listed twice",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "twice", "when": { "source": "x" }, "then": { "attentionClass": "standard", "channels": [ "slack", "SLACK" ] } } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: channel \"slack\" is listed twice" } }
+    },
+    {
+      "name": "a critical rule cannot choose channels: critical events always go to every configured channel",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": { "name": "narrow critical", "when": { "source": "x" }, "then": { "attentionClass": "critical", "channels": [ "slack" ] } } },
+      "expect": { "status": 400, "json": { "error": "invalid rule: a critical rule cannot choose channels; critical events always go to every configured channel" } }
+    },
+    {
+      "name": "a critical outcome never reports channels",
+      "request": { "method": "POST", "path": "/api/rules/test", "headers": { "X-API-Key": "contract-key" }, "body": { "source": "github", "eventType": "security_advisory" } },
+      "expect": { "status": 200, "json": { "matched": true, "attentionClass": "critical", "aiBypassed": true }, "absent": ["channels"] }
+    },
+    {
+      "name": "none of the refused rules was stored",
+      "request": { "method": "GET", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "rules": [ { "name": "github-security-advisory" }, { "name": "github-dependabot-alert" }, { "name": "github-star" }, { "name": "default-github" }, { "name": "retry storm" }, { "name": "has an owner" } ] } }
+    }
+  ]
+}

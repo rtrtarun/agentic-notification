@@ -100,6 +100,31 @@ class DeliveryTest {
     }
 
     @Test
+    void aRulesChannelOverrideReplacesTheClassRouteAndOnlyConfiguredChannelsCount() {
+        QueueOutbox outbox = outbox(Map.of("standard", List.of("slack")));
+        Event e = standard("o1");
+        e.setRouteChannels(List.of("email", "teams"));
+        assertTrue(outbox.routed("standard", e.getRouteChannels()), "email is configured");
+        assertFalse(outbox.routed("standard", List.of("teams")), "teams has no target, and the class route is not used instead");
+        assertTrue(outbox.routed("standard", List.of()), "no override means the class route");
+
+        outbox.enqueue(e);
+        List<Delivery.Job> jobs = store.list(10);
+        assertEquals(1, jobs.size());
+        assertEquals("email", jobs.get(0).channel());
+    }
+
+    @Test
+    void aCriticalEventIsNeverQueuedEvenIfItsRouteChannelsAreSet() {
+        QueueOutbox outbox = outbox(Map.of("standard", List.of("slack")));
+        Event critical = standard("o2");
+        critical.setAttentionClass("critical");
+        critical.setRouteChannels(List.of("slack"));
+        outbox.enqueue(critical);
+        assertTrue(store.list(10).isEmpty());
+    }
+
+    @Test
     void aRoutedClassWithNoConfiguredChannelIsNotRouted() {
         assertFalse(new QueueOutbox(store, Targets.none(), Map.of("standard", List.of("slack")), clock).routed("standard"));
     }

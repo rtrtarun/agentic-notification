@@ -8,6 +8,7 @@ import com.agentpulse.notification.application.Fakes.RecordingProvider;
 import com.agentpulse.notification.application.Fakes.RecordingRepository;
 import com.agentpulse.notification.application.Ports.Adjustment;
 import com.agentpulse.notification.domain.Event;
+import com.agentpulse.notification.domain.Rule;
 import com.agentpulse.notification.domain.Status;
 import org.junit.jupiter.api.Test;
 
@@ -102,6 +103,24 @@ class SacredInvariantTest {
         provider.fail = true;
         assertThrows(Pipeline.PipelineException.class, () -> pipeline.handle(Fakes.event("c2", "security_advisory")));
         assertTrue(repository.saved.stream().noneMatch(e -> e.getId().equals("c2")));
+    }
+
+    @Test
+    void aCriticalRuleCanNeverNarrowWhereACriticalEventGoes() {
+        // Even a stored rule that wrongly carries a channel override cannot narrow a critical event.
+        Rule bad = new Rule("1", "bad", "", new Rule.Condition("github", "security_advisory", ""),
+                new Rule.Outcome("critical", "security", false, List.of("slack")), false, true);
+        preferences.answer = new Adjustment("background", Status.DELAYED, "quiet hours");
+        budget.allow = false;
+        Pipeline pipeline = new Pipeline(new PolicyEngine(List.of(bad)), provider, repository)
+                .withClassifier(classifier).withPreferences(preferences).withBudget(budget).withOutbox(outbox);
+
+        Event result = pipeline.handle(Fakes.event("c9", "security_advisory"));
+
+        assertTrue(result.getRouteChannels().isEmpty(), "no override survives on a critical event");
+        assertEquals(0, outbox.enqueued);
+        assertEquals(1, provider.sent.size(), "delivered inline to every configured channel");
+        assertEquals(Status.SENT, result.getDecisionState().getStatus());
     }
 
     // ---- Milestone 35: the queue, Redis dedup and /notify ----------------------------------------------------------

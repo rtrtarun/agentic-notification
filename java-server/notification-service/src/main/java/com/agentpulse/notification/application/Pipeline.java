@@ -169,6 +169,7 @@ public final class Pipeline {
             PolicyDecision d = decision.get();
             event.setAttentionClass(d.attentionClass());
             event.setDecisionState(new DecisionState(d.reason(), d.matchedRule()));
+            event.setRouteChannels(d.channels());
             return d.adaptive();
         }
         // No rule decided, so nothing explicit can be second-guessed: the event is adaptive.
@@ -254,7 +255,7 @@ public final class Pipeline {
         if (budget == null || !Attention.STANDARD.equals(event.getAttentionClass()) || !state.getStatus().isEmpty()) {
             return;
         }
-        if (outbox == null || !outbox.routed(Attention.STANDARD)) {
+        if (outbox == null || !outbox.routed(Attention.STANDARD, event.getRouteChannels())) {
             return;
         }
         BudgetResult result;
@@ -276,7 +277,7 @@ public final class Pipeline {
     /** "queued", except background events with nowhere to go: those are held for the digest. */
     private String defaultStatus(Event event) {
         boolean background = Attention.BACKGROUND.equals(event.getAttentionClass());
-        if (background && (outbox == null || !outbox.routed(Attention.BACKGROUND))) {
+        if (background && (outbox == null || !outbox.routed(Attention.BACKGROUND, event.getRouteChannels()))) {
             return Status.DIGEST;
         }
         return Status.QUEUED;
