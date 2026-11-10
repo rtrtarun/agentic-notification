@@ -106,6 +106,30 @@ class SacredInvariantTest {
     }
 
     @Test
+    void anOverrideNeverTouchesACriticalEventAndFeedbackCannotMuteOne() {
+        var overrides = new Overrides.Service(new com.agentpulse.notification.infrastructure.FeedbackStores.MemoryOverrides(), Clock.systemUTC());
+        overrides.upsert(new Overrides.Override("", "github", "", "", "never", "sam", "", null));
+        overrides.upsert(new Overrides.Override("", "github", "security_advisory", "", "never", "sam", "", null));
+        preferences.answer = new Adjustment("background", Status.DELAYED, "quiet hours");
+        budget.allow = false;
+        Pipeline pipeline = armed().withOverrides(overrides);
+
+        Event result = pipeline.handle(Fakes.event("c8", "security_advisory"));
+
+        assertEquals("critical", result.getAttentionClass(), "a never override cannot demote a critical event");
+        assertEquals("security vulnerability detected", result.getDecisionState().getReason(), "decided by its rule alone");
+        assertEquals(Status.SENT, result.getDecisionState().getStatus());
+        assertEquals(1, provider.sent.size(), "delivered inline");
+        assertEquals(0, outbox.enqueued);
+
+        // And the feedback path refuses to create such an override in the first place.
+        var feedback = new Feedback.Service(new com.agentpulse.notification.infrastructure.FeedbackStores.MemoryFeedback(),
+                id -> java.util.Optional.of(result), overrides, Clock.systemUTC());
+        assertThrows(Feedback.InvalidException.class,
+                () -> feedback.record("sam", new Feedback.Input(result.getId(), "never", "", ""), true));
+    }
+
+    @Test
     void aCriticalRuleCanNeverNarrowWhereACriticalEventGoes() {
         // Even a stored rule that wrongly carries a channel override cannot narrow a critical event.
         Rule bad = new Rule("1", "bad", "", new Rule.Condition("github", "security_advisory", ""),

@@ -397,7 +397,7 @@ Everything lives in [`docs/`](docs/), grouped by what you want to do. **[docs/RE
 
 **Known issues**
 
-- The Java service covers the core, `/notify`, the rules API, the delivery queue, Redis dedup and accounts (milestones 34 to 36), not SMS, Novu, single sign-on, AI, feedback, learning, traces, MCP, or event retention (rule `payloadMatch` and `channels` work in Java since milestone 37a). Two services sharing one database must be configured alike because both dispatch queued jobs. See [java-service.md](docs/java-service.md).
+- The Java service covers the core, `/notify`, the rules API, the delivery queue, Redis dedup and accounts (milestones 34 to 36), not SMS, Novu, single sign-on, AI, learning, traces, MCP, or event retention (rule `payloadMatch` and `channels` work in Java since milestone 37a). Two services sharing one database must be configured alike because both dispatch queued jobs. See [java-service.md](docs/java-service.md).
 - **Sign-up and one workspace:** an approved member sees every event (no tenants); that is why sign-up needs an admin's approval. There is no email verification or password reset yet.
 - **Sessions across sites:** the console on `github.io` and the service elsewhere need `AUTH_COOKIE_SAMESITE=none` (or one shared site); browsers that block third-party cookies still refuse it. Behind a proxy every person shares one address for the per-address sign-in and sign-up limits.
 - **No ingestion rate limiting**, and a critical event can be sent twice if the same delivery arrives twice at once; the full audit list is in [implementation-sync.md](docs/implementation-sync.md).

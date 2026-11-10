@@ -1,8 +1,10 @@
 package com.agentpulse.notification.interfaces;
 
 import com.agentpulse.notification.application.Accounts;
+import com.agentpulse.notification.application.Feedback;
 import com.agentpulse.notification.application.GitHubNormalizer;
 import com.agentpulse.notification.application.Notify;
+import com.agentpulse.notification.application.Overrides;
 import com.agentpulse.notification.application.Pipeline;
 import com.agentpulse.notification.application.Ports.DeliveryStore;
 import com.agentpulse.notification.application.Ports.EventRepository;
@@ -48,10 +50,26 @@ public final class HttpApi {
     private final RulesApi rules;
     private final DeliveriesApi deliveries;
     private final AuthApi auth;
+    private final FeedbackApi feedbackApi;
 
     public HttpApi(Config config, Pipeline pipeline, EventRepository events, Notify.Service notifyService,
                    RulesService rulesService, DeliveryStore deliveryStore, Clock clock) {
         this(config, pipeline, events, notifyService, rulesService, deliveryStore, clock, null);
+    }
+
+    /** With accounts, overrides and feedback as well. Either of the last two may be null. */
+    public HttpApi(Config config, Pipeline pipeline, EventRepository events, Notify.Service notifyService,
+                   RulesService rulesService, DeliveryStore deliveryStore, Clock clock, Accounts.Service accounts,
+                   Overrides.Service overrides, Feedback.Service feedback) {
+        this.config = config;
+        this.pipeline = pipeline;
+        this.events = events;
+        this.api = new ApiSupport(config).withAccounts(accounts);
+        this.auth = accounts == null ? null : new AuthApi(api, accounts);
+        this.notify = new NotifyApi(api, notifyService);
+        this.rules = new RulesApi(api, rulesService);
+        this.deliveries = new DeliveriesApi(api, deliveryStore, clock);
+        this.feedbackApi = new FeedbackApi(api, feedback, overrides, accounts);
     }
 
     /** With an accounts service, people can sign up, sign in and use the API with a session as well as the API key. */
@@ -65,6 +83,7 @@ public final class HttpApi {
         this.notify = new NotifyApi(api, notifyService);
         this.rules = new RulesApi(api, rulesService);
         this.deliveries = new DeliveriesApi(api, deliveryStore, clock);
+        this.feedbackApi = new FeedbackApi(api, null, null, accounts);
     }
 
     /** Starts serving on the given port (0 picks a free one) and returns the running server. */
@@ -82,6 +101,8 @@ public final class HttpApi {
             rules.rules(x);
         } else if (under(path, DeliveriesApi.PREFIX)) {
             deliveries.handle(x);
+        } else if (under(path, FeedbackApi.OVERRIDES_PREFIX)) {
+            feedbackApi.overrides(x);
         } else if (auth != null && (under(path, AuthApi.AUTH_PREFIX) || under(path, AuthApi.USERS_PREFIX))) {
             auth.handle(x);
         } else {
@@ -90,6 +111,7 @@ public final class HttpApi {
                 case "/webhooks/github" -> webhook(x);
                 case "/events" -> listEvents(x);
                 case "/notify" -> notify.handle(x);
+                case FeedbackApi.FEEDBACK_PATH -> feedbackApi.feedback(x);
                 case "/api/policies" -> rules.policies(x, config);
                 default -> api.error(x, 404, "not found");
             }

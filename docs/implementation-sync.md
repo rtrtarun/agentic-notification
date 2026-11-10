@@ -19,6 +19,7 @@ The single place that says **what is built, what was proven, what is open and wh
 | Critical path (inline, never suppressed) | Yes | Yes (9 invariant tests) | |
 | `/notify`, rules and policies API, durable delivery queue | Yes | Yes | [contract/](contract/README.md) |
 | Rule `payloadMatch` and per-rule `channels` | Yes | Yes (M37a, contract 11) | |
+| Feedback (`/feedback`) and always/never overrides (`/api/overrides`) | Yes | Yes (M37b, contract 12) | Overrides cache is per process in both |
 | SMS, Novu, metrics, inbox, channels API, retention | Yes | **No** | |
 | Accounts, sessions, roles | Yes | Yes (milestone 36) | [milestones/milestone-36.md](milestones/milestone-36.md) |
 | Sign-up with admin approval (`AUTH_SIGNUP=approval`, default off) | Yes | Yes | same |

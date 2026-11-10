@@ -52,6 +52,7 @@ public final class Pipeline {
     private Classifier classifier;
     private Preferences preferences;
     private Budget budget;
+    private Overrides.Service overrides;
     private Outbox outbox;
     private Targets criticalTargets = Targets.none();
 
@@ -76,6 +77,12 @@ public final class Pipeline {
     /** Applies quiet hours and mutes to non-critical events. */
     public Pipeline withPreferences(Preferences preferences) {
         this.preferences = preferences;
+        return this;
+    }
+
+    /** Applies people's always and never notify choices to non-critical events; they outrank judgement, quiet hours and the budget. */
+    public Pipeline withOverrides(Overrides.Service overrides) {
+        this.overrides = overrides;
         return this;
     }
 
@@ -146,8 +153,8 @@ public final class Pipeline {
             return;
         }
         applyAttention(event, adaptive);
-        applyPreferences(event);
-        applyBudget(event);
+        boolean overridden = applyPreferences(event);
+        applyBudget(event, overridden);
         if (state.getStatus().isEmpty()) {
             state.setStatus(defaultStatus(event));
         }
@@ -219,6 +226,10 @@ public final class Pipeline {
         if (classifier == null || !adaptive || !Attention.STANDARD.equals(event.getAttentionClass())) {
             return;
         }
+        // A person's explicit choice outranks judgement: leave events an override covers alone.
+        if (overrides != null && overrides.decide(event).isPresent()) {
+            return;
+        }
         Classification c;
         try {
             c = classifier.classify(event);
@@ -235,24 +246,39 @@ public final class Pipeline {
         }
     }
 
-    private void applyPreferences(Event event) {
+    /** Returns true when a person's override decided the event, which also exempts it from the budget. */
+    private boolean applyPreferences(Event event) {
+        // A person's explicit choice outranks quiet hours and mutes: "never" sends the event to the digest, and
+        // "always" keeps it queued whatever the preferences say.
+        if (overrides != null) {
+            Optional<Overrides.Decision> decision = overrides.decide(event);
+            if (decision.isPresent()) {
+                event.getDecisionState().setReason(decision.get().reason());
+                if (Overrides.NEVER.equals(decision.get().mode())) {
+                    event.setAttentionClass(Attention.BACKGROUND);
+                    event.getDecisionState().setStatus(Status.DIGEST);
+                }
+                return true;
+            }
+        }
         if (preferences == null) {
-            return;
+            return false;
         }
         Optional<Adjustment> adjustment = preferences.decide(event);
         if (adjustment.isEmpty()) {
-            return;
+            return false;
         }
         Adjustment a = adjustment.get();
         event.setAttentionClass(a.attentionClass());
         event.getDecisionState().setStatus(a.status());
         event.getDecisionState().setReason(a.reason());
+        return false;
     }
 
     /** Holds a standard event that would interrupt someone once the budget is used up. */
-    private void applyBudget(Event event) {
+    private void applyBudget(Event event, boolean overridden) {
         DecisionState state = event.getDecisionState();
-        if (budget == null || !Attention.STANDARD.equals(event.getAttentionClass()) || !state.getStatus().isEmpty()) {
+        if (budget == null || overridden || !Attention.STANDARD.equals(event.getAttentionClass()) || !state.getStatus().isEmpty()) {
             return;
         }
         if (outbox == null || !outbox.routed(Attention.STANDARD, event.getRouteChannels())) {

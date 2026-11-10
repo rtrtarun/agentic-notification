@@ -7,6 +7,9 @@ import com.agentpulse.notification.application.PolicyEngine;
 import com.agentpulse.notification.application.QueueOutbox;
 import com.agentpulse.notification.application.RulesService;
 import com.agentpulse.notification.application.Targets;
+import com.agentpulse.notification.application.Feedback;
+import com.agentpulse.notification.application.Overrides;
+import com.agentpulse.notification.infrastructure.FeedbackStores;
 import com.agentpulse.notification.infrastructure.MemoryAccountStore;
 import com.agentpulse.notification.infrastructure.MemoryStores;
 import com.agentpulse.notification.application.Pipeline;
@@ -105,7 +108,11 @@ class ContractTest {
         MemoryStores.Deliveries deliveries = new MemoryStores.Deliveries();
         // No channel is configured, so nothing is routed to the queue; critical deliveries are still logged there.
         QueueOutbox outbox = new QueueOutbox(deliveries, Targets.none(), Map.of(), Clock.systemUTC());
+        Overrides.Service overrides = new Overrides.Service(new FeedbackStores.MemoryOverrides(), Clock.systemUTC());
+        Feedback.Service feedback = new Feedback.Service(new FeedbackStores.MemoryFeedback(),
+                id -> repository.listRecent(1000).stream().filter(e -> e.getId().equals(id)).findFirst(), overrides, Clock.systemUTC());
         Pipeline pipeline = new Pipeline(engine, logOnly, repository)
+                .withOverrides(overrides)
                 .withDeduper(new MemoryDeduper(Duration.ofMinutes(10), Clock.systemUTC()))
                 .withOutbox(outbox);
         Config config = Config.load(Map.of("API_KEY", KEY, "GITHUB_WEBHOOK_SECRET", SECRET));
@@ -113,7 +120,7 @@ class ContractTest {
         // The same accounts the Go contract server has: one admin, and sign-up open with admin approval.
         Accounts.Service accounts = new Accounts.Service(new MemoryAccountStore(), Duration.ofHours(1), Clock.systemUTC()).withSignup(true);
         accounts.bootstrap("admin@contract.test", "a long contract admin password");
-        return new HttpApi(config, pipeline, repository, notify, rules, deliveries, Clock.systemUTC(), accounts)
+        return new HttpApi(config, pipeline, repository, notify, rules, deliveries, Clock.systemUTC(), accounts, overrides, feedback)
                 .start(0);
     }
 

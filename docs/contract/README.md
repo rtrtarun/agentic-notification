@@ -2,7 +2,7 @@
 
 The files in this folder are the shared contract for the Go service and the Java service. Each service has a test that reads these files, starts itself, replays the requests and checks the answers. If a service disagrees with a file, that service's build fails, so "the two services behave the same" is checked by tests rather than by reading code.
 
-The contract covers milestones 34 to 37a: `/health`, `/webhooks/github`, `/events`, `/notify`, `/api/rules`, `/api/policies`, `/api/deliveries`, and accounts (`/api/auth/status`, `/api/auth/signup`, `/api/auth/login`, `/api/users`). Rule `payloadMatch` and `channels` are in `11-rule-predicates.json`. It grows with each parity milestone.
+The contract covers milestones 34 to 37b: `/health`, `/webhooks/github`, `/events`, `/notify`, `/api/rules`, `/api/policies`, `/api/deliveries`, and accounts (`/api/auth/status`, `/api/auth/signup`, `/api/auth/login`, `/api/users`). Rule `payloadMatch` and `channels` are in `11-rule-predicates.json`; feedback and overrides in `12-feedback.json`. It grows with each parity milestone.
 
 ## Environment both services run with
 
