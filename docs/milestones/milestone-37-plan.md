@@ -1,6 +1,6 @@
 # Milestone 37 plan: Java parity part 3 (rule fields, feedback, attention)
 
-Status: **approved and built** (all three slices; digests are stored, not delivered). Record: [milestone-37.md](milestone-37.md). Branch: `feature/m37-attention-feedback`.
+Status: **approved and built** (all three slices; digests are stored, not delivered). Record: [milestone-37.md](milestone-37.md). Merged as PR #14 (2026-11-10).
 
 Follows [milestone 36](milestone-36.md) (Java accounts, sessions, sign-up). Goal: the Java service gains the next slice of the Go service's behaviour, proved by shared contract files.
 

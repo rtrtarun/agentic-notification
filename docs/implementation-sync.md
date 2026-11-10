@@ -46,7 +46,7 @@ Milestones 1 to 33 (Go, console, SDK) are recorded in [archived/milestones/](arc
 | Java: critical delivery fails if any channel fails | A partly delivered security alert must be retried, not recorded as sent | M35 |
 | Java: `payloadMatch` and `channels` rules were refused until M37a | Ignoring a condition would widen a rule; now ported with shared fixtures | M35, M37a |
 | Java SSRF check resolves and refuses private addresses just before connecting | The JDK HTTP client has no dial hook | M35 |
-| Two services on one database must be configured alike | Both run a dispatcher on `delivery_jobs`; found end to end | M35 |
+| Two services on one database must be configured alike, or one turns its dispatcher off (`DISPATCHER_ENABLED=false`) | Both run a dispatcher on `delivery_jobs`; found end to end | M35; setting added in PR #13 |
 | Sign-up is off by default; when on, an account starts **pending** and an admin must approve it | One workspace: everyone signed in sees every event, so sign-up cannot grant access by itself | M36 |
 | The API key is for services; the console hides it under "Advanced", and signing out forgets it | People use accounts; a key left in the tab is access | M36 |
 | Java hashes passwords as Go does (argon2id, same format, BouncyCastle) | An account made by one service signs in on the other | M36 |
@@ -72,7 +72,7 @@ Milestones 1 to 33 (Go, console, SDK) are recorded in [archived/milestones/](arc
 Coverage is below 80 percent locally in `db`, `event`, `feedback`, `inbox`, `mail`, `delivery`, `rules` and `auth` (mostly PostgreSQL code that only the integration tests reach). It is not scheduled as its own milestone; new code lands at 80 percent or more.
 
 ## 5. Open questions for the owner
-1. **Two dispatchers on one database.** Keep "configure alike", or add a setting to turn a service's dispatcher off?
+1. **Two dispatchers on one database.** Answered: a setting, `DISPATCHER_ENABLED` (default true), turns a service's dispatcher off (PR #13). Run one dispatcher per database, or configure both alike.
 2. **Default budget.** `ATTENTION_BUDGET_PER_HOUR=10` silently quiets busy workspaces after upgrade. Keep it, or default to 0 and announce it?
 3. **Java retention.** Port event purging (Go has it), or leave it Go-only?
 4. **Milestone 37 scope** (Attention Intelligence, feedback, learning in Java) needs its AGENTS.md plan and approval. See [roadmap.md](roadmap.md).
@@ -96,7 +96,7 @@ From the reverse-engineering report in [feature-flows.md](feature-flows.md) sect
 | F2 | High | Check-then-act on duplicate deliveries: two concurrent deliveries of one critical event can both send (`pkg/pipeline/pipeline.go`, `Exists` then `Save`) | Open question 7; roadmap "Hardening backlog" |
 | F3 | Medium | Critical delivery runs inside the webhook request; latency equals the slowest channel | Open question 8 |
 | F4 | Medium | Workers poll PostgreSQL, so deferred and retried work waits up to one interval; NATS unused | roadmap "Queue and scale" |
-| F5 | Medium | Two dispatchers on one database can dead-letter a job for a missing channel | Open question 1; section 3 |
+| F5 | Medium | Two dispatchers on one database can dead-letter a job for a missing channel | Mitigated by `DISPATCHER_ENABLED` (PR #13); open question 1 answered |
 | F6 | Medium | Java SSRF check is pre-flight, not dial-time, so a changing DNS answer is not covered | Section 3 (decision in force); roadmap "Hardening backlog" |
 | F7 | Medium | Dedup, budget and classifier fail open by design: no alert is hidden, duplicates or extra interruptions are possible | Accepted behaviour; documented in [architecture.md](architecture.md) |
 | F8 | Medium | Java has no accounts; the API key is its only gate | Open question 9; milestone 36 in roadmap |
