@@ -4,6 +4,7 @@ import com.agentpulse.notification.application.Accounts;
 import com.agentpulse.notification.application.Digests;
 import com.agentpulse.notification.application.Feedback;
 import com.agentpulse.notification.application.Heuristic;
+import com.agentpulse.notification.application.Learning;
 import com.agentpulse.notification.application.GitHubNormalizer;
 import com.agentpulse.notification.application.Notify;
 import com.agentpulse.notification.application.Overrides;
@@ -54,6 +55,7 @@ public final class HttpApi {
     private final AuthApi auth;
     private final FeedbackApi feedbackApi;
     private volatile AttentionApi attention;
+    private volatile LearningApi learning;
 
     public HttpApi(Config config, Pipeline pipeline, EventRepository events, Notify.Service notifyService,
                    RulesService rulesService, DeliveryStore deliveryStore, Clock clock) {
@@ -99,6 +101,12 @@ public final class HttpApi {
         return this;
     }
 
+    /** Turns on the learning suggestions API. */
+    public HttpApi withLearning(Learning.Service service, Accounts.Service accounts) {
+        this.learning = new LearningApi(api, service, accounts);
+        return this;
+    }
+
     /** Starts serving on the given port (0 picks a free one) and returns the running server. */
     public HttpServer start(int port) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -116,6 +124,8 @@ public final class HttpApi {
             deliveries.handle(x);
         } else if (under(path, FeedbackApi.OVERRIDES_PREFIX)) {
             feedbackApi.overrides(x);
+        } else if (learning != null && under(path, LearningApi.PREFIX)) {
+            learning.handle(x);
         } else if (attention != null && under(path, AttentionApi.DIGESTS_PREFIX)) {
             attention.digests(x);
         } else if (attention != null && under(path, AttentionApi.EXPLAIN_PREFIX)) {

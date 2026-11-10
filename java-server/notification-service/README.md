@@ -11,7 +11,7 @@ Also: `POST /notify` (agents ask the service to notify people, with the Go servi
 
 Accounts (milestone 36): `POST /api/auth/signup` (off unless `AUTH_SIGNUP=approval`; the account is pending until an admin approves it), `/api/auth/login`, `logout`, `me`, `status`, and `/api/users` (admin). Sessions use an `HttpOnly` cookie and a CSRF token, and the API key still works; settings `AUTH_BOOTSTRAP_EMAIL`, `AUTH_BOOTSTRAP_PASSWORD`, `AUTH_SESSION_TTL`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`, `AUTH_SIGNUP`; `GET /health` returns `version` (`APP_VERSION`). No CORS and no single sign-on.
 
-Not here yet (Go only): metrics, inbox, channels API, SMS, Novu, single sign-on, language-model Attention Intelligence, learning, traces, MCP, event retention. Rule `payloadMatch` and `channels` work (milestone 37a).
+Not here yet (Go only): metrics, inbox, channels API, SMS, Novu, single sign-on, language-model Attention Intelligence, learning score tuning, traces, MCP, event retention. Rule `payloadMatch` and `channels` work (milestone 37a).
 
 **Two services on one database must be configured alike**: both run a dispatcher against `delivery_jobs`, and a queued job goes to whichever claims it first.
 
