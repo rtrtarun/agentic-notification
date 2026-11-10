@@ -2,7 +2,7 @@
 
 What is **not** built yet, in the order it is likely to happen. Every item needs its AGENTS.md plan (goals, decisions, database, APIs, folders, risks, tests, acceptance) and owner approval before code, and work stops after each milestone. What exists is in [implementation-sync.md](implementation-sync.md).
 
-## Next: milestone 37, Java parity part 3 (approved in outline, no plan yet)
+## Done on branch `feature/m37-attention-feedback`, awaiting review: milestone 37, Java parity part 3
 Milestone 36 gave the Java service accounts, sessions and sign-up with admin approval. Still to come: Attention Intelligence (heuristic classifier, digests, explanations, budgets) and feedback in the Java service, with new shared contract files. Rule `payloadMatch` and per-rule `channels` (37a) and feedback with overrides (37b) are done (on branch `feature/m37-attention-feedback`); the plan is in [milestones/milestone-37-plan.md](milestones/milestone-37-plan.md). After that: learning, traces and MCP, SMS and Novu, metrics, inbox and retention, in the owner's order.
 
 ## Proposed, not started: SDKs for other languages

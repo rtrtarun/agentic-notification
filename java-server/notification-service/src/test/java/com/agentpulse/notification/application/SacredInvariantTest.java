@@ -130,6 +130,31 @@ class SacredInvariantTest {
     }
 
     @Test
+    void aCriticalEventIsNeverClassifiedByTheRealHeuristicAndNeverAppearsInADigest() {
+        Heuristic heuristic = new Heuristic();
+        com.agentpulse.notification.infrastructure.InMemoryEventRepository real = new com.agentpulse.notification.infrastructure.InMemoryEventRepository(Clock.systemUTC());
+        Pipeline pipeline = new Pipeline(Fakes.engine(), provider, real)
+                .withClassifier(GuardedClassifier.of(heuristic)).withBudget(budget).withOutbox(outbox);
+        budget.allow = false;
+
+        Event critical = pipeline.handle(Fakes.event("c7", "security_advisory",
+                new java.util.LinkedHashMap<>(java.util.Map.of("sender", java.util.Map.of("type", "Bot")))));
+
+        assertEquals("critical", critical.getAttentionClass(), "a bot-sent, otherwise noisy advisory is still critical");
+        assertEquals("", critical.getDecisionState().getModelVersion(), "the heuristic never judged it");
+        assertEquals(0, budget.calls, "and it was never counted against the budget");
+        assertEquals(Status.SENT, critical.getDecisionState().getStatus());
+        assertThrows(IllegalArgumentException.class, () -> heuristic.classify(critical));
+
+        // Even a stored critical event whose status says "digest" cannot be put in a digest.
+        critical.getDecisionState().setStatus(Status.DIGEST);
+        Digests.Generator generator = new Digests.Generator(() -> java.util.List.of(critical),
+                new com.agentpulse.notification.infrastructure.DigestStores.Memory(), heuristic, heuristic, Clock.systemUTC());
+        assertEquals(null, generator.generate("test"));
+        assertTrue(heuristic.summarize(java.util.List.of(critical)).groups().isEmpty());
+    }
+
+    @Test
     void aCriticalRuleCanNeverNarrowWhereACriticalEventGoes() {
         // Even a stored rule that wrongly carries a channel override cannot narrow a critical event.
         Rule bad = new Rule("1", "bad", "", new Rule.Condition("github", "security_advisory", ""),

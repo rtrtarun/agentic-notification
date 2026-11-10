@@ -1,7 +1,9 @@
 package com.agentpulse.notification.interfaces;
 
 import com.agentpulse.notification.application.Accounts;
+import com.agentpulse.notification.application.Digests;
 import com.agentpulse.notification.application.Feedback;
+import com.agentpulse.notification.application.Heuristic;
 import com.agentpulse.notification.application.GitHubNormalizer;
 import com.agentpulse.notification.application.Notify;
 import com.agentpulse.notification.application.Overrides;
@@ -51,6 +53,7 @@ public final class HttpApi {
     private final DeliveriesApi deliveries;
     private final AuthApi auth;
     private final FeedbackApi feedbackApi;
+    private volatile AttentionApi attention;
 
     public HttpApi(Config config, Pipeline pipeline, EventRepository events, Notify.Service notifyService,
                    RulesService rulesService, DeliveryStore deliveryStore, Clock clock) {
@@ -86,6 +89,16 @@ public final class HttpApi {
         this.feedbackApi = new FeedbackApi(api, null, null, accounts);
     }
 
+    /**
+     * Turns on digests, explanations and the attention status. {@code lookup} finds an event by id; {@code every}
+     * is the schedule shown with the digests (zero means only on request).
+     */
+    public HttpApi withAttention(Digests.Generator generator, Digests.Store store, java.util.function.Function<String, java.util.Optional<Event>> lookup,
+                                 java.time.Duration every, Accounts.Service accounts) {
+        this.attention = new AttentionApi(api, generator, store, new Heuristic(), lookup, every, accounts);
+        return this;
+    }
+
     /** Starts serving on the given port (0 picks a free one) and returns the running server. */
     public HttpServer start(int port) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -103,6 +116,10 @@ public final class HttpApi {
             deliveries.handle(x);
         } else if (under(path, FeedbackApi.OVERRIDES_PREFIX)) {
             feedbackApi.overrides(x);
+        } else if (attention != null && under(path, AttentionApi.DIGESTS_PREFIX)) {
+            attention.digests(x);
+        } else if (attention != null && under(path, AttentionApi.EXPLAIN_PREFIX)) {
+            attention.explain(x);
         } else if (auth != null && (under(path, AuthApi.AUTH_PREFIX) || under(path, AuthApi.USERS_PREFIX))) {
             auth.handle(x);
         } else {
@@ -112,6 +129,13 @@ public final class HttpApi {
                 case "/events" -> listEvents(x);
                 case "/notify" -> notify.handle(x);
                 case FeedbackApi.FEEDBACK_PATH -> feedbackApi.feedback(x);
+                case AttentionApi.STATUS_PATH -> {
+                    if (attention != null) {
+                        attention.status(x);
+                    } else {
+                        api.error(x, 404, "not found");
+                    }
+                }
                 case "/api/policies" -> rules.policies(x, config);
                 default -> api.error(x, 404, "not found");
             }

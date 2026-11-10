@@ -1,5 +1,6 @@
 package com.agentpulse.notification.infrastructure;
 
+import com.agentpulse.notification.application.Budgets;
 import com.agentpulse.notification.application.Dedup;
 import com.agentpulse.notification.application.Ports.PortException;
 import com.agentpulse.notification.domain.Event;
@@ -63,6 +64,33 @@ class JedisKeyStoreTest {
             d.forget(Dedup.dedupKey(pr("e3", 10)), "e3");
             assertFalse(d.check(pr("e4", 10)).duplicate(), "forgotten by the event that made it");
             d.forget(Dedup.dedupKey(pr("e4", 10)), "e4");
+        }
+    }
+
+    @Test
+    void theSlidingWindowAllowsALimitThenDeniesAndFreesSlotsAsTheWindowMoves() throws Exception {
+        try (JedisKeyStore store = JedisKeyStore.connect(url())) {
+            String key = "java-test:budget:" + run;
+            long now = System.currentTimeMillis();
+            assertEquals(new Budgets.Slide(true, 1), store.slide(key, now, 400, 2, "a"));
+            assertEquals(new Budgets.Slide(true, 2), store.slide(key, now + 1, 400, 2, "b"));
+            assertEquals(new Budgets.Slide(false, 2), store.slide(key, now + 2, 400, 2, "c"), "full: denied, nothing added");
+            assertEquals(new Budgets.Slide(true, 1), store.slide(key, now + 1000, 400, 2, "d"), "the old entries have left the window");
+        }
+    }
+
+    @Test
+    void twoReplicasShareOneBudgetThroughRedisUnderTheKeyTheGoServiceUses() throws Exception {
+        try (JedisKeyStore a = JedisKeyStore.connect(url()); JedisKeyStore b = JedisKeyStore.connect(url())) {
+            Duration window = Duration.ofSeconds(2);
+            Budgets.Redis replicaA = new Budgets.Redis(a, 2, window, java.time.Clock.systemUTC());
+            Budgets.Redis replicaB = new Budgets.Redis(b, 2, window, java.time.Clock.systemUTC());
+            Thread.sleep(2100); // let anything an earlier run left under the shared key leave the window
+            assertTrue(replicaA.take().allowed());
+            assertTrue(replicaB.take().allowed());
+            assertFalse(replicaA.take().allowed(), "the second replica's interruption counted against the same cap");
+            assertFalse(replicaB.take().allowed());
+            Thread.sleep(2100);
         }
     }
 

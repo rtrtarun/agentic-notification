@@ -25,6 +25,9 @@ public record Config(
         boolean allowUnsignedWebhooks,
         boolean dispatcherEnabled,
         boolean overridesAdminOnly,
+        boolean attentionClassify,
+        Duration attentionDigestEvery,
+        int attentionBudgetPerHour,
         String databaseUrl,
         String redisUrl,
         String rulesPath,
@@ -68,6 +71,11 @@ public record Config(
 
     /** Reads the settings from a map, normally {@code System.getenv()}. */
     public static Config load(Map<String, String> env) {
+        String provider = choice(env, "ATTENTION_PROVIDER", "heuristic", "heuristic", "ollama", "claude");
+        if (!provider.equals("heuristic")) {
+            throw new InvalidConfigException("ATTENTION_PROVIDER=" + provider
+                    + " is not supported by this service yet; only the built-in heuristic is");
+        }
         List<String> standard = channels(env, "NOTIFY_STANDARD_CHANNELS");
         List<String> background = channels(env, "NOTIFY_BACKGROUND_CHANNELS");
         return new Config(
@@ -78,6 +86,9 @@ public record Config(
                 bool(env, "ALLOW_UNSIGNED_WEBHOOKS"),
                 text(env, "DISPATCHER_ENABLED").isEmpty() || bool(env, "DISPATCHER_ENABLED"),
                 bool(env, "OVERRIDES_ADMIN_ONLY"),
+                text(env, "ATTENTION_CLASSIFY").isEmpty() || bool(env, "ATTENTION_CLASSIFY"),
+                duration(env, "ATTENTION_DIGEST_EVERY", Duration.ZERO, true),
+                intValue(env, "ATTENTION_BUDGET_PER_HOUR", 10, 0, 100000),
                 text(env, "DATABASE_URL"),
                 text(env, "REDIS_URL"),
                 text(env, "RULES_PATH"),

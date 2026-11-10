@@ -44,6 +44,21 @@ class InfrastructureTest {
         assertFalse(c.allowUnauthenticated());
         assertFalse(c.allowUnsignedWebhooks());
         assertTrue(c.dispatcherEnabled());
+        assertTrue(c.attentionClassify(), "judgement is on by default, as in the Go service");
+        assertEquals(Duration.ZERO, c.attentionDigestEvery(), "no scheduled digest by default");
+        assertEquals(10, c.attentionBudgetPerHour());
+        assertFalse(c.overridesAdminOnly());
+        Config tuned = Config.load(Map.of("ATTENTION_CLASSIFY", "false", "ATTENTION_DIGEST_EVERY", "30m", "ATTENTION_BUDGET_PER_HOUR", "0",
+                "OVERRIDES_ADMIN_ONLY", "true", "ATTENTION_PROVIDER", "Heuristic"));
+        assertFalse(tuned.attentionClassify());
+        assertEquals(Duration.ofMinutes(30), tuned.attentionDigestEvery());
+        assertEquals(0, tuned.attentionBudgetPerHour());
+        assertTrue(tuned.overridesAdminOnly());
+        assertThrows(Config.InvalidConfigException.class, () -> Config.load(Map.of("ATTENTION_PROVIDER", "claude")), "a model is not built in yet");
+        assertThrows(Config.InvalidConfigException.class, () -> Config.load(Map.of("ATTENTION_PROVIDER", "ollama")));
+        assertThrows(Config.InvalidConfigException.class, () -> Config.load(Map.of("ATTENTION_PROVIDER", "gpt")));
+        assertThrows(Config.InvalidConfigException.class, () -> Config.load(Map.of("ATTENTION_BUDGET_PER_HOUR", "-1")));
+        assertThrows(Config.InvalidConfigException.class, () -> Config.load(Map.of("ATTENTION_CLASSIFY", "maybe")));
         assertFalse(Config.load(Map.of("DISPATCHER_ENABLED", "false")).dispatcherEnabled());
         assertThrows(Config.InvalidConfigException.class, () -> Config.load(Map.of("DISPATCHER_ENABLED", "maybe")));
         assertEquals(Duration.ZERO, c.dedupWindow());
