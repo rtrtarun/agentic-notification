@@ -45,7 +45,7 @@ Java: `Predicate`, `Predicates`, `Overrides`, `Feedback`, `Heuristic`, `GuardedC
 - [x] The same event gets the same heuristic score, reason, digest and explanation in both services.
 - [x] All contract files pass in Go and Java; `mvn verify` passes offline and with PostgreSQL and Redis.
 - [x] No critical-path regression.
-- [ ] CI green on the branch (not yet seen).
+- [x] CI green on the branch (last run on `afe00de`), merged as PR #14.
 
 ## Not in Java yet
 SMS, Novu, single sign-on, language-model Attention Intelligence, personal digests and preferences, digest delivery, learning, traces, MCP, metrics, inbox, channels API, event retention.
@@ -53,4 +53,4 @@ SMS, Novu, single sign-on, language-model Attention Intelligence, personal diges
 ## Review checklist
 - Read `Overrides.decide`, `Pipeline.applyPreferences` and `GuardedClassifier` for the critical-event guarantees.
 - Run `docs/contract` against both services and the invariant tests.
-- Decide whether to merge `feature/dispatcher-flag` first (separate branch).
+- The dispatcher setting `DISPATCHER_ENABLED` was merged separately (PR #13) before this milestone.

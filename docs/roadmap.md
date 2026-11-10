@@ -13,10 +13,10 @@ What is **not** built yet, as one numbered sequence of milestones. What exists i
 | Milestone | State |
 |---|---|
 | 34 to 36 | Done and merged |
-| 37 Java parity part 3 (rule fields, feedback and overrides, heuristic Attention Intelligence) | **Done on `feature/m37-attention-feedback`, awaiting review** ([record](milestones/milestone-37.md)) |
-| 38 to 48 | Not started; no plan yet |
+| 37 Java parity part 3 (rule fields, feedback and overrides, heuristic Attention Intelligence) | **Done and merged** (PR #14, 2026-11-10; [record](milestones/milestone-37.md)) |
+| 38 to 48 | Not started; no plan approved yet. Each needs its plan and owner approval first |
 
-A separate small branch, `feature/dispatcher-flag` (`DISPATCHER_ENABLED`), is also awaiting review.
+`DISPATCHER_ENABLED` (a setting in both services that turns a process's queue dispatcher off, so one service can own the queue when two share a database) is also merged (PR #13).
 
 ## Milestone 38: Learning
 Feedback loops and dynamic model training. Layer 2 only: learn from the stored feedback signals (opened, dismissed, undo, always, never, replies) to suggest and refine preferences, overrides and scores.
