@@ -1,12 +1,12 @@
 # Milestone 38 plan: Learning
 
-Status: **proposed, awaiting owner approval. No code written.** Follows [milestone 37](milestone-37.md). Roadmap entry: [roadmap.md](../roadmap.md#milestone-38-learning).
+Status: **approved by the owner on 2026-11-10** (decisions recorded at the end). Build order: 38a, then 38b, then 38c, stopping after each slice for review. Follows [milestone 37](milestone-37.md). Roadmap entry: [roadmap.md](../roadmap.md#milestone-38-learning).
 
 ## Guardrails (hard-coded into the design, not optional)
 1. **Offline or async only.** Learning is a background process that reads stored feedback and writes proposals. It is never a step in the live event path, adds no latency to it, and never calls a model, a network service or a database from it. The live path only reads a small in-memory snapshot, and if that snapshot is missing or stale the event is decided exactly as it is today.
 2. **Critical events are untouchable.** Feedback about a critical event is never learned from. A critical event, a critical rule or a locked rule is never the subject of a proposal and is never adjusted. This is enforced when a proposal is made, when it is approved, and when it would be applied, and it is covered by invariant tests.
 3. **Explicit beats inferred.** A person's explicit override (always, never) outranks anything learned. Events an override covers are never adjusted, and learning never edits or removes an override.
-4. **Nothing changes by itself.** Every proposal is reviewable, attributable, audited, bounded and reversible. An admin approves or rejects it.
+4. **Nothing changes by itself.** Every proposal is reviewable, attributable, audited, bounded and reversible. **An admin must explicitly approve every adjustment, whatever its size.** There is no automatic activation, no size under which one is skipped, and no autonomous drift: predictability and auditability come first in this first version.
 5. **Not a black box.** "Training" here means a deterministic, explainable statistical rule over counts: the same feedback always gives the same proposals, each with its evidence in plain language. No neural network, no language model, no randomness.
 
 ## What exists today (Go, milestone 28)
@@ -20,7 +20,7 @@ Status: **proposed, awaiting owner approval. No code written.** Follows [milesto
 
 ## 2. Architecture decisions
 - **Same layers, same style.** Plain JDK in Java, the existing Go packages. A `learning` package per service with small interfaces (`FeedbackReader`, `EventReader`, `RuleEditor`, `OverrideWriter`, plus a new `AdjustmentStore`), so each part is testable alone.
-- **Proposals, then approval, then a snapshot.** A run writes `proposed` adjustments. Approving one makes it `active`. The heuristic reads an in-memory snapshot of the active adjustments (`source`, `eventType`, `repository` mapped to a score offset), refreshed when one is approved or retired and on a short interval. The live path does a map lookup and no I/O.
+- **Proposals, then approval, then a snapshot.** A run writes `proposed` adjustments. Only an admin's explicit approval makes one `active`, and no code path activates one otherwise (a test asserts this). The heuristic reads an in-memory snapshot of the active adjustments (`source`, `eventType`, `repository` mapped to a score offset), refreshed when one is approved or retired and on a short interval. The live path does a map lookup and no I/O.
 - **How an adjustment is used.** The heuristic adds the offset to its score and adds a reason ("learned adjustment -12: 9 of 11 people dismissed this"). It still can only move an **adaptive standard** event to background (the existing pipeline rule); a positive offset only protects an event from demotion. `GuardedClassifier` and the critical refusal in `Heuristic.classify` are unchanged, so a critical event never reaches it. Events covered by an override never reach the classifier (existing behaviour, kept and tested).
 - **The rule that proposes (deterministic, explainable):**
   - Count signals per scope over the lookback window, weighting recent signals more (fixed half-life, no randomness).
@@ -79,10 +79,10 @@ Status: **proposed, awaiting owner approval. No code written.** Follows [milesto
 - A person's explicit override still wins over any adjustment.
 - All contract files pass in Go and Java; `mvn verify` and the Go suite pass; CI is green; the live event path makes no new database or network call.
 
-## Questions for the owner
-1. **Approval.** Should every adjustment need an admin's approval before it takes effect (recommended, and consistent with suggestions today), or may small ones (say within ±5) activate on their own?
-2. **Defaults.** Are these acceptable: at most ±20 points, at least 5 signals from at least 2 distinct people, a 30-day lookback with a 14-day half-life?
-3. **Scope.** Is it right to keep "routing preferences" to the existing suggestion kinds (rules and overrides) plus score adjustments, and leave per-person preferences to milestone 46?
-4. **Trigger.** Is "manual by default, scheduled when `LEARNING_TRAIN_EVERY` is set" right?
-5. **Go change.** Do you accept that this milestone also changes the Go service (new tables, endpoints and heuristic input), not only Java?
-6. **Slicing.** Three slices (38a Java suggestions parity, 38b Go tuning, 38c Java tuning) as one milestone, or stop after 38a and 38b?
+## Decisions (owner, 2026-11-10)
+1. **Approval:** every adjustment must be explicitly approved by an admin, regardless of size. No automatic activation.
+2. **Defaults:** at most ±20 points, at least 5 signals from at least 2 distinct people, a 30-day lookback and a 14-day half-life.
+3. **Scope:** per-person preferences stay fenced off for milestone 46. This milestone is only global heuristic score tuning and the existing suggestion kinds.
+4. **Trigger:** manual by default; `LEARNING_TRAIN_EVERY` turns on scheduled runs.
+5. **Go changes:** yes. Go is the reference, so the new tables, endpoints and heuristic input are built there first (38b), and Java follows (38c).
+6. **Slicing:** all three slices (38a Java suggestions parity, 38b Go tuning, 38c Java tuning) are one milestone, built in that order, with a stop and review after each slice.
