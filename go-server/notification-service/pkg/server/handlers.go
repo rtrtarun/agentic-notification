@@ -52,6 +52,10 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle(tracesPrefix+"/", protected(s.tracesHandler))
 	mux.Handle(learningPrefix, protected(s.learningHandler))
 	mux.Handle(learningPrefix+"/", protected(s.learningHandler))
+	mux.Handle(adjustmentsPrefix, protected(s.adjustmentsHandler))
+	mux.Handle(adjustmentsPrefix+"/", protected(s.adjustmentsHandler))
+	mux.Handle(runsPrefix, protected(s.runsHandler))
+	mux.Handle(runsPrefix+"/", protected(s.runsHandler))
 	mux.Handle(overridesPrefix, protected(s.overridesHandler))
 	mux.Handle(overridesPrefix+"/", protected(s.overridesHandler))
 	mux.Handle("/notify", protected(s.notifyHandler))
@@ -121,6 +125,18 @@ func (s *Server) Run(ctx context.Context) error {
 		go func() {
 			defer background.Done()
 			s.digestScheduler.Run(ctx)
+		}()
+	}
+
+	if s.tuner != nil {
+		background.Add(2)
+		go func() {
+			defer background.Done()
+			s.tuner.KeepSnapshotFresh(ctx, snapshotRefresh)
+		}()
+		go func() {
+			defer background.Done()
+			s.tuner.Schedule(ctx, s.cfg.LearningTrainEvery)
 		}()
 	}
 

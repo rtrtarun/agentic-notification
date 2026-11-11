@@ -81,7 +81,7 @@ func TestMigrateCreatesEveryStoreTableAndItsLookupIndexes(t *testing.T) {
 		t.Fatalf("migrate: %v", err)
 	}
 	all := strings.Join(exec.statements, "\n")
-	for _, table := range []string{"delivery_jobs", "users", "user_identities", "sessions", "audit_log", "feedback", "overrides", "digests", "learning_suggestions", "user_preferences"} {
+	for _, table := range []string{"delivery_jobs", "users", "user_identities", "sessions", "audit_log", "feedback", "overrides", "digests", "learning_suggestions", "learning_adjustments", "learning_runs", "user_preferences"} {
 		if !strings.Contains(all, "CREATE TABLE IF NOT EXISTS "+table+" (") {
 			t.Errorf("migration does not create table %s", table)
 		}
@@ -89,12 +89,16 @@ func TestMigrateCreatesEveryStoreTableAndItsLookupIndexes(t *testing.T) {
 	for _, index := range []string{
 		"delivery_jobs_due_idx", "delivery_jobs_created_idx", "sessions_user_idx",
 		"feedback_event_idx", "feedback_created_idx", "events_trace_id_idx", "digests_created_idx", "learning_suggestions_status_idx",
+		"learning_adjustments_status_idx", "learning_runs_started_idx",
 	} {
 		if !strings.Contains(all, "CREATE INDEX IF NOT EXISTS "+index+" ") {
 			t.Errorf("migration does not create index %s", index)
 		}
 	}
-	for _, unique := range []string{"scope_key  TEXT NOT NULL UNIQUE"} {
+	if !strings.Contains(all, "CREATE UNIQUE INDEX IF NOT EXISTS learning_runs_one_running ON learning_runs (status) WHERE status = 'running'") {
+		t.Error("migration lost the index that allows only one running learning run")
+	}
+	for _, unique := range []string{"scope_key  TEXT NOT NULL UNIQUE", "scope_key   TEXT NOT NULL UNIQUE"} {
 		if !strings.Contains(all, unique) {
 			t.Errorf("migration lost the constraint %q", unique)
 		}

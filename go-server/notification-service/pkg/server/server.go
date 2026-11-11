@@ -84,6 +84,8 @@ type Server struct {
 	feedback        *feedback.Service
 	feedbackStore   feedback.Store
 	learning        *learning.Service
+	tuner           *learning.Tuner
+	tuning          *attention.Tuning
 	digests         *attention.Generator
 	digestStore     attention.DigestStore
 	digestScheduler *attention.Scheduler
@@ -186,6 +188,7 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 		return nil, fmt.Errorf("init feedback: %w", err)
 	}
 	s.initLearning()
+	s.initTuning(ctx)
 	s.mcp = mcp.New(mcpBackend{s}, "service")
 	s.tracer = telemetry.NewTracer(logger)
 	s.service = notification.NewValidatingService(

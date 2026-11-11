@@ -1,0 +1,1415 @@
+{
+  "name": "offline score tuning: feedback becomes bounded, explainable proposals; nothing is active until an admin approves; the heuristic's score and reason change only while an adjustment is active; critical feedback teaches nothing",
+  "steps": [
+    {
+      "name": "adjustments need the key",
+      "request": {
+        "method": "GET",
+        "path": "/api/learning/adjustments"
+      },
+      "expect": {
+        "status": 401,
+        "json": {
+          "error": "missing or invalid api key"
+        }
+      }
+    },
+    {
+      "name": "runs need the key",
+      "request": {
+        "method": "GET",
+        "path": "/api/learning/runs"
+      },
+      "expect": {
+        "status": 401,
+        "json": {
+          "error": "missing or invalid api key"
+        }
+      }
+    },
+    {
+      "name": "there is nothing yet, and the limits in force are shown",
+      "request": {
+        "method": "GET",
+        "path": "/api/learning/adjustments",
+        "headers": {
+          "X-API-Key": "contract-key"
+        }
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "adjustments": [],
+          "version": 0,
+          "maxAdjustment": 20,
+          "minSignals": 5,
+          "minPeople": 1
+        }
+      }
+    },
+    {
+      "name": "no run has been made, and none is scheduled",
+      "request": {
+        "method": "GET",
+        "path": "/api/learning/runs",
+        "headers": {
+          "X-API-Key": "contract-key"
+        }
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "runs": [],
+          "every": "0s"
+        }
+      }
+    },
+    {
+      "name": "an unknown status is refused",
+      "request": {
+        "method": "GET",
+        "path": "/api/learning/adjustments?status=maybe",
+        "headers": {
+          "X-API-Key": "contract-key"
+        }
+      },
+      "expect": {
+        "status": 400,
+        "json": {
+          "error": "status must be proposed, active, rejected or retired"
+        }
+      }
+    },
+    {
+      "name": "adjustments cannot be written to",
+      "request": {
+        "method": "PUT",
+        "path": "/api/learning/adjustments",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 405,
+        "json": {
+          "error": "method not allowed"
+        }
+      }
+    },
+    {
+      "name": "runs cannot be deleted",
+      "request": {
+        "method": "DELETE",
+        "path": "/api/learning/runs",
+        "headers": {
+          "X-API-Key": "contract-key"
+        }
+      },
+      "expect": {
+        "status": 405,
+        "json": {
+          "error": "method not allowed"
+        }
+      }
+    },
+    {
+      "name": "a run has no sub-path",
+      "request": {
+        "method": "GET",
+        "path": "/api/learning/runs/abc",
+        "headers": {
+          "X-API-Key": "contract-key"
+        }
+      },
+      "expect": {
+        "status": 404,
+        "json": {
+          "error": "not found"
+        }
+      }
+    },
+    {
+      "name": "an unknown action is not found",
+      "request": {
+        "method": "POST",
+        "path": "/api/learning/adjustments/abc/explode",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 404,
+        "json": {
+          "error": "not found"
+        }
+      }
+    },
+    {
+      "name": "an unknown adjustment is not found",
+      "request": {
+        "method": "POST",
+        "path": "/api/learning/adjustments/abc/approve",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 404,
+        "json": {
+          "error": "adjustment not found"
+        }
+      }
+    },
+    {
+      "name": "pull request 1 is delivered",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "pull_request",
+          "X-GitHub-Delivery": "tune-pr-1"
+        },
+        "body": {
+          "action": "opened",
+          "number": 1,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "eventId": "github-pull_request-tune-pr-1",
+          "decisionState": {
+            "status": "queued"
+          }
+        }
+      }
+    },
+    {
+      "name": "pull request 1 is opened",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-pull_request-tune-pr-1",
+          "action": "opened"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "pull request 2 is delivered",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "pull_request",
+          "X-GitHub-Delivery": "tune-pr-2"
+        },
+        "body": {
+          "action": "opened",
+          "number": 2,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "eventId": "github-pull_request-tune-pr-2",
+          "decisionState": {
+            "status": "queued"
+          }
+        }
+      }
+    },
+    {
+      "name": "pull request 2 is opened",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-pull_request-tune-pr-2",
+          "action": "opened"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "pull request 3 is delivered",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "pull_request",
+          "X-GitHub-Delivery": "tune-pr-3"
+        },
+        "body": {
+          "action": "opened",
+          "number": 3,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "eventId": "github-pull_request-tune-pr-3",
+          "decisionState": {
+            "status": "queued"
+          }
+        }
+      }
+    },
+    {
+      "name": "pull request 3 is opened",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-pull_request-tune-pr-3",
+          "action": "opened"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "pull request 4 is delivered",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "pull_request",
+          "X-GitHub-Delivery": "tune-pr-4"
+        },
+        "body": {
+          "action": "opened",
+          "number": 4,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "eventId": "github-pull_request-tune-pr-4",
+          "decisionState": {
+            "status": "queued"
+          }
+        }
+      }
+    },
+    {
+      "name": "pull request 4 is opened",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-pull_request-tune-pr-4",
+          "action": "opened"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "pull request 5 is delivered",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "pull_request",
+          "X-GitHub-Delivery": "tune-pr-5"
+        },
+        "body": {
+          "action": "opened",
+          "number": 5,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "eventId": "github-pull_request-tune-pr-5",
+          "decisionState": {
+            "status": "queued"
+          }
+        }
+      }
+    },
+    {
+      "name": "pull request 5 is opened",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-pull_request-tune-pr-5",
+          "action": "opened"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "issue 1 is delivered",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "issues",
+          "X-GitHub-Delivery": "tune-is-1"
+        },
+        "body": {
+          "action": "opened",
+          "number": 1,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "eventId": "github-issues-tune-is-1",
+          "decisionState": {
+            "status": "queued"
+          }
+        }
+      }
+    },
+    {
+      "name": "issue 1 is dismissed",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-issues-tune-is-1",
+          "action": "dismissed"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "issue 2 is delivered",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "issues",
+          "X-GitHub-Delivery": "tune-is-2"
+        },
+        "body": {
+          "action": "opened",
+          "number": 2,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "eventId": "github-issues-tune-is-2",
+          "decisionState": {
+            "status": "queued"
+          }
+        }
+      }
+    },
+    {
+      "name": "issue 2 is dismissed",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-issues-tune-is-2",
+          "action": "dismissed"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "issue 3 is delivered",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "issues",
+          "X-GitHub-Delivery": "tune-is-3"
+        },
+        "body": {
+          "action": "opened",
+          "number": 3,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "eventId": "github-issues-tune-is-3",
+          "decisionState": {
+            "status": "queued"
+          }
+        }
+      }
+    },
+    {
+      "name": "issue 3 is dismissed",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-issues-tune-is-3",
+          "action": "dismissed"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "issue 4 is delivered",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "issues",
+          "X-GitHub-Delivery": "tune-is-4"
+        },
+        "body": {
+          "action": "opened",
+          "number": 4,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "eventId": "github-issues-tune-is-4",
+          "decisionState": {
+            "status": "queued"
+          }
+        }
+      }
+    },
+    {
+      "name": "issue 4 is dismissed",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-issues-tune-is-4",
+          "action": "dismissed"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "issue 5 is delivered",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "issues",
+          "X-GitHub-Delivery": "tune-is-5"
+        },
+        "body": {
+          "action": "opened",
+          "number": 5,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "eventId": "github-issues-tune-is-5",
+          "decisionState": {
+            "status": "queued"
+          }
+        }
+      }
+    },
+    {
+      "name": "issue 5 is dismissed",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-issues-tune-is-5",
+          "action": "dismissed"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "advisory 1 is critical and sent at once",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "security_advisory",
+          "X-GitHub-Delivery": "tune-adv-1"
+        },
+        "body": {
+          "action": "published",
+          "number": 1,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "attentionClass": "critical",
+          "decisionState": {
+            "status": "sent"
+          }
+        }
+      }
+    },
+    {
+      "name": "advisory 1 is dismissed, which must teach nothing",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-security_advisory-tune-adv-1",
+          "action": "dismissed"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "advisory 2 is critical and sent at once",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "security_advisory",
+          "X-GitHub-Delivery": "tune-adv-2"
+        },
+        "body": {
+          "action": "published",
+          "number": 2,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "attentionClass": "critical",
+          "decisionState": {
+            "status": "sent"
+          }
+        }
+      }
+    },
+    {
+      "name": "advisory 2 is dismissed, which must teach nothing",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-security_advisory-tune-adv-2",
+          "action": "dismissed"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "advisory 3 is critical and sent at once",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "security_advisory",
+          "X-GitHub-Delivery": "tune-adv-3"
+        },
+        "body": {
+          "action": "published",
+          "number": 3,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "attentionClass": "critical",
+          "decisionState": {
+            "status": "sent"
+          }
+        }
+      }
+    },
+    {
+      "name": "advisory 3 is dismissed, which must teach nothing",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-security_advisory-tune-adv-3",
+          "action": "dismissed"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "advisory 4 is critical and sent at once",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "security_advisory",
+          "X-GitHub-Delivery": "tune-adv-4"
+        },
+        "body": {
+          "action": "published",
+          "number": 4,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "attentionClass": "critical",
+          "decisionState": {
+            "status": "sent"
+          }
+        }
+      }
+    },
+    {
+      "name": "advisory 4 is dismissed, which must teach nothing",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-security_advisory-tune-adv-4",
+          "action": "dismissed"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "advisory 5 is critical and sent at once",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "security_advisory",
+          "X-GitHub-Delivery": "tune-adv-5"
+        },
+        "body": {
+          "action": "published",
+          "number": 5,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "attentionClass": "critical",
+          "decisionState": {
+            "status": "sent"
+          }
+        }
+      }
+    },
+    {
+      "name": "advisory 5 is dismissed, which must teach nothing",
+      "request": {
+        "method": "POST",
+        "path": "/feedback",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "eventId": "github-security_advisory-tune-adv-5",
+          "action": "dismissed"
+        }
+      },
+      "expect": {
+        "status": 202
+      }
+    },
+    {
+      "name": "nothing is proposed before a run",
+      "request": {
+        "method": "GET",
+        "path": "/api/learning/adjustments",
+        "headers": {
+          "X-API-Key": "contract-key"
+        }
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "adjustments": [],
+          "version": 0
+        }
+      }
+    },
+    {
+      "name": "a run reads the feedback and proposes two adjustments, none for the critical advisories",
+      "request": {
+        "method": "POST",
+        "path": "/api/learning/runs?wait=true",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "run": {
+            "status": "done",
+            "feedbackRead": 15,
+            "eventsRead": 15,
+            "proposalsMade": 2
+          }
+        },
+        "present": [
+          "run"
+        ]
+      }
+    },
+    {
+      "name": "the proposals are listed with their evidence and a replay of recent events, and nothing is active",
+      "request": {
+        "method": "GET",
+        "path": "/api/learning/adjustments",
+        "headers": {
+          "X-API-Key": "contract-key"
+        }
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "version": 0,
+          "adjustments": [
+            {
+              "id": "10ce5c7ae7840ae4",
+              "source": "github",
+              "eventType": "issues",
+              "delta": -12,
+              "status": "proposed",
+              "version": 0,
+              "evidence": {
+                "positive": 0,
+                "negative": 5,
+                "people": 1,
+                "signals": 5,
+                "windowDays": 30,
+                "summary": "5 of 5 signals from 1 person were negative"
+              },
+              "impact": {
+                "replayed": 5,
+                "wouldChange": 0
+              }
+            },
+            {
+              "id": "68abe35a59d2dd14",
+              "source": "github",
+              "eventType": "pull_request",
+              "delta": 12,
+              "status": "proposed",
+              "version": 0,
+              "evidence": {
+                "positive": 5,
+                "negative": 0,
+                "people": 1,
+                "signals": 5,
+                "windowDays": 30,
+                "summary": "5 of 5 signals from 1 person were positive"
+              },
+              "impact": {
+                "replayed": 5,
+                "wouldChange": 0
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "the proposals can be filtered by status",
+      "request": {
+        "method": "GET",
+        "path": "/api/learning/adjustments?status=active",
+        "headers": {
+          "X-API-Key": "contract-key"
+        }
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "adjustments": []
+        }
+      }
+    },
+    {
+      "name": "a run again does not add a second proposal for the same scope",
+      "request": {
+        "method": "POST",
+        "path": "/api/learning/runs?wait=true",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "run": {
+            "status": "done",
+            "proposalsMade": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "still two proposals, neither resolved",
+      "request": {
+        "method": "GET",
+        "path": "/api/learning/adjustments?status=proposed",
+        "headers": {
+          "X-API-Key": "contract-key"
+        }
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "adjustments": [
+            {
+              "id": "10ce5c7ae7840ae4"
+            },
+            {
+              "id": "68abe35a59d2dd14"
+            }
+          ]
+        },
+        "absentInEach": {
+          "adjustments": [
+            "resolvedBy",
+            "resolvedAt"
+          ]
+        }
+      }
+    },
+    {
+      "name": "an override quiets pull requests, so a new one is held and there is something to lead a digest with",
+      "request": {
+        "method": "POST",
+        "path": "/api/overrides",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {
+          "mode": "never",
+          "eventType": "pull_request"
+        }
+      },
+      "expect": {
+        "status": 201
+      }
+    },
+    {
+      "name": "a new pull request is held for the digest",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "pull_request",
+          "X-GitHub-Delivery": "tune-held-1"
+        },
+        "body": {
+          "action": "opened",
+          "number": 50,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "eventId": "github-pull_request-tune-held-1",
+          "attentionClass": "background",
+          "decisionState": {
+            "status": "digest"
+          }
+        }
+      }
+    },
+    {
+      "name": "before approval the digest leads with the plain score",
+      "request": {
+        "method": "POST",
+        "path": "/api/digests/generate",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 201,
+        "json": {
+          "generated": true,
+          "digest": {
+            "count": 1,
+            "highlights": [
+              {
+                "eventId": "github-pull_request-tune-held-1",
+                "reason": "scored 60: something new was opened",
+                "score": 60
+              }
+            ],
+            "model": "heuristic-v1"
+          }
+        }
+      }
+    },
+    {
+      "name": "an admin approves the pull request adjustment",
+      "request": {
+        "method": "POST",
+        "path": "/api/learning/adjustments/68abe35a59d2dd14/approve",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "adjustment": {
+            "id": "68abe35a59d2dd14",
+            "status": "active",
+            "delta": 12,
+            "version": 1,
+            "resolvedBy": "api-key"
+          }
+        }
+      }
+    },
+    {
+      "name": "approving it again is refused",
+      "request": {
+        "method": "POST",
+        "path": "/api/learning/adjustments/68abe35a59d2dd14/approve",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 409,
+        "json": {
+          "error": "adjustment is no longer proposed"
+        }
+      }
+    },
+    {
+      "name": "an active adjustment cannot be rejected",
+      "request": {
+        "method": "POST",
+        "path": "/api/learning/adjustments/68abe35a59d2dd14/reject",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 409,
+        "json": {
+          "error": "adjustment is no longer proposed"
+        }
+      }
+    },
+    {
+      "name": "the set in force has version 1",
+      "request": {
+        "method": "GET",
+        "path": "/api/learning/adjustments?status=active",
+        "headers": {
+          "X-API-Key": "contract-key"
+        }
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "version": 1,
+          "adjustments": [
+            {
+              "id": "68abe35a59d2dd14",
+              "status": "active"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "an admin rejects the issue adjustment",
+      "request": {
+        "method": "POST",
+        "path": "/api/learning/adjustments/10ce5c7ae7840ae4/reject",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "adjustment": {
+            "id": "10ce5c7ae7840ae4",
+            "status": "rejected",
+            "delta": -12,
+            "version": 0,
+            "resolvedBy": "api-key"
+          }
+        }
+      }
+    },
+    {
+      "name": "a rejected adjustment cannot be retired",
+      "request": {
+        "method": "POST",
+        "path": "/api/learning/adjustments/10ce5c7ae7840ae4/retire",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 409,
+        "json": {
+          "error": "adjustment is not active"
+        }
+      }
+    },
+    {
+      "name": "another pull request is held",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "pull_request",
+          "X-GitHub-Delivery": "tune-held-2"
+        },
+        "body": {
+          "action": "opened",
+          "number": 51,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "decisionState": {
+            "status": "digest"
+          }
+        }
+      }
+    },
+    {
+      "name": "after approval the held pull request scores higher, says why, and the digest names it",
+      "request": {
+        "method": "POST",
+        "path": "/api/digests/generate",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 201,
+        "json": {
+          "generated": true,
+          "digest": {
+            "count": 1,
+            "highlights": [
+              {
+                "eventId": "github-pull_request-tune-held-2",
+                "reason": "scored 72: something new was opened, learned adjustment +12: 5 of 5 signals from 1 person were positive",
+                "score": 72
+              }
+            ],
+            "model": "heuristic-v1"
+          }
+        }
+      }
+    },
+    {
+      "name": "an admin retires it",
+      "request": {
+        "method": "POST",
+        "path": "/api/learning/adjustments/68abe35a59d2dd14/retire",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "adjustment": {
+            "id": "68abe35a59d2dd14",
+            "status": "retired",
+            "version": 2,
+            "resolvedBy": "api-key"
+          }
+        }
+      }
+    },
+    {
+      "name": "retiring it again is refused",
+      "request": {
+        "method": "POST",
+        "path": "/api/learning/adjustments/68abe35a59d2dd14/retire",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 409,
+        "json": {
+          "error": "adjustment is not active"
+        }
+      }
+    },
+    {
+      "name": "a third pull request is held",
+      "request": {
+        "method": "POST",
+        "path": "/webhooks/github",
+        "headers": {
+          "X-GitHub-Event": "pull_request",
+          "X-GitHub-Delivery": "tune-held-3"
+        },
+        "body": {
+          "action": "opened",
+          "number": 52,
+          "repository": {
+            "full_name": "acme/tune"
+          }
+        },
+        "sign": true
+      },
+      "expect": {
+        "status": 202,
+        "json": {
+          "decisionState": {
+            "status": "digest"
+          }
+        }
+      }
+    },
+    {
+      "name": "after retiring, scores are exactly what they were",
+      "request": {
+        "method": "POST",
+        "path": "/api/digests/generate",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 201,
+        "json": {
+          "generated": true,
+          "digest": {
+            "count": 1,
+            "highlights": [
+              {
+                "eventId": "github-pull_request-tune-held-3",
+                "reason": "scored 60: something new was opened",
+                "score": 60
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "name": "nothing is active any more, and the version moved on",
+      "request": {
+        "method": "GET",
+        "path": "/api/learning/adjustments?status=active",
+        "headers": {
+          "X-API-Key": "contract-key"
+        }
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "version": 2,
+          "adjustments": []
+        }
+      }
+    },
+    {
+      "name": "a run after the decisions has no new evidence, so it proposes nothing",
+      "request": {
+        "method": "POST",
+        "path": "/api/learning/runs?wait=true",
+        "headers": {
+          "X-API-Key": "contract-key"
+        },
+        "body": {}
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "run": {
+            "status": "done",
+            "proposalsMade": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "the runs are listed newest first",
+      "request": {
+        "method": "GET",
+        "path": "/api/learning/runs",
+        "headers": {
+          "X-API-Key": "contract-key"
+        }
+      },
+      "expect": {
+        "status": 200,
+        "json": {
+          "every": "0s",
+          "runs": [
+            {
+              "status": "done",
+              "proposalsMade": 0
+            },
+            {
+              "status": "done",
+              "proposalsMade": 2
+            },
+            {
+              "status": "done",
+              "proposalsMade": 2
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

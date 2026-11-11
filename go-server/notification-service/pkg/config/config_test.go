@@ -188,6 +188,38 @@ func TestAttentionProviderValidation(t *testing.T) {
 	}
 }
 
+func TestLearningTuningSettings(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil || cfg.LearningMinPeople != 2 || cfg.LearningMaxAdjustment != 20 || cfg.LearningHalfLife != 14*24*time.Hour || cfg.LearningTrainEvery != 0 {
+		t.Fatalf("defaults wrong: %v %+v", err, cfg)
+	}
+	t.Setenv("LEARNING_MIN_PEOPLE", "3")
+	t.Setenv("LEARNING_MAX_ADJUSTMENT", "10")
+	t.Setenv("LEARNING_HALF_LIFE", "72h")
+	t.Setenv("LEARNING_TRAIN_EVERY", "6h")
+	cfg, err = LoadConfig()
+	if err != nil || cfg.LearningMinPeople != 3 || cfg.LearningMaxAdjustment != 10 || cfg.LearningHalfLife != 72*time.Hour || cfg.LearningTrainEvery != 6*time.Hour {
+		t.Fatalf("settings not read: %v %+v", err, cfg)
+	}
+	for name, env := range map[string]map[string]string{
+		"zero people":      {"LEARNING_MIN_PEOPLE": "0"},
+		"too large offset": {"LEARNING_MAX_ADJUSTMENT": "51"},
+		"zero offset":      {"LEARNING_MAX_ADJUSTMENT": "0"},
+		"zero half-life":   {"LEARNING_HALF_LIFE": "0s"},
+		"bad schedule":     {"LEARNING_TRAIN_EVERY": "often"},
+		"negative":         {"LEARNING_TRAIN_EVERY": "-1h"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			for k, v := range env {
+				t.Setenv(k, v)
+			}
+			if _, err := LoadConfig(); err == nil {
+				t.Fatal("expected an error")
+			}
+		})
+	}
+}
+
 func TestLearningSettings(t *testing.T) {
 	cfg, err := LoadConfig()
 	if err != nil || cfg.LearningMinSignals != 5 || cfg.LearningLookback != 30*24*time.Hour {

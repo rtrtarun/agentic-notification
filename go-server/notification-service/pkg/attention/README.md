@@ -18,3 +18,6 @@ Promises, enforced in code:
 A model is provided by `pkg/attention/llm` (Ollama or Claude, milestone 26): it implements these interfaces, is wrapped by `Guarded`, and falls back to `Heuristic` on any failure. `SourcedExplainer` and `SourceOf` let an API say whether the heuristic or a model wrote something.
 
 Tests cover classification, determinism, the guard, summaries, explanations, digest selection and windows, bounds and the scheduler.
+
+## Learned score adjustments (milestone 38b)
+`Tuning` is an in-memory snapshot of the adjustments an admin approved (see `pkg/learning`). `Heuristic.WithTuning` makes `Classify` add the matching offset (a repository-specific one beats one for the whole type), add the reason `learned adjustment -14: 5 of 5 signals from 2 people were negative`, and name the version on the decision (`heuristic-v1+tuned-N`; `SourceOf` still says "heuristic"). The live path only does a map lookup. With no snapshot, an empty one or a stale one (older than `DefaultTuningMaxAge`) scores are exactly what they were. Offsets are clamped to ±`MaxTuningDelta` (50) whatever a store holds. A critical event never reaches the heuristic, so it is never adjusted.

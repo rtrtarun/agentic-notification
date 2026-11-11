@@ -9,6 +9,7 @@ import com.agentpulse.notification.application.Overrides;
 import com.agentpulse.notification.application.Dispatcher;
 import com.agentpulse.notification.application.GuardedClassifier;
 import com.agentpulse.notification.application.Learning;
+import com.agentpulse.notification.application.Tuning;
 import com.agentpulse.notification.application.Heuristic;
 import com.agentpulse.notification.application.MemoryDeduper;
 import com.agentpulse.notification.application.Notify;
@@ -31,6 +32,7 @@ import com.agentpulse.notification.infrastructure.FeedbackStores;
 import com.agentpulse.notification.infrastructure.InMemoryEventRepository;
 import com.agentpulse.notification.infrastructure.JedisKeyStore;
 import com.agentpulse.notification.infrastructure.LearningStores;
+import com.agentpulse.notification.infrastructure.TuningStores;
 import com.agentpulse.notification.infrastructure.MemoryAccountStore;
 import com.agentpulse.notification.infrastructure.MemoryStores;
 import com.agentpulse.notification.infrastructure.PostgresAccountStore;
@@ -78,6 +80,8 @@ public final class Main {
         Feedback.Store feedbackStore;
         Digests.Store digestStore;
         Learning.Repository learningRepository;
+        Tuning.AdjustmentRepository adjustmentRepository;
+        Tuning.RunRepository runRepository;
         if (config.databaseUrl().isEmpty()) {
             LOG.warn("DATABASE_URL unset; events, rules and deliveries are kept in memory and lost on restart");
             repository = new InMemoryEventRepository(clock);
@@ -88,6 +92,8 @@ public final class Main {
             feedbackStore = new FeedbackStores.MemoryFeedback();
             digestStore = new DigestStores.Memory();
             learningRepository = new LearningStores.Memory();
+            adjustmentRepository = new TuningStores.MemoryAdjustments();
+            runRepository = new TuningStores.MemoryRuns();
         } else {
             database = Database.connect(config.databaseUrl());
             Database.waitForSchema(database, SCHEMA_WAIT);
@@ -99,6 +105,8 @@ public final class Main {
             feedbackStore = new FeedbackStores.PostgresFeedback(database);
             digestStore = new DigestStores.Postgres(database);
             learningRepository = new LearningStores.Postgres(database);
+            adjustmentRepository = new TuningStores.PostgresAdjustments(database);
+            runRepository = new TuningStores.PostgresRuns(database);
         }
         Accounts.Service accounts = new Accounts.Service(accountStore, config.authSessionTtl(), clock)
                 .withSignup("approval".equals(config.authSignup()));
@@ -141,7 +149,8 @@ public final class Main {
                 "background", config.backgroundChannels());
         QueueOutbox outbox = new QueueOutbox(deliveryStore, targets, routes, clock);
         Overrides.Service overrides = new Overrides.Service(overrideStore, clock);
-        Heuristic heuristic = new Heuristic();
+        Tuning.Snapshot tuningSnapshot = new Tuning.Snapshot(Tuning.DEFAULT_MAX_AGE, clock);
+        Heuristic heuristic = new Heuristic().withTuning(tuningSnapshot);
         Budget budget = null;
         if (config.attentionBudgetPerHour() > 0) {
             budget = redis == null
@@ -167,6 +176,17 @@ public final class Main {
         Learning.Service learning = new Learning.Service(learningRepository, feedbackStore::list,
                 () -> eventsForLookup.listRecent(FEEDBACK_LOOKUP_WINDOW), Learning.ruleEditor(rules), overrides::upsert,
                 new Learning.Config(config.learningMinSignals(), 0, config.learningLookback()), clock);
+        Tuning.Tuner tuner = new Tuning.Tuner(adjustmentRepository, runRepository, feedbackStore::list,
+                () -> eventsForLookup.listRecent(FEEDBACK_LOOKUP_WINDOW), rules::list, tuningSnapshot,
+                new Tuning.Config(config.learningMinSignals(), config.learningMinPeople(), config.learningMaxAdjustment(),
+                        config.learningLookback(), config.learningHalfLife()), clock);
+        try {
+            tuner.refreshSnapshot();
+        } catch (RuntimeException e) {
+            // The service starts and scores as it did without learning until the next refresh works.
+            LOG.warn("loading the learned adjustments failed; scoring without them error={}", e.getMessage());
+        }
+        Tuning.Background tuningBackground = new Tuning.Background(tuner, config.learningTrainEvery());
         Dispatcher dispatcher = new Dispatcher(deliveryStore, targets, byChannel, clock,
                 Dispatcher.DEFAULT_MAX_ATTEMPTS, Dispatcher.DEFAULT_BACKOFF_BASE);
 
@@ -180,10 +200,12 @@ public final class Main {
         Notify.Service notify = new Notify.Service(config.notifyLimits(), provider);
         HttpServer server = new HttpApi(config, pipeline, repository, notify, rules, deliveryStore, clock, accounts, overrides, feedback)
                 .withLearning(learning, accounts)
+                .withTuning(tuner, accounts, config.learningTrainEvery())
                 .withAttention(digests, digestStore, id -> eventsForLookup.listRecent(FEEDBACK_LOOKUP_WINDOW).stream()
                         .filter(e -> e.getId().equals(id)).findFirst(), config.attentionDigestEvery(), accounts)
                 .start(config.port());
         digestScheduler.start();
+        tuningBackground.start();
         if (config.dispatcherEnabled()) {
             dispatcher.start();
         } else {
@@ -196,6 +218,7 @@ public final class Main {
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             dispatcher.stop();
             digestScheduler.stop();
+            tuningBackground.stop();
             server.stop(SHUTDOWN_SECONDS);
             if (cache != null) {
                 cache.close();

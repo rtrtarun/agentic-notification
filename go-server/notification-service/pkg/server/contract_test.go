@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentpulse/notification-service/pkg/config"
 )
@@ -83,6 +84,7 @@ func newContractServer(t *testing.T) http.Handler {
 	t.Setenv("RULES_PATH", contractRules)
 	t.Setenv("ATTENTION_CLASSIFY", "false")
 	t.Setenv("ATTENTION_BUDGET_PER_HOUR", "0")
+	t.Setenv("LEARNING_MIN_PEOPLE", "1") // the contract has one caller, the API key; the distinct-people rule is tested in each service
 	t.Setenv("DATABASE_URL", "")
 	t.Setenv("REDIS_URL", "")
 	t.Setenv("AUTH_BOOTSTRAP_EMAIL", "admin@contract.test")
@@ -103,7 +105,12 @@ func newContractServer(t *testing.T) http.Handler {
 func runContractFile(t *testing.T, file contractFile) {
 	handler := newContractServer(t)
 	vars := map[string]string{}
+	lastStep := time.Now().UTC()
 	for _, step := range file.Steps {
+		// A wall clock can tick as slowly as a millisecond (Windows). Wait for a new tick so that anything a step
+		// stores is later than anything an earlier step stored, as "held since the last digest" needs.
+		for !time.Now().UTC().After(lastStep) {
+		}
 		path := step.Request.Path
 		for k, v := range vars {
 			path = strings.ReplaceAll(path, "{{"+k+"}}", v)
@@ -129,6 +136,7 @@ func runContractFile(t *testing.T, file contractFile) {
 		}
 		rr := httptest.NewRecorder()
 		handler.ServeHTTP(rr, req)
+		lastStep = time.Now().UTC()
 
 		answer, _ := io.ReadAll(rr.Body)
 		if rr.Code != step.Expect.Status {

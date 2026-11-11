@@ -209,6 +209,53 @@ class SacredInvariantTest {
     }
 
     @Test
+    void scoreTuningNeverLearnsFromCriticalEventsNorAdjustsACriticalOrLockedScope() {
+        Clock clock = Clock.systemUTC();
+        MemoryStores.Rules store = new MemoryStores.Rules();
+        RulesService rules = new RulesService(store, new PolicyEngine(List.of()), List.of(
+                new Rule("", "advisory", "", new Rule.Condition("github", "security_advisory", ""),
+                        new Rule.Outcome("critical", "security", false), false, true),
+                new Rule("", "default", "", new Rule.Condition("github", "", ""), new Rule.Outcome("standard", "r", true), false, false)));
+        com.agentpulse.notification.infrastructure.FeedbackStores.MemoryFeedback fb = new com.agentpulse.notification.infrastructure.FeedbackStores.MemoryFeedback();
+        com.agentpulse.notification.infrastructure.TuningStores.MemoryAdjustments adjustments = new com.agentpulse.notification.infrastructure.TuningStores.MemoryAdjustments();
+        java.util.List<Event> events = new java.util.ArrayList<>();
+        Tuning.Snapshot snapshot = new Tuning.Snapshot(java.time.Duration.ofHours(1), clock);
+        Tuning.Tuner tuner = new Tuning.Tuner(adjustments, new com.agentpulse.notification.infrastructure.TuningStores.MemoryRuns(), fb::list,
+                () -> java.util.List.copyOf(events), rules::list, snapshot, new Tuning.Config(5, 1, 20, null, null), clock);
+
+        // Many people dismiss critical events. Nothing may be learned from that.
+        for (int i = 0; i < 30; i++) {
+            Event critical = new Event("c" + i, "github", "security_advisory", "acme/api", null);
+            critical.setAttentionClass("critical");
+            com.agentpulse.notification.domain.DecisionState state = new com.agentpulse.notification.domain.DecisionState("security", "advisory");
+            state.setStatus("sent");
+            critical.setDecisionState(state);
+            events.add(critical);
+            fb.add(new Feedback.Entry("f" + i, "c" + i, i % 2 == 0 ? "sam" : "alex", "dismissed", "", "", "", "github", "security_advisory", "acme/api", clock.instant()));
+        }
+        assertEquals(0, tuner.runNow().proposalsMade(), "feedback about critical events is never learned from");
+        assertTrue(tuner.list("").isEmpty());
+
+        // A proposal crafted against the locked critical rule's scope is refused, stays proposed, and nothing becomes active.
+        adjustments.save(new Tuning.Adjustment("crafted", "github", "security_advisory", "", -20, "proposed", Tuning.Evidence.NONE,
+                new Tuning.Impact(0, 0), 0, clock.instant(), clock.instant(), "", null));
+        assertThrows(Tuning.GuardrailException.class, () -> tuner.approve("crafted", "admin"));
+        assertEquals("proposed", adjustments.get("crafted").status());
+        assertEquals(0, snapshot.size());
+
+        // Even an active row for that scope is left out of the snapshot, and the heuristic refuses a critical event outright.
+        adjustments.save(new Tuning.Adjustment("sneaky", "github", "security_advisory", "", -20, "active", Tuning.Evidence.NONE,
+                new Tuning.Impact(0, 0), 1, clock.instant(), clock.instant(), "", null));
+        tuner.refreshSnapshot();
+        assertEquals(0, snapshot.size(), "a scope a critical or locked rule covers is never applied");
+        snapshot.set(1, java.util.List.of(new Tuning.Applied("sneaky", "github", "security_advisory", "", -20, "s")));
+        Event critical = new Event("x", "github", "security_advisory", "", null);
+        critical.setAttentionClass("critical");
+        assertThrows(IllegalArgumentException.class, () -> new Heuristic().withTuning(snapshot).classify(critical));
+        assertThrows(IllegalArgumentException.class, () -> GuardedClassifier.of(new Heuristic().withTuning(snapshot)).classify(critical));
+    }
+
+    @Test
     void aCriticalRuleCanNeverNarrowWhereACriticalEventGoes() {
         // Even a stored rule that wrongly carries a channel override cannot narrow a critical event.
         Rule bad = new Rule("1", "bad", "", new Rule.Condition("github", "security_advisory", ""),

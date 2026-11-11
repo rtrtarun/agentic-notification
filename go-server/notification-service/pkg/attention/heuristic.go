@@ -12,10 +12,20 @@ import (
 // Heuristic is the built-in, offline implementation of Classifier, Summarizer
 // and Explainer. It is deterministic: the same event always gets the same
 // score, and every point of it comes with a reason a person can read.
-type Heuristic struct{}
+type Heuristic struct {
+	tuning *Tuning
+}
 
 // NewHeuristic returns the built-in implementation.
 func NewHeuristic() *Heuristic { return &Heuristic{} }
+
+// WithTuning lets the heuristic add the approved, learned score offsets in the
+// snapshot. Without one, or while the snapshot is empty or stale, it scores
+// exactly as it always did.
+func (h *Heuristic) WithTuning(t *Tuning) *Heuristic {
+	h.tuning = t
+	return h
+}
 
 const (
 	baseScore       = 50
@@ -78,6 +88,12 @@ func (h *Heuristic) Classify(ctx context.Context, evt event.Event) (Classificati
 		add(10, "a person commented")
 	}
 
+	model := ModelHeuristic
+	if adj, version, ok := h.tuning.lookup(evt); ok {
+		add(adj.Delta, fmt.Sprintf("learned adjustment %+d: %s", adj.Delta, adj.Summary))
+		model = TunedModel(version)
+	}
+
 	if score < 0 {
 		score = 0
 	}
@@ -91,7 +107,7 @@ func (h *Heuristic) Classify(ctx context.Context, evt event.Event) (Classificati
 	} else if score > baseScore {
 		confidence = clamp(0.6+float64(score-baseScore)/100, 0.6, 0.95)
 	}
-	return Classification{Class: class, Score: score, Confidence: confidence, Reasons: reasons, Model: ModelHeuristic}, nil
+	return Classification{Class: class, Score: score, Confidence: confidence, Reasons: reasons, Model: model}, nil
 }
 
 // Summarize groups events by source and repository and describes each group.

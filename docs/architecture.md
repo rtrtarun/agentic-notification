@@ -1069,6 +1069,8 @@ Auth: **key** means the API key or a signed-in session; **admin** means an admin
 | `GET /api/explain/{eventId}` | key | Plain-language reason for a decision, labelled heuristic or model |
 | `GET /api/attention/status` | admin | Which engine is active, breaker state, fallbacks |
 | `GET /api/learning/suggestions`, `POST .../{id}/apply`, `POST .../{id}/dismiss` | key to read, admin to resolve | Suggestions from feedback |
+| `GET /api/learning/adjustments?status=`, `POST .../{id}/approve`, `.../reject`, `.../retire` | key to read, admin to decide | Learned score adjustments (milestone 38b) |
+| `GET /api/learning/runs`, `POST /api/learning/runs` (`?wait=true` waits) | key to read, admin to start | Learning runs (milestone 38b) |
 | `GET /api/traces`, `GET /api/traces/{id}` | key | Agent runs and their ordered steps with decisions |
 | `POST /api/mcp` | key | Model Context Protocol over HTTP (one JSON-RPC message per request) |
 | `GET /api/stream` | key | Server-sent events for live updates |
