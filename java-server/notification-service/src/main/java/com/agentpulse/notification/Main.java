@@ -8,6 +8,7 @@ import com.agentpulse.notification.application.Feedback;
 import com.agentpulse.notification.application.Overrides;
 import com.agentpulse.notification.application.Dispatcher;
 import com.agentpulse.notification.application.GuardedClassifier;
+import com.agentpulse.notification.application.Learning;
 import com.agentpulse.notification.application.Heuristic;
 import com.agentpulse.notification.application.MemoryDeduper;
 import com.agentpulse.notification.application.Notify;
@@ -29,6 +30,7 @@ import com.agentpulse.notification.infrastructure.DigestStores;
 import com.agentpulse.notification.infrastructure.FeedbackStores;
 import com.agentpulse.notification.infrastructure.InMemoryEventRepository;
 import com.agentpulse.notification.infrastructure.JedisKeyStore;
+import com.agentpulse.notification.infrastructure.LearningStores;
 import com.agentpulse.notification.infrastructure.MemoryAccountStore;
 import com.agentpulse.notification.infrastructure.MemoryStores;
 import com.agentpulse.notification.infrastructure.PostgresAccountStore;
@@ -75,6 +77,7 @@ public final class Main {
         Overrides.Store overrideStore;
         Feedback.Store feedbackStore;
         Digests.Store digestStore;
+        Learning.Repository learningRepository;
         if (config.databaseUrl().isEmpty()) {
             LOG.warn("DATABASE_URL unset; events, rules and deliveries are kept in memory and lost on restart");
             repository = new InMemoryEventRepository(clock);
@@ -84,6 +87,7 @@ public final class Main {
             overrideStore = new FeedbackStores.MemoryOverrides();
             feedbackStore = new FeedbackStores.MemoryFeedback();
             digestStore = new DigestStores.Memory();
+            learningRepository = new LearningStores.Memory();
         } else {
             database = Database.connect(config.databaseUrl());
             Database.waitForSchema(database, SCHEMA_WAIT);
@@ -94,6 +98,7 @@ public final class Main {
             overrideStore = new FeedbackStores.PostgresOverrides(database);
             feedbackStore = new FeedbackStores.PostgresFeedback(database);
             digestStore = new DigestStores.Postgres(database);
+            learningRepository = new LearningStores.Postgres(database);
         }
         Accounts.Service accounts = new Accounts.Service(accountStore, config.authSessionTtl(), clock)
                 .withSignup("approval".equals(config.authSignup()));
@@ -159,6 +164,9 @@ public final class Main {
         Digests.Generator digests = new Digests.Generator(() -> eventsForLookup.listRecent(FEEDBACK_LOOKUP_WINDOW), digestStore,
                 heuristic, heuristic, clock);
         Digests.Scheduler digestScheduler = new Digests.Scheduler(digests, config.attentionDigestEvery());
+        Learning.Service learning = new Learning.Service(learningRepository, feedbackStore::list,
+                () -> eventsForLookup.listRecent(FEEDBACK_LOOKUP_WINDOW), Learning.ruleEditor(rules), overrides::upsert,
+                new Learning.Config(config.learningMinSignals(), 0, config.learningLookback()), clock);
         Dispatcher dispatcher = new Dispatcher(deliveryStore, targets, byChannel, clock,
                 Dispatcher.DEFAULT_MAX_ATTEMPTS, Dispatcher.DEFAULT_BACKOFF_BASE);
 
@@ -171,6 +179,7 @@ public final class Main {
 
         Notify.Service notify = new Notify.Service(config.notifyLimits(), provider);
         HttpServer server = new HttpApi(config, pipeline, repository, notify, rules, deliveryStore, clock, accounts, overrides, feedback)
+                .withLearning(learning, accounts)
                 .withAttention(digests, digestStore, id -> eventsForLookup.listRecent(FEEDBACK_LOOKUP_WINDOW).stream()
                         .filter(e -> e.getId().equals(id)).findFirst(), config.attentionDigestEvery(), accounts)
                 .start(config.port());

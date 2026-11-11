@@ -10,9 +10,11 @@ import com.agentpulse.notification.application.Targets;
 import com.agentpulse.notification.application.Digests;
 import com.agentpulse.notification.application.Feedback;
 import com.agentpulse.notification.application.Heuristic;
+import com.agentpulse.notification.application.Learning;
 import com.agentpulse.notification.application.Overrides;
 import com.agentpulse.notification.infrastructure.DigestStores;
 import com.agentpulse.notification.infrastructure.FeedbackStores;
+import com.agentpulse.notification.infrastructure.LearningStores;
 import com.agentpulse.notification.infrastructure.MemoryAccountStore;
 import com.agentpulse.notification.infrastructure.MemoryStores;
 import com.agentpulse.notification.application.Pipeline;
@@ -112,7 +114,8 @@ class ContractTest {
         // No channel is configured, so nothing is routed to the queue; critical deliveries are still logged there.
         QueueOutbox outbox = new QueueOutbox(deliveries, Targets.none(), Map.of(), Clock.systemUTC());
         Overrides.Service overrides = new Overrides.Service(new FeedbackStores.MemoryOverrides(), Clock.systemUTC());
-        Feedback.Service feedback = new Feedback.Service(new FeedbackStores.MemoryFeedback(),
+        Feedback.Store feedbackStore = new FeedbackStores.MemoryFeedback();
+        Feedback.Service feedback = new Feedback.Service(feedbackStore,
                 id -> repository.listRecent(1000).stream().filter(e -> e.getId().equals(id)).findFirst(), overrides, Clock.systemUTC());
         Pipeline pipeline = new Pipeline(engine, logOnly, repository)
                 .withOverrides(overrides)
@@ -129,6 +132,9 @@ class ContractTest {
         Digests.Store digestStore = new DigestStores.Memory();
         Digests.Generator digests = new Digests.Generator(() -> repository.listRecent(1000), digestStore, heuristic, heuristic, Clock.systemUTC());
         return new HttpApi(config, pipeline, repository, notify, rules, deliveries, Clock.systemUTC(), accounts, overrides, feedback)
+                .withLearning(new Learning.Service(new LearningStores.Memory(), feedbackStore::list,
+                        () -> repository.listRecent(1000), Learning.ruleEditor(rules), overrides::upsert,
+                        new Learning.Config(5, 0, null), Clock.systemUTC()), accounts)
                 .withAttention(digests, digestStore, id -> repository.listRecent(1000).stream().filter(e -> e.getId().equals(id)).findFirst(),
                         Duration.ZERO, accounts)
                 .start(0);

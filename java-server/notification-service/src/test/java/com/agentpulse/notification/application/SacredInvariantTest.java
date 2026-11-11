@@ -9,6 +9,7 @@ import com.agentpulse.notification.application.Fakes.RecordingRepository;
 import com.agentpulse.notification.application.Ports.Adjustment;
 import com.agentpulse.notification.domain.Event;
 import com.agentpulse.notification.domain.Rule;
+import com.agentpulse.notification.infrastructure.MemoryStores;
 import com.agentpulse.notification.domain.Status;
 import org.junit.jupiter.api.Test;
 
@@ -170,6 +171,41 @@ class SacredInvariantTest {
         assertEquals("", critical.getDecisionState().getStatus(), "not delayed, not sent to the digest");
         assertEquals("security", critical.getDecisionState().getReason());
         assertEquals(0, preferences.calls, "quiet hours were never even consulted");
+    }
+
+    @Test
+    void learningNeverLearnsFromCriticalEventsNorChangesACriticalOrLockedRule() {
+        Clock clock = Clock.systemUTC();
+        MemoryStores.Rules store = new MemoryStores.Rules();
+        RulesService rules = new RulesService(store, new PolicyEngine(List.of()), List.of(
+                new Rule("", "advisory", "", new Rule.Condition("github", "security_advisory", ""),
+                        new Rule.Outcome("critical", "security", false), false, true),
+                new Rule("", "default", "", new Rule.Condition("github", ""  , ""), new Rule.Outcome("standard", "r", false), false, false)));
+        com.agentpulse.notification.infrastructure.FeedbackStores.MemoryFeedback fb = new com.agentpulse.notification.infrastructure.FeedbackStores.MemoryFeedback();
+        com.agentpulse.notification.infrastructure.LearningStores.Memory repo = new com.agentpulse.notification.infrastructure.LearningStores.Memory();
+        java.util.List<Event> events = new java.util.ArrayList<>();
+        Learning.Service learning = new Learning.Service(repo, fb::list, () -> java.util.List.copyOf(events), Learning.ruleEditor(rules),
+                o -> o, new Learning.Config(5, 2, null), clock);
+
+        // Twenty people dismiss critical advisories. Nothing may be learned from that.
+        for (int i = 0; i < 20; i++) {
+            Event critical = new Event("c" + i, "github", "security_advisory", "acme/api", null);
+            critical.setAttentionClass("critical");
+            critical.setDecisionState(new com.agentpulse.notification.domain.DecisionState("security", "advisory"));
+            events.add(critical);
+            fb.add(new Feedback.Entry("f" + i, "c" + i, "sam", "dismissed", "", "", "", "github", "security_advisory", "acme/api", clock.instant()));
+        }
+        assertTrue(learning.review().isEmpty(), "feedback about critical events is never learned from");
+
+        // A suggestion crafted against the locked critical rule is refused, and the rule is unchanged.
+        Rule locked = rules.list().stream().filter(Rule::locked).findFirst().orElseThrow();
+        repo.save(new Learning.Suggestion("crafted", "demote", "pending", "github", "security_advisory", "", locked.id(), locked.name(), "s", "p",
+                new Learning.Evidence(20, 0, 0, 0, 0), clock.instant(), clock.instant(), "", null));
+        assertThrows(Learning.GuardrailException.class, () -> learning.apply("crafted", "admin"));
+        Rule after = rules.list().stream().filter(Rule::locked).findFirst().orElseThrow();
+        assertEquals("critical", after.then().attentionClass());
+        assertTrue(after.locked());
+        assertEquals("pending", repo.get("crafted").status(), "refused, so it is still pending, not applied");
     }
 
     @Test

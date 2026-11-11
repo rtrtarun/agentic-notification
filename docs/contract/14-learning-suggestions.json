@@ -1,0 +1,243 @@
+{
+  "name": "feedback becomes reviewable suggestions; nothing changes until an admin applies one; applying changes the rule and is final; critical feedback is never learned from",
+  "steps": [
+    {
+      "name": "suggestions need the key",
+      "request": { "method": "GET", "path": "/api/learning/suggestions" },
+      "expect": { "status": 401, "json": { "error": "missing or invalid api key" } }
+    },
+    {
+      "name": "there is nothing to suggest yet, and the evidence threshold is shown",
+      "request": { "method": "GET", "path": "/api/learning/suggestions", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "suggestions": [], "minSignals": 5 } }
+    },
+    {
+      "name": "five different pull requests arrive",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "learn-1" }, "body": { "action": "opened", "number": 1, "repository": { "full_name": "acme/learn" } }, "sign": true },
+      "expect": { "status": 202, "json": { "eventId": "github-pull_request-learn-1", "attentionClass": "standard", "decisionState": { "status": "queued", "matchedRule": "default-github" } } }
+    },
+    {
+      "name": "pull request 2",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "learn-2" }, "body": { "action": "opened", "number": 2, "repository": { "full_name": "acme/learn" } }, "sign": true },
+      "expect": { "status": 202, "json": { "decisionState": { "status": "queued" } } }
+    },
+    {
+      "name": "pull request 3",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "learn-3" }, "body": { "action": "opened", "number": 3, "repository": { "full_name": "acme/learn" } }, "sign": true },
+      "expect": { "status": 202, "json": { "decisionState": { "status": "queued" } } }
+    },
+    {
+      "name": "pull request 4",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "learn-4" }, "body": { "action": "opened", "number": 4, "repository": { "full_name": "acme/learn" } }, "sign": true },
+      "expect": { "status": 202, "json": { "decisionState": { "status": "queued" } } }
+    },
+    {
+      "name": "pull request 5",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "learn-5" }, "body": { "action": "opened", "number": 5, "repository": { "full_name": "acme/learn" } }, "sign": true },
+      "expect": { "status": 202, "json": { "decisionState": { "status": "queued" } } }
+    },
+    {
+      "name": "four dismissals are not enough evidence",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-learn-1", "action": "dismissed" } },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "dismissal 2",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-learn-2", "action": "dismissed" } },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "dismissal 3",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-learn-3", "action": "dismissed" } },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "dismissal 4",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-learn-4", "action": "dismissed" } },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "four is below the threshold of five, so still nothing is suggested",
+      "request": { "method": "GET", "path": "/api/learning/suggestions", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "suggestions": [], "minSignals": 5 } }
+    },
+    {
+      "name": "the fifth dismissal",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-pull_request-learn-5", "action": "dismissed" } },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "now one suggestion is pending: demote the rule, with the evidence in plain words",
+      "request": { "method": "GET", "path": "/api/learning/suggestions", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "suggestions": [ {
+        "kind": "demote", "status": "pending", "source": "github", "eventType": "pull_request", "repository": "acme/learn",
+        "ruleName": "default-github",
+        "summary": "People dismissed or muted github pull_request notifications 5 times and never opened or replied to one.",
+        "proposed": "Change the rule \"default-github\" from standard to background.",
+        "evidence": { "dismissed": 5, "never": 0, "opened": 0, "reply": 0, "always": 0 } } ], "minSignals": 5 },
+        "present": ["suggestions"] },
+      "save": { "demote": "suggestions.0.id" }
+    },
+    {
+      "name": "asking again does not make a second one",
+      "request": { "method": "GET", "path": "/api/learning/suggestions", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "suggestions": [ { "kind": "demote", "status": "pending" } ] } }
+    },
+    {
+      "name": "nothing has changed by itself: the rule is still standard",
+      "request": { "method": "GET", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "rules": [ { "name": "github-security-advisory" }, { "name": "github-dependabot-alert" }, { "name": "github-star" }, { "name": "default-github", "then": { "attentionClass": "standard" } } ] } }
+    },
+    {
+      "name": "an unknown suggestion is not found",
+      "request": { "method": "POST", "path": "/api/learning/suggestions/nope/apply", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 404, "json": { "error": "suggestion not found" } }
+    },
+    {
+      "name": "an unknown action is not found",
+      "request": { "method": "POST", "path": "/api/learning/suggestions/{{demote}}/explode", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 404, "json": { "error": "not found" } }
+    },
+    {
+      "name": "the suggestions API refuses other methods",
+      "request": { "method": "PUT", "path": "/api/learning/suggestions", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 405, "json": { "error": "method not allowed" } }
+    },
+    {
+      "name": "applying makes the change and records who did it",
+      "request": { "method": "POST", "path": "/api/learning/suggestions/{{demote}}/apply", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 200, "json": { "suggestion": { "kind": "demote", "status": "applied", "resolvedBy": "api-key" } }, "present": ["suggestion"] }
+    },
+    {
+      "name": "the rule is now background",
+      "request": { "method": "GET", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "rules": [ { "name": "github-security-advisory", "then": { "attentionClass": "critical" } }, { "name": "github-dependabot-alert", "then": { "attentionClass": "critical" } }, { "name": "github-star" }, { "name": "default-github", "then": { "attentionClass": "background" } } ] } }
+    },
+    {
+      "name": "and the next pull request follows it",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "pull_request", "X-GitHub-Delivery": "learn-6" }, "body": { "action": "opened", "number": 6, "repository": { "full_name": "acme/learn" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "background", "decisionState": { "status": "digest" } } }
+    },
+    {
+      "name": "a suggestion can be applied only once",
+      "request": { "method": "POST", "path": "/api/learning/suggestions/{{demote}}/apply", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 409, "json": { "error": "suggestion is no longer pending" } }
+    },
+    {
+      "name": "feedback from before it was applied is not counted again, so nothing new is pending",
+      "request": { "method": "GET", "path": "/api/learning/suggestions", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "suggestions": [], "minSignals": 5 } }
+    },
+    {
+      "name": "two stars arrive from two repositories",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "star", "X-GitHub-Delivery": "learn-star-1" }, "body": { "action": "created", "repository": { "full_name": "acme/one" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "background" } }
+    },
+    {
+      "name": "the second star",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "star", "X-GitHub-Delivery": "learn-star-2" }, "body": { "action": "created", "repository": { "full_name": "acme/two" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "background" } }
+    },
+    {
+      "name": "someone asks to always hear about stars",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-star-learn-star-1", "action": "always" } },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "and again for the second",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-star-learn-star-2", "action": "always" } },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "six critical events are dismissed, which must teach nothing",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "security_advisory", "X-GitHub-Delivery": "learn-crit-1" }, "body": { "action": "published", "repository": { "full_name": "acme/crit-1" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "critical" } }
+    },
+    {
+      "name": "critical 2",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "security_advisory", "X-GitHub-Delivery": "learn-crit-2" }, "body": { "action": "published", "repository": { "full_name": "acme/crit-2" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "critical" } }
+    },
+    {
+      "name": "critical 3",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "security_advisory", "X-GitHub-Delivery": "learn-crit-3" }, "body": { "action": "published", "repository": { "full_name": "acme/crit-3" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "critical" } }
+    },
+    {
+      "name": "critical 4",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "security_advisory", "X-GitHub-Delivery": "learn-crit-4" }, "body": { "action": "published", "repository": { "full_name": "acme/crit-4" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "critical" } }
+    },
+    {
+      "name": "critical 5",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "security_advisory", "X-GitHub-Delivery": "learn-crit-5" }, "body": { "action": "published", "repository": { "full_name": "acme/crit-5" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "critical" } }
+    },
+    {
+      "name": "critical 6",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "security_advisory", "X-GitHub-Delivery": "learn-crit-6" }, "body": { "action": "published", "repository": { "full_name": "acme/crit-6" } }, "sign": true },
+      "expect": { "status": 202, "json": { "attentionClass": "critical" } }
+    },
+    {
+      "name": "dismiss critical 1",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-security_advisory-learn-crit-1", "action": "dismissed" } },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "dismiss critical 2",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-security_advisory-learn-crit-2", "action": "dismissed" } },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "dismiss critical 3",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-security_advisory-learn-crit-3", "action": "dismissed" } },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "dismiss critical 4",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-security_advisory-learn-crit-4", "action": "dismissed" } },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "dismiss critical 5",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-security_advisory-learn-crit-5", "action": "dismissed" } },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "dismiss critical 6",
+      "request": { "method": "POST", "path": "/feedback", "headers": { "X-API-Key": "contract-key" }, "body": { "eventId": "github-security_advisory-learn-crit-6", "action": "dismissed" } },
+      "expect": { "status": 202 }
+    },
+    {
+      "name": "the only suggestion is the one about stars; nothing is suggested about critical events",
+      "request": { "method": "GET", "path": "/api/learning/suggestions", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "suggestions": [ {
+        "kind": "promote", "status": "pending", "source": "github", "eventType": "star", "ruleName": "github-star",
+        "summary": "People asked to always be told about github star notifications 2 times.",
+        "proposed": "Change the rule \"github-star\" from background to standard.",
+        "evidence": { "dismissed": 0, "never": 0, "opened": 0, "reply": 0, "always": 2 } } ], "minSignals": 5 },
+        "absentInEach": { "suggestions": ["repository"] } },
+      "save": { "stars": "suggestions.0.id" }
+    },
+    {
+      "name": "a suggestion can be dismissed instead",
+      "request": { "method": "POST", "path": "/api/learning/suggestions/{{stars}}/dismiss", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 200, "json": { "suggestion": { "kind": "promote", "status": "dismissed", "resolvedBy": "api-key" } } }
+    },
+    {
+      "name": "the rule was not changed by dismissing",
+      "request": { "method": "GET", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "rules": [ { "name": "github-security-advisory" }, { "name": "github-dependabot-alert" }, { "name": "github-star", "then": { "attentionClass": "background" } }, { "name": "default-github" } ] } }
+    },
+    {
+      "name": "a dismissed suggestion is not made again",
+      "request": { "method": "GET", "path": "/api/learning/suggestions", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "suggestions": [], "minSignals": 5 } }
+    },
+    {
+      "name": "a resolved suggestion cannot be resolved again",
+      "request": { "method": "POST", "path": "/api/learning/suggestions/{{stars}}/apply", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 409, "json": { "error": "suggestion is no longer pending" } }
+    }
+  ]
+}
