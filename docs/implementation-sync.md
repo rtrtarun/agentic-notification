@@ -22,7 +22,7 @@ The single place that says **what is built, what was proven, what is open and wh
 | Feedback (`/feedback`) and always/never overrides (`/api/overrides`) | Yes | Yes (M37b, contract 12) | Overrides cache is per process in both |
 | Heuristic Attention Intelligence: classifier, explanations, digests, attention budget | Yes | Yes (M37c, contract 13; digests stored, not delivered; no personal digests) | Budget shared through Redis |
 | Learning suggestions (review, apply, dismiss) | Yes | Yes (M38a, contract 14) | Same suggestion id hash; analysis reads the newest events and feedback (F10) |
-| Learning score tuning (offline, approval-gated) | Planned (M38b) | Planned (M38c) | [plan](milestones/milestone-38-plan.md) |
+| Learning score tuning (offline, approval-gated) | Yes (M38b, contract 15) | Planned (M38c) | [plan](milestones/milestone-38-plan.md) |
 | Language-model classification (Ollama, Claude) | Yes | **No** (refused at start) | |
 | SMS, Novu, metrics, inbox, channels API, retention | Yes | **No** | |
 | Accounts, sessions, roles | Yes | Yes (milestone 36) | [milestones/milestone-36.md](milestones/milestone-36.md) |

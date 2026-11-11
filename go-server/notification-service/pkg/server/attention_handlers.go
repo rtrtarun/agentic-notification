@@ -38,7 +38,8 @@ func (s *Server) initAttention(outbox *delivery.Outbox) {
 		store = attention.NewPostgresDigestStore(s.sqlDB)
 	}
 	s.digestStore = store
-	h := attention.NewHeuristic()
+	s.tuning = newTuning()
+	h := attention.NewHeuristic().WithTuning(s.tuning)
 	var (
 		classifier attention.Classifier = h
 		summarizer attention.Summarizer = h

@@ -122,6 +122,14 @@ type Config struct {
 	LearningMinSignals int
 	// LearningLookback is how far back feedback is read for suggestions.
 	LearningLookback time.Duration
+	// LearningMinPeople is how many distinct people a score adjustment needs signals from.
+	LearningMinPeople int
+	// LearningMaxAdjustment is the most points a learned score adjustment may add or take away.
+	LearningMaxAdjustment int
+	// LearningHalfLife is the age at which a feedback signal counts half as much.
+	LearningHalfLife time.Duration
+	// LearningTrainEvery is how often a learning run is made; zero means only on request.
+	LearningTrainEvery time.Duration
 	// AttentionMaxCallsPerMin caps model calls per minute.
 	AttentionMaxCallsPerMin int
 	// DigestChannels lists the channels a digest is delivered to; empty means digests are only stored.
@@ -334,6 +342,18 @@ func LoadConfig() (*Config, error) {
 	if cfg.LearningLookback, err = envDuration("LEARNING_LOOKBACK", defaultLearningLookback, false); err != nil {
 		return nil, err
 	}
+	if cfg.LearningMinPeople, err = envInt("LEARNING_MIN_PEOPLE", defaultLearningMinPeople, 1, 1000); err != nil {
+		return nil, err
+	}
+	if cfg.LearningMaxAdjustment, err = envInt("LEARNING_MAX_ADJUSTMENT", defaultLearningMaxAdjustment, 1, 50); err != nil {
+		return nil, err
+	}
+	if cfg.LearningHalfLife, err = envDuration("LEARNING_HALF_LIFE", defaultLearningHalfLife, false); err != nil {
+		return nil, err
+	}
+	if cfg.LearningTrainEvery, err = envDuration("LEARNING_TRAIN_EVERY", 0, true); err != nil {
+		return nil, err
+	}
 	if cfg.AttentionMaxCallsPerMin, err = envInt("ATTENTION_MAX_CALLS_PER_MIN", defaultAttentionMaxCalls, 1, 100000); err != nil {
 		return nil, err
 	}
@@ -472,4 +492,7 @@ const (
 	defaultAttentionBudgetPerHour  = 10
 	defaultLearningMinSignals      = 5
 	defaultLearningLookback        = 30 * 24 * time.Hour
+	defaultLearningMinPeople       = 2
+	defaultLearningMaxAdjustment   = 20
+	defaultLearningHalfLife        = 14 * 24 * time.Hour
 )

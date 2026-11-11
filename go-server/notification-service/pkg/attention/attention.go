@@ -91,7 +91,7 @@ type SourcedExplainer interface {
 
 // SourceOf says whether a model name means the built-in heuristic or a language model.
 func SourceOf(model string) string {
-	if model == "" || model == ModelHeuristic {
+	if model == "" || model == ModelHeuristic || strings.HasPrefix(model, ModelHeuristic+"+tuned-") {
 		return "heuristic"
 	}
 	return "model"

@@ -239,6 +239,37 @@ func Migrate(ctx context.Context, db Execer) error {
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 		`CREATE INDEX IF NOT EXISTS learning_suggestions_status_idx ON learning_suggestions (status, updated_at DESC)`,
+		// Score adjustments proposed by offline tuning and approved by an admin, and the log of tuning runs. See pkg/learning.
+		`CREATE TABLE IF NOT EXISTS learning_adjustments (
+			id          TEXT PRIMARY KEY,
+			scope_key   TEXT NOT NULL UNIQUE,
+			source      TEXT NOT NULL,
+			event_type  TEXT NOT NULL,
+			repository  TEXT NOT NULL DEFAULT '',
+			delta       INTEGER NOT NULL,
+			status      TEXT NOT NULL CHECK (status IN ('proposed','active','rejected','retired')),
+			evidence    JSONB NOT NULL DEFAULT '{}',
+			impact      JSONB NOT NULL DEFAULT '{}',
+			version     INTEGER NOT NULL DEFAULT 0,
+			created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			resolved_by TEXT NOT NULL DEFAULT '',
+			resolved_at TIMESTAMPTZ
+		)`,
+		`CREATE INDEX IF NOT EXISTS learning_adjustments_status_idx ON learning_adjustments (status, updated_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS learning_runs (
+			id             TEXT PRIMARY KEY,
+			status         TEXT NOT NULL CHECK (status IN ('running','done','failed')),
+			started_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+			finished_at    TIMESTAMPTZ,
+			feedback_read  INTEGER NOT NULL DEFAULT 0,
+			events_read    INTEGER NOT NULL DEFAULT 0,
+			proposals_made INTEGER NOT NULL DEFAULT 0,
+			error          TEXT NOT NULL DEFAULT ''
+		)`,
+		// At most one run may be running at a time, across every service sharing the database.
+		`CREATE UNIQUE INDEX IF NOT EXISTS learning_runs_one_running ON learning_runs (status) WHERE status = 'running'`,
+		`CREATE INDEX IF NOT EXISTS learning_runs_started_idx ON learning_runs (started_at DESC)`,
 		`CREATE TABLE IF NOT EXISTS audit_log (
 			id     BIGSERIAL PRIMARY KEY,
 			at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
