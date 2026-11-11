@@ -37,6 +37,25 @@ class InfrastructureTest {
     // ---- settings ---------------------------------------------------------------------------------------------
 
     @Test
+    void scoreTuningSettingsHaveTheOwnersDefaultsAndAreChecked() {
+        Config c = Config.load(Map.of());
+        assertEquals(2, c.learningMinPeople());
+        assertEquals(20, c.learningMaxAdjustment());
+        assertEquals(Duration.ofDays(14), c.learningHalfLife());
+        assertEquals(Duration.ZERO, c.learningTrainEvery(), "runs only when an admin starts one");
+        Config tuned = Config.load(Map.of("LEARNING_MIN_PEOPLE", "3", "LEARNING_MAX_ADJUSTMENT", "10", "LEARNING_HALF_LIFE", "72h", "LEARNING_TRAIN_EVERY", "6h"));
+        assertEquals(3, tuned.learningMinPeople());
+        assertEquals(10, tuned.learningMaxAdjustment());
+        assertEquals(Duration.ofHours(72), tuned.learningHalfLife());
+        assertEquals(Duration.ofHours(6), tuned.learningTrainEvery());
+        for (Map<String, String> bad : List.of(Map.of("LEARNING_MIN_PEOPLE", "0"), Map.of("LEARNING_MAX_ADJUSTMENT", "51"),
+                Map.of("LEARNING_MAX_ADJUSTMENT", "0"), Map.of("LEARNING_HALF_LIFE", "0s"), Map.of("LEARNING_TRAIN_EVERY", "often"),
+                Map.of("LEARNING_TRAIN_EVERY", "-1h"))) {
+            assertThrows(Config.InvalidConfigException.class, () -> Config.load(bad), bad.toString());
+        }
+    }
+
+    @Test
     void emptySettingsFailClosedAndHaveSafeDefaults() {
         Config c = Config.load(Map.of());
         assertEquals(8080, c.port());

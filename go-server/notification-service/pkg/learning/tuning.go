@@ -346,15 +346,23 @@ func (t *Tuner) analyze(ctx context.Context) (readCounts, int, error) {
 
 // propose applies the rule to one scope's evidence.
 func (t *Tuner) propose(sc *scope, events []event.Event, now time.Time) (Adjustment, bool) {
+	// Sums are taken in a fixed order (by person) and rounded to six decimals, so the result does not depend on
+	// map order, and the Java service, which does the same, gets the very same numbers.
+	people := make([]string, 0, len(sc.voters))
+	for id := range sc.voters {
+		people = append(people, id)
+	}
+	sort.Strings(people)
 	var p, n float64
 	signals := 0
-	for _, v := range sc.voters {
-		p += math.Min(v.pos, PerPersonCap)
-		n += math.Min(v.neg, PerPersonCap)
+	for _, id := range people {
+		v := sc.voters[id]
+		p += math.Min(round6(v.pos), PerPersonCap)
+		n += math.Min(round6(v.neg), PerPersonCap)
 		signals += v.n
 	}
-	people := len(sc.voters)
-	if signals < t.cfg.MinSignals || people < t.cfg.MinPeople {
+	p, n = round6(p), round6(n)
+	if signals < t.cfg.MinSignals || len(people) < t.cfg.MinPeople {
 		return Adjustment{}, false
 	}
 	delta := offset(p, n, t.cfg.MaxAdjustment)
@@ -368,9 +376,9 @@ func (t *Tuner) propose(sc *scope, events []event.Event, now time.Time) (Adjustm
 	adj := Adjustment{
 		ID: AdjustmentID(sc.source, sc.eventType, ""), Source: sc.source, EventType: sc.eventType, Delta: delta, Status: AdjustmentProposed,
 		Evidence: TuneEvidence{
-			Positive: sc.positive, Negative: sc.negative, People: people, Signals: signals,
+			Positive: sc.positive, Negative: sc.negative, People: len(people), Signals: signals,
 			WindowDays: int(t.cfg.Lookback / (24 * time.Hour)),
-			Summary:    fmt.Sprintf("%d of %d signals from %s were %s", count, signals, people2(people), word),
+			Summary:    fmt.Sprintf("%d of %d signals from %s were %s", count, signals, people2(len(people)), word),
 		},
 		CreatedAt: now.UTC(), UpdatedAt: now.UTC(),
 	}
@@ -395,9 +403,11 @@ func weight(age, halfLife time.Duration) float64 {
 	if age < 0 {
 		age = 0
 	}
-	w := math.Pow(0.5, float64(age)/float64(halfLife))
-	return math.Round(w*1e6) / 1e6
+	return round6(math.Pow(0.5, float64(age)/float64(halfLife)))
 }
+
+// round6 rounds to six decimals, half away from zero.
+func round6(x float64) float64 { return math.Round(x*1e6) / 1e6 }
 
 // learnable says whether an event's feedback may be learned from: it must be a
 // non-critical event that was actually delivered (queued or sent). Events held for

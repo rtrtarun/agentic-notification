@@ -34,6 +34,17 @@ public final class Heuristic implements Classifier {
             "milestoned", "demilestoned", "synchronize", "converted_to_draft");
     private static final Set<String> CHECK_TYPES = Set.of("check_run", "workflow_run", "check_suite");
 
+    private volatile Tuning.Snapshot tuning;
+
+    /**
+     * Lets the heuristic add the approved, learned score offsets in the snapshot. Without one, or while the
+     * snapshot is empty or stale, it scores exactly as it always did.
+     */
+    public Heuristic withTuning(Tuning.Snapshot snapshot) {
+        this.tuning = snapshot;
+        return this;
+    }
+
     // ---- classify ------------------------------------------------------------------------------------------
 
     /** Scores an event from what it is and who sent it. Below 35 it is background; otherwise standard. */
@@ -80,6 +91,15 @@ public final class Heuristic implements Classifier {
             score += 10;
             reasons.add("a person commented");
         }
+        String model = MODEL;
+        Tuning.Snapshot snapshot = tuning;
+        Tuning.Match learned = snapshot == null ? null : snapshot.lookup(event);
+        if (learned != null) {
+            int delta = learned.adjustment().delta();
+            score += delta;
+            reasons.add("learned adjustment " + (delta >= 0 ? "+" : "") + delta + ": " + learned.adjustment().summary());
+            model = Tuning.tunedModel(learned.version());
+        }
         score = Math.max(0, Math.min(100, score));
 
         String cls = Attention.STANDARD;
@@ -91,7 +111,7 @@ public final class Heuristic implements Classifier {
             confidence = clamp(0.6 + (score - BASE_SCORE) / 100.0, 0.6, 0.95);
         }
         String reason = reasons.isEmpty() ? "scored " + score : "scored " + score + ": " + String.join(", ", reasons);
-        return new Classification(cls, MODEL, confidence, reason, score);
+        return new Classification(cls, model, confidence, reason, score);
     }
 
     // ---- summarise -----------------------------------------------------------------------------------------

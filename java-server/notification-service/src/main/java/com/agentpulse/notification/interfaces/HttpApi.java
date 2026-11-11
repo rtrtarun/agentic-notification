@@ -5,6 +5,7 @@ import com.agentpulse.notification.application.Digests;
 import com.agentpulse.notification.application.Feedback;
 import com.agentpulse.notification.application.Heuristic;
 import com.agentpulse.notification.application.Learning;
+import com.agentpulse.notification.application.Tuning;
 import com.agentpulse.notification.application.GitHubNormalizer;
 import com.agentpulse.notification.application.Notify;
 import com.agentpulse.notification.application.Overrides;
@@ -56,6 +57,7 @@ public final class HttpApi {
     private final FeedbackApi feedbackApi;
     private volatile AttentionApi attention;
     private volatile LearningApi learning;
+    private volatile TuningApi tuning;
 
     public HttpApi(Config config, Pipeline pipeline, EventRepository events, Notify.Service notifyService,
                    RulesService rulesService, DeliveryStore deliveryStore, Clock clock) {
@@ -107,6 +109,12 @@ public final class HttpApi {
         return this;
     }
 
+    /** Turns on offline score tuning: the adjustments and runs APIs. {@code trainEvery} is the schedule shown with the runs. */
+    public HttpApi withTuning(Tuning.Tuner tuner, Accounts.Service accounts, java.time.Duration trainEvery) {
+        this.tuning = new TuningApi(api, tuner, accounts, trainEvery);
+        return this;
+    }
+
     /** Starts serving on the given port (0 picks a free one) and returns the running server. */
     public HttpServer start(int port) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
@@ -126,6 +134,10 @@ public final class HttpApi {
             feedbackApi.overrides(x);
         } else if (learning != null && under(path, LearningApi.PREFIX)) {
             learning.handle(x);
+        } else if (tuning != null && under(path, TuningApi.ADJUSTMENTS_PREFIX)) {
+            tuning.adjustments(x);
+        } else if (tuning != null && under(path, TuningApi.RUNS_PREFIX)) {
+            tuning.runs(x);
         } else if (attention != null && under(path, AttentionApi.DIGESTS_PREFIX)) {
             attention.digests(x);
         } else if (attention != null && under(path, AttentionApi.EXPLAIN_PREFIX)) {

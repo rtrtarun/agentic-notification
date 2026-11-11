@@ -1,6 +1,6 @@
 # Milestone 38: Learning
 
-Status: **in progress.** Slice 38a is merged (PR #17, CI green); 38b is built; 38c is next. Plan, with the owner's six decisions: [milestone-38-plan.md](milestone-38-plan.md). The plan's guardrails apply to every slice: offline or async only, critical events untouchable, explicit overrides outrank anything learned, and nothing changes without an admin.
+Status: **all three slices built; awaiting the owner's review.** Slice 38a is merged (PR #17, CI green); 38b (Go) and 38c (Java) are built and reviewed together in one pull request, as two commits. Plan, with the owner's six decisions: [milestone-38-plan.md](milestone-38-plan.md). The plan's guardrails apply to every slice: offline or async only, critical events untouchable, explicit overrides outrank anything learned, and nothing changes without an admin.
 
 ## Slice 38a: Java parity for the suggestions engine (merged, PR #17)
 
@@ -73,7 +73,7 @@ Go: `pkg/attention/tuning.go`, `heuristic.go`, `attention.go` (`SourceOf` knows 
 - **Critical leakage:** critical feedback is dropped at read; events decided by a locked or critical rule are dropped; a scope a critical or locked rule covers is never proposed, refused at approval, and left out of the snapshot; the heuristic and `Guarded` still refuse a critical event. Tests for each.
 - **Two services, one database:** one running run across both, one row per scope, so a second run updates rather than duplicates.
 - **Known limit, unchanged:** a run reads the newest events and 5000 feedback rows (finding F10, milestone 42); a run reports how many it read.
-- **Contract file 15 and Java:** the Java contract test skips this one file until slice 38c.
+- **Contract file 15 and Java:** the 38b commit's Java contract test skipped this one file so that commit stayed green; the skip is removed in 38c.
 
 ### Tests
 - `attention/tuning_test.go`: unchanged scores without a snapshot (nil, empty, unrelated), the score, reason and version with one, protection versus demotion, critical refused, repository beats type, clamping, a never-loaded or stale snapshot is ignored, nil safety.
@@ -90,11 +90,56 @@ Go: `pkg/attention/tuning.go`, `heuristic.go`, `attention.go` (`SourceOf` knows 
 - [x] No critical event is counted, adjusted or classified; the invariant tests pass.
 - [x] A person's explicit override still wins.
 - [x] Contract file 15 passes in Go; the Go suite passes.
-- [ ] Java passes file 15 (slice 38c) and CI is green on the branch.
+- [x] Java passes file 15 (slice 38c).
 
 ### Review checklist
 - Read `Tuner.analyze`, `propose`, `offset`, `learnable`, `Approve`, `refresh` and `coveredByProtectedRule`.
 - Read `attention.Tuning` and the few lines in `Heuristic.Classify`.
 - Run `go test ./pkg/learning ./pkg/attention ./pkg/server` and the contract file.
 
-## Slice 38c: score tuning in Java (not started)
+## Slice 38c: score tuning in Java (built)
+
+### Goals (met)
+- Java proposes the same adjustments as Go from the same feedback, an admin approves them through the same API, and the heuristic scores the same way afterwards.
+- The contract file `15-learning-adjustments.json`, written against Go in 38b, passes in Java; its skip is removed.
+
+### Decisions
+- A port, not a redesign: `Tuning` holds the rule, the records, the stores' interfaces, `Tuner` and `Snapshot`; `TuningStores` the memory and PostgreSQL stores; `TuningApi` the HTTP; `Heuristic.withTuning` the three lines that apply an offset.
+- **Same numbers.** Floating point can disagree between languages, so both services now take the sums in a fixed order (by person) and round to six decimals, and round halves away from zero. The Go rule was changed in the 38c commit for this: Go's map order is random, so its sums could differ in the last digit from run to run. The weights use `StrictMath.pow`. A test pins the Go values (`-14`, `-13`, `-8`, `-16`, `0.997939`).
+- **Same ids and rows.** The adjustment id is the same hash (`68abe35a59d2dd14` for `github` and `pull_request`), the `scope_key` is written the way Go writes it, and Java reads rows Go wrote (a test inserts one with plain SQL). So two services on one database never propose the same scope twice, and one service's approval reaches the other's snapshot within 30 seconds.
+- **One running run across both services:** the same partial unique index and `INSERT ... ON CONFLICT DO NOTHING`; a second start gets 409.
+- **Scheduling:** a background refresher every 30 seconds; a schedule only when `LEARNING_TRAIN_EVERY` is set (default off). Set it on one service only.
+- **Not changed:** no Go behaviour other than the arithmetic order above, no schema change, no change to the live event path.
+
+### APIs
+The same as 38b: `GET /api/learning/adjustments?status=`, admin `POST .../{id}/approve|reject|retire`, `GET /api/learning/runs`, admin `POST /api/learning/runs[?wait=true]`, with the same statuses and messages.
+
+### Folder changes
+Java: `application/Tuning.java`, `infrastructure/TuningStores.java`, `interfaces/TuningApi.java`, `Heuristic`, `HttpApi`, `Main`, `Config` (four settings). Tests: `TuningTest`, `TuningApiTest`, `PostgresTuningStoresTest`, one more case in `SacredInvariantTest`, one in `InfrastructureTest`. Contract: the Java harness gives the digests the same ticking clock as the events, and uses `LEARNING_MIN_PEOPLE=1`, like the Go harness.
+
+### Risks and how they were handled
+- **Drift from Go:** contract file 15 (64 steps), pinned numbers and ids, and a real-stack check with both services on one database.
+- **Floating point:** the fixed order, the rounding and the pinned values above.
+- **Critical leakage:** the same guards and a new invariant test: critical feedback teaches nothing, a crafted proposal against a locked critical scope is refused and stays proposed, an active row for that scope is left out of the snapshot, and the heuristic and `GuardedClassifier` refuse a critical event even with an adjustment loaded.
+- **Known limits, unchanged:** a run reads the newest 1000 events and 5000 feedback rows (finding F10, milestone 42); the overrides cache is per process.
+
+### Tests
+- `TuningTest` (33): the rule's numbers, rounding and decay, thresholds, one person, the cap, delivered-only, critical and locked, undo, refresh without duplicates, determinism, nothing active before approval, approve, reject and retire with the heuristic's score, rejected, active and retired scopes, the approval guardrail, the snapshot, the impact estimate, asynchronous runs, a failed run, an abandoned run, config bounds, the id hash, JSON shape, and the heuristic with and without a snapshot (stale, nil, empty, repository versus type, clamping, protection).
+- `TuningApiTest` (7): the whole path with two people, who may do what, audit entries, an override still wins, critical feedback, refusals, the endpoints absent until turned on.
+- `PostgresTuningStoresTest` (4): the store contract, a row written by Go, the scope key, and the one-running-run index.
+- Contract: all 15 files pass in Java (`ContractTest`) and in Go (`TestContract`).
+- Totals: Java `mvn verify` 356 tests with PostgreSQL and Redis, none skipped; offline 329 (5 skipped); 88.7 offline, 94.2 with PostgreSQL percent of lines. Go `go test ./...` passes.
+- Real stack (PostgreSQL 16, Redis 7, the Go binary and the Java jar on one database): see the CHANGELOG entry.
+
+### Acceptance criteria
+- [x] Java returns the same proposals as Go for the same feedback and scores the same after approval.
+- [x] A run is asynchronous, returns at once, records what it did, and a second cannot start while one runs, across both services.
+- [x] Nothing is active before approval; every approval, rejection, retirement and run is audited.
+- [x] No critical event is counted, adjusted or classified; the invariant tests pass; an explicit override still wins.
+- [x] All 15 contract files pass in Go and Java; `mvn verify` and the Go suite pass.
+- [ ] CI green on the pull request (not yet seen).
+
+### Review checklist
+- Read `Tuning.Tuner.analyze`, `propose`, `approve`, `refresh`, and `Tuning.offset`, `weight`, `roundHalfAway`.
+- Compare with Go's `Tuner.analyze`, `propose` and `offset`: the same steps, the same order.
+- Run `mvn verify`, `go test ./...`, and the contract files against both services.

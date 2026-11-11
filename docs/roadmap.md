@@ -14,7 +14,7 @@ What is **not** built yet, as one numbered sequence of milestones. What exists i
 |---|---|
 | 34 to 36 | Done and merged |
 | 37 Java parity part 3 (rule fields, feedback and overrides, heuristic Attention Intelligence) | **Done and merged** (PR #14, 2026-11-10; [record](milestones/milestone-37.md)) |
-| 38 Learning | **Plan approved 2026-11-10** ([plan](milestones/milestone-38-plan.md)); slice 38a (Java suggestions parity) merged (PR #17); 38b (Go score tuning) built; 38c (Java score tuning) next ([record](milestones/milestone-38.md)) |
+| 38 Learning | **Plan approved 2026-11-10** ([plan](milestones/milestone-38-plan.md)); slice 38a (Java suggestions parity) merged (PR #17); 38b (Go score tuning) and 38c (Java score tuning) built, awaiting review ([record](milestones/milestone-38.md)) |
 | 39 to 48 | Not started; no plan approved yet. Each needs its plan and owner approval first |
 
 `DISPATCHER_ENABLED` (a setting in both services that turns a process's queue dispatcher off, so one service can own the queue when two share a database) is also merged (PR #13).

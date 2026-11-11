@@ -12,6 +12,8 @@ import com.agentpulse.notification.application.Feedback;
 import com.agentpulse.notification.application.Heuristic;
 import com.agentpulse.notification.application.Learning;
 import com.agentpulse.notification.application.Overrides;
+import com.agentpulse.notification.application.Tuning;
+import com.agentpulse.notification.infrastructure.TuningStores;
 import com.agentpulse.notification.infrastructure.DigestStores;
 import com.agentpulse.notification.infrastructure.FeedbackStores;
 import com.agentpulse.notification.infrastructure.LearningStores;
@@ -63,15 +65,12 @@ class ContractTest {
     private static final Path RULES = Path.of("../../go-server/notification-service/config/rules.yaml");
     private static final String KEY = "contract-key";
     private static final String SECRET = "contract-secret";
-    /** Contract files written against Go first whose Java side is a later slice of the same milestone (38c). */
-    private static final java.util.Set<String> NOT_YET_IN_JAVA = java.util.Set.of("15-learning-adjustments.json");
 
     @TestFactory
     Stream<DynamicTest> contractFiles() throws Exception {
         List<Path> files;
         try (Stream<Path> all = Files.list(CONTRACT_DIR)) {
             files = all.filter(p -> p.getFileName().toString().endsWith(".json"))
-                    .filter(p -> !NOT_YET_IN_JAVA.contains(p.getFileName().toString()))
                     .sorted().toList();
         }
         assertFalse(files.isEmpty(), "no contract files in " + CONTRACT_DIR.toAbsolutePath());
@@ -132,13 +131,21 @@ class ContractTest {
         accounts.bootstrap("admin@contract.test", "a long contract admin password");
         // Attention Intelligence is on for digests and explanations; the pipeline itself has no classifier and no
         // budget, as in the Go contract server (ATTENTION_CLASSIFY=false, ATTENTION_BUDGET_PER_HOUR=0).
-        Heuristic heuristic = new Heuristic();
+        // Learned score adjustments, as in the Go contract server: LEARNING_MIN_PEOPLE=1 because the contract has one
+        // caller, the API key. The digests use the same ticking clock as the events, so "held since the last digest"
+        // does not depend on the clock's resolution.
+        Tuning.Snapshot snapshot = new Tuning.Snapshot(Tuning.DEFAULT_MAX_AGE, Clock.systemUTC());
+        Heuristic heuristic = new Heuristic().withTuning(snapshot);
         Digests.Store digestStore = new DigestStores.Memory();
-        Digests.Generator digests = new Digests.Generator(() -> repository.listRecent(1000), digestStore, heuristic, heuristic, Clock.systemUTC());
+        Digests.Generator digests = new Digests.Generator(() -> repository.listRecent(1000), digestStore, heuristic, heuristic, ticking);
+        Tuning.Tuner tuner = new Tuning.Tuner(new TuningStores.MemoryAdjustments(), new TuningStores.MemoryRuns(), feedbackStore::list,
+                () -> repository.listRecent(1000), rules::list, snapshot, new Tuning.Config(5, 1, 20, null, null), Clock.systemUTC());
+        tuner.refreshSnapshot();
         return new HttpApi(config, pipeline, repository, notify, rules, deliveries, Clock.systemUTC(), accounts, overrides, feedback)
                 .withLearning(new Learning.Service(new LearningStores.Memory(), feedbackStore::list,
                         () -> repository.listRecent(1000), Learning.ruleEditor(rules), overrides::upsert,
                         new Learning.Config(5, 0, null), Clock.systemUTC()), accounts)
+                .withTuning(tuner, accounts, Duration.ZERO)
                 .withAttention(digests, digestStore, id -> repository.listRecent(1000).stream().filter(e -> e.getId().equals(id)).findFirst(),
                         Duration.ZERO, accounts)
                 .start(0);
