@@ -137,7 +137,7 @@ Java: `application/Tuning.java`, `infrastructure/TuningStores.java`, `interfaces
 - [x] Nothing is active before approval; every approval, rejection, retirement and run is audited.
 - [x] No critical event is counted, adjusted or classified; the invariant tests pass; an explicit override still wins.
 - [x] All 15 contract files pass in Go and Java; `mvn verify` and the Go suite pass.
-- [ ] CI green on the pull request (not yet seen).
+- [x] CI green on the pull request (PR #18: go-service, java-service, web and python-sdk all passed).
 
 ### Review checklist
 - Read `Tuning.Tuner.analyze`, `propose`, `approve`, `refresh`, and `Tuning.offset`, `weight`, `roundHalfAway`.
