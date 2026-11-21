@@ -1,6 +1,6 @@
 # Java notification service
 
-The Java implementation of the Attention Orchestration core. It is being brought to parity with the Go service milestone by milestone; milestone 34 delivered the deterministic core, 35 the rules API and durable queue, and 36 the accounts. See [docs/java-service.md](../../docs/java-service.md) and [docs/milestones/milestone-36.md](../../docs/milestones/milestone-36.md).
+The Java implementation of the Attention Orchestration core. It is brought to parity with the Go service milestone by milestone (34 to 39 so far), and a shared HTTP contract ([docs/contract](../../docs/contract/README.md), 17 files) proves both behave the same. What it does and does not do, its layout and settings: [docs/java-service.md](../../docs/java-service.md).
 
 ## What it does
 `POST /webhooks/github` verifies the signature, normalises the event, evaluates the rules, deduplicates, delivers critical events inline, and stores everything in the PostgreSQL schema the Go service migrates. `GET /events` lists what was stored. `GET /health` is open.

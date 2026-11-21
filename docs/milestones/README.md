@@ -1,14 +1,9 @@
 # Milestones
 
-Records for the **current work** (the Java parity effort). Milestones 1 to 33 are in [../archived/milestones/](../archived/milestones/).
+Records for the **current milestone** only. Finished milestones, 1 to 38, with their plans, are in [../archived/milestones/](../archived/milestones/); what is still to come is in [../roadmap.md](../roadmap.md).
 
-| Milestone | What was built |
+| Milestone | State |
 |---|---|
-| [34](milestone-34.md) | Java foundation: core pipeline, critical path, PostgreSQL, shared HTTP contract |
-| [35](milestone-35.md) | Java parity part 2: `/notify`, rules API, durable delivery queue, Redis dedup |
-| [39](milestone-39.md) | Observability and MCP: 39a Java agent events and traces (approved); 39b Java MCP built, awaiting review; plan in [milestone-39-plan.md](milestone-39-plan.md) |
-| [38](milestone-38.md) | Learning: 38a Java parity for the suggestions engine; 38b Go offline score tuning; 38c Java port of it; all merged; plan in [milestone-38-plan.md](milestone-38-plan.md) |
-| [37](milestone-37.md) | Java parity part 3: rule `payloadMatch` and `channels`, feedback and overrides, heuristic Attention Intelligence (classifier, explanations, digests, budget); plan in [milestone-37-plan.md](milestone-37-plan.md) |
-| [36](milestone-36.md) | Sign-in and sign-up with admin approval in both services, console sign-in first, two versioned images |
+| [39](milestone-39.md) Observability and MCP | Plan approved 2026-11-21 ([plan](milestone-39-plan.md)). 39a Java agent events and traces and 39b Java MCP: merged (PR #20, PR #21). 39c OTLP export and 39d real-client verification: not started |
 
-Each record holds goals, decisions, database and API changes, folders, risks, tests, acceptance and a review checklist. When newer work supersedes a milestone, move its record to the archive and update the index in [../README.md](../README.md).
+Each record holds goals, decisions, database and API changes, folders, risks, tests, acceptance and a review checklist. When a milestone is finished and merged, `git mv` its record and plan to `../archived/milestones/`, fix the links, and update [../archived/README.md](../archived/README.md).

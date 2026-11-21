@@ -2,7 +2,7 @@
 
 The Java service now covers the generic agent entry point, run-time rules, the durable delivery queue and cross-replica deduplication, on the same database and Redis as the Go service. Accounts, Attention Intelligence, feedback, learning, traces and MCP are still Go only (milestone 36 onward).
 
-Scope and decisions are the owner's, recorded in [implementation-sync.md](../implementation-sync.md) section 10.
+Scope and decisions are the owner's, recorded in [implementation-sync.md](../../implementation-sync.md) section 10.
 
 ## 1. Goals
 1. `POST /notify` with the Go service's validation: API key, SSRF host allow-list, one-line title, size limits, no caller-chosen SMS numbers.

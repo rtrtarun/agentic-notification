@@ -1,8 +1,8 @@
 # Deployment and hosting
 
-> **Status after Milestone 36** (accounts with sign-up, versioned images for both services; the live service may still run an earlier release, see "Where we have deployed").
+> **Status after milestone 39b** (merged to `master` 2026-11-21; images republished on each merge, still tagged `0.36.0`; whether the live service has picked them up is in "Where we have deployed" and the log below).
 >
-> Two services exist: the Go service (the one the console talks to) and the Java service (milestones 34 to 36; see "The Java service" at the end). Both have accounts, sessions and sign-up with admin approval; the Go service also has single sign-on, a delivery retry queue, optional Ollama or Claude and Novu, and an MCP server. The environment variables for all of it are in "Production reference" at the end of this document, and each milestone document lists its own settings.
+> Two services exist: the Go service (the one the console talks to) and the Java service (milestones 34 to 39b; see "The Java service" at the end). Both have accounts and sign-up with admin approval, the delivery retry queue, feedback, heuristic Attention Intelligence, learning, agent traces and an MCP server; only the Go service has single sign-on, SMS, Novu, optional Ollama or Claude, metrics, the inbox and retention. The environment variables for all of it are in "Production reference" at the end of this document, and each milestone document lists its own settings.
 
 The platform has two deployable parts. They are hosted differently.
 
@@ -52,6 +52,7 @@ Names only; values are never written in this repository. Where each one lives, s
 ## Deployment log
 What was done to get here, newest first. Dates are 2026-11-07 unless stated.
 
+1. **2026-11-21: milestones up to 39b are on `master`**: milestone 37 (PR #14, 2026-11-10), 38 (PRs #17 to #19, 2026-11-11), 39a and 39b (PRs #20 and #21, 2026-11-21). "Publish service images" succeeded on the merges of PRs #18, #20 and #21 (runs 42976237449, 44879506245, 44879871660), so `notification-service` and `notification-service-java` at `latest` and `0.36.0` now carry milestone 39b; `VERSION` was not bumped, so no new GitHub Release was made. Not checked: whether Render redeployed the new `latest` image.
 1. **`AUTH_COOKIE_SAMESITE=none` set on Render** (confirmed from outside: the sign-in cookie changed from `SameSite=Lax` to `SameSite=None; Secure`). Not yet verified in a browser; Safari and some privacy settings block third-party cookies even with `none`.
 1. **Milestone 36 built, not deployed.** Sign-in first, sign-up with admin approval, Java accounts, two versioned images, `VERSION` `0.36.0`, CI on `master`. On branch `feature/signup-and-sign-in`; merging it will run the publish workflow and redeploy the console.
 2. **Repository secret `API_KEY` added** (from the local `env.txt`) with the GitHub CLI after signing in as the repository owner.

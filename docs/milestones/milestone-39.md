@@ -1,6 +1,6 @@
 # Milestone 39: Observability and MCP
 
-Status: **slice 39a approved by the owner on 2026-11-21** (both decisions accepted; PR #20, CI green). **Slice 39b built; awaiting the owner's review.** 39c and 39d are not started. Plan, with the owner's four decisions and extra guardrails: [milestone-39-plan.md](milestone-39-plan.md).
+Status: **slices 39a and 39b merged to `master` on 2026-11-21** (PR #20 and PR #21; CI green on `master`, runs 44879506261 and 44879871735). 39c (OTLP export) and 39d (real-client verification) are not started. Plan, with the owner's four decisions and extra guardrails: [milestone-39-plan.md](milestone-39-plan.md).
 
 ## Slice 39a: Java agent events and traces
 
@@ -82,6 +82,5 @@ Status: **slice 39a approved by the owner on 2026-11-21** (both decisions accept
 - Real stack: Go's stdio `mcp-server` against the Java jar: `initialize` (proposing `2025-06-18`), `notifications/initialized` (no answer), `publish_event`, `get_recent_events`, `explain_decision` and a refused `notify_user` all answered as against Go. A real MCP client (Claude Code, MCP Inspector) is slice 39d.
 
 ### Review checklist
-- [ ] Contract file 17 reads as the behaviour we want (especially: a tool call sent as a notification still runs).
-- [ ] The Go change to plain argument errors is acceptable.
-- [ ] CI green on the pull request.
+- [x] Contract file 17 and the Go change to plain argument errors: merged by the owner as PR #21. Whether a tool call sent as a notification should keep running is still open question 4 in [implementation-sync.md](../implementation-sync.md#5-open-questions-for-the-owner).
+- [x] CI green on the pull request (PR #21) and on `master` after the merge (run 44879871735).

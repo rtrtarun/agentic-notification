@@ -1,4 +1,4 @@
-"""Build docs/feature-flows.html from docs/feature-flows.md.
+"""Build docs/archived/design-notes/feature-flows.html from feature-flows.md beside it (archived after milestone 39b).
 
 The HTML embeds the markdown and renders it in the browser with marked (markdown)
 and mermaid (diagrams), both loaded from jsDelivr at pinned versions. Re-run after
@@ -10,8 +10,8 @@ import html
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SRC = ROOT / "docs" / "feature-flows.md"
-OUT = ROOT / "docs" / "feature-flows.html"
+SRC = ROOT / "docs" / "archived" / "design-notes" / "feature-flows.md"
+OUT = ROOT / "docs" / "archived" / "design-notes" / "feature-flows.html"
 
 TEMPLATE = """<!doctype html>
 <html lang="en">
