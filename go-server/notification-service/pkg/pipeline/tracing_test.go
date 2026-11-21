@@ -4,13 +4,18 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
+	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/agentpulse/notification-service/pkg/attention"
 	"github.com/agentpulse/notification-service/pkg/event"
+	"github.com/agentpulse/notification-service/pkg/policy"
 	"github.com/agentpulse/notification-service/pkg/telemetry"
 )
 
@@ -81,5 +86,81 @@ func TestAPipelineWithoutATracerWorksAsBefore(t *testing.T) {
 	p, _, _ := newTestPipeline(adaptiveRules(true))
 	if _, err := p.Handle(context.Background(), noisy("e1")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// exportCapture keeps exported spans in memory.
+type exportCapture struct{ spans []telemetry.SpanData }
+
+func (c *exportCapture) Export(s telemetry.SpanData) { c.spans = append(c.spans, s) }
+
+// TestExportedSpansNameTheDecisionButNeverThePayload (milestone 39c): the pipeline span carries
+// the source, type, class, status, rule and agent trace, and nothing from the payload.
+func TestExportedSpansNameTheDecisionButNeverThePayload(t *testing.T) {
+	out := &exportCapture{}
+	p, _ := tracedPipeline("")
+	p.WithTracer(telemetry.NewTracer(quiet).WithExporter(out))
+	evt := noisy("e-secret")
+	evt.TraceID = "run-7"
+	evt.Payload = map[string]any{"token": "ghp_supersecret", "pusher": map[string]any{"email": "dev@example.com"}}
+	if _, err := p.Handle(context.Background(), evt); err != nil {
+		t.Fatal(err)
+	}
+	var handle *telemetry.SpanData
+	for i := range out.spans {
+		if out.spans[i].Name == "pipeline.Handle" {
+			handle = &out.spans[i]
+		}
+		for _, a := range out.spans[i].Attributes {
+			if strings.Contains(a.Value, "ghp_supersecret") || strings.Contains(a.Value, "dev@example.com") {
+				t.Fatalf("payload leaked into span %s: %+v", out.spans[i].Name, a)
+			}
+		}
+	}
+	if handle == nil {
+		t.Fatal("no pipeline span exported")
+	}
+	got := map[string]string{}
+	for _, a := range handle.Attributes {
+		got[a.Key] = a.Value
+	}
+	if got[telemetry.AttrEventSource] != evt.Source || got[telemetry.AttrEventType] != evt.EventType ||
+		got[telemetry.AttrAttentionClass] == "" || got[telemetry.AttrDecisionStatus] == "" || got[telemetry.AttrAgentTraceID] != "run-7" {
+		t.Fatalf("attributes %v", got)
+	}
+}
+
+// TestACollectorThatHangsNeverDelaysACriticalEvent (milestone 39c invariant): spans go to a
+// bounded buffer, so a collector that never answers cannot hold up inline critical delivery.
+func TestACollectorThatHangsNeverDelaysACriticalEvent(t *testing.T) {
+	release := make(chan struct{})
+	collector := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { <-release }))
+	defer collector.Close()
+	defer close(release)
+	exporter, err := telemetry.NewOTLPExporter(telemetry.OTLPConfig{Endpoint: collector.URL, BatchSize: 1, BufferSize: 4, Logger: quiet})
+	if err != nil {
+		t.Fatal(err)
+	}
+	exporter.Start()
+	p, _, provider := newTestPipeline([]policy.Rule{{
+		Name: "security", When: policy.RuleCondition{Source: "github", EventType: "security_advisory"},
+		Then: policy.RuleOutcome{AttentionClass: "critical", Reason: "security vulnerability"},
+	}})
+	p.WithTracer(telemetry.NewTracer(quiet).WithExporter(exporter))
+	start := time.Now()
+	for i := 0; i < 20; i++ {
+		out, err := p.Handle(context.Background(), event.Event{ID: fmt.Sprintf("sec-%d", i), Source: "github", EventType: "security_advisory"})
+		if err != nil || out.DecisionState.Status != event.DecisionSent {
+			t.Fatalf("%v %+v", err, out.DecisionState)
+		}
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("20 critical events took %s with a hanging collector", elapsed)
+	}
+	if len(provider.sent) != 20 {
+		t.Fatalf("delivered %d of 20", len(provider.sent))
+	}
+	if _, dropped, _ := exporter.Stats(); dropped == 0 {
+		t.Fatal("with the collector stuck, the full buffer must drop spans rather than wait")
 	}
 }

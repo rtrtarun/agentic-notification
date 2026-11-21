@@ -6,6 +6,7 @@ import com.agentpulse.notification.application.Mcp;
 import com.agentpulse.notification.application.Notify;
 import com.agentpulse.notification.application.Pipeline;
 import com.agentpulse.notification.application.Ports.EventRepository;
+import com.agentpulse.notification.application.Telemetry;
 import com.agentpulse.notification.domain.Event;
 import com.sun.net.httpserver.HttpExchange;
 import org.slf4j.Logger;
@@ -36,14 +37,15 @@ final class McpApi {
     private static final Logger LOG = LoggerFactory.getLogger(McpApi.class);
 
     private final ApiSupport api;
-    private final Mcp.Server server;
+    private final InProcess backend;
 
-    McpApi(ApiSupport api, Mcp.Backend backend) {
+    McpApi(ApiSupport api, InProcess backend) {
         this.api = api;
-        this.server = new Mcp.Server(backend, VERSION);
+        this.backend = backend;
     }
 
-    void handle(HttpExchange x) throws IOException {
+    /** {@code span} is the request's span context; an event a tool publishes becomes its child. */
+    void handle(HttpExchange x, Telemetry.SpanContext span) throws IOException {
         if (!api.authorised(x)) {
             return;
         }
@@ -55,7 +57,7 @@ final class McpApi {
         if (body == null) {
             return;
         }
-        byte[] reply = server.handle(body);
+        byte[] reply = new Mcp.Server(backend.forRequest(span), VERSION).handle(body);
         if (reply == null) {
             x.sendResponseHeaders(202, -1);
             return;
@@ -74,14 +76,26 @@ final class McpApi {
         private final Notify.Service notify;
         private final Function<Event, String> explainer;
         private final Function<Event, Map<String, Object>> summary;
+        private final Telemetry.SpanContext span;
 
         InProcess(Pipeline pipeline, EventRepository events, Notify.Service notify, Function<Event, String> explainer,
                   Function<Event, Map<String, Object>> summary) {
+            this(pipeline, events, notify, explainer, summary, null);
+        }
+
+        private InProcess(Pipeline pipeline, EventRepository events, Notify.Service notify, Function<Event, String> explainer,
+                          Function<Event, Map<String, Object>> summary, Telemetry.SpanContext span) {
             this.pipeline = pipeline;
             this.events = events;
             this.notify = notify;
             this.explainer = explainer;
             this.summary = summary;
+            this.span = span;
+        }
+
+        /** The same backend acting within one request's span, passed explicitly. */
+        InProcess forRequest(Telemetry.SpanContext requestSpan) {
+            return new InProcess(pipeline, events, notify, explainer, summary, requestSpan);
         }
 
         @Override
@@ -94,7 +108,7 @@ final class McpApi {
             }
             Event result;
             try {
-                result = pipeline.handle(normalized);
+                result = pipeline.handle(normalized, span);
             } catch (Pipeline.DuplicateDeliveryException e) {
                 return Map.of("status", "duplicate", "eventId", normalized.getId());
             } catch (RuntimeException e) {

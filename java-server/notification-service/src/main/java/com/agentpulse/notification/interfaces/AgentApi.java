@@ -2,6 +2,7 @@ package com.agentpulse.notification.interfaces;
 
 import com.agentpulse.notification.application.AgentEvents;
 import com.agentpulse.notification.application.Pipeline;
+import com.agentpulse.notification.application.Telemetry;
 import com.agentpulse.notification.application.Ports.EventRepository;
 import com.agentpulse.notification.application.Traces;
 import com.agentpulse.notification.domain.Event;
@@ -54,10 +55,11 @@ final class AgentApi {
         this.listEvents = listEvents;
     }
 
-    void events(HttpExchange x) throws IOException {
+    /** {@code span} is the request's span context; a published step becomes its child. */
+    void events(HttpExchange x, Telemetry.SpanContext span) throws IOException {
         switch (x.getRequestMethod()) {
             case "GET" -> listEvents.handle(x);
-            case "POST" -> publish(x);
+            case "POST" -> publish(x, span);
             default -> {
                 if (api.authorised(x)) {
                     api.error(x, 405, "method not allowed");
@@ -66,7 +68,7 @@ final class AgentApi {
         }
     }
 
-    private void publish(HttpExchange x) throws IOException {
+    private void publish(HttpExchange x, Telemetry.SpanContext span) throws IOException {
         if (!api.authorised(x)) {
             return;
         }
@@ -88,7 +90,7 @@ final class AgentApi {
         }
         Event result;
         try {
-            result = pipeline.handle(normalized);
+            result = pipeline.handle(normalized, span);
         } catch (Pipeline.DuplicateDeliveryException e) {
             api.reply(x, 200, Map.of("status", "duplicate", "eventId", normalized.getId()));
             return;

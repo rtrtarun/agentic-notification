@@ -1,6 +1,6 @@
 # Milestone 39: Observability and MCP
 
-Status: **slices 39a and 39b merged to `master` on 2026-11-21** (PR #20 and PR #21; CI green on `master`, runs 44879506261 and 44879871735). 39c (OTLP export) and 39d (real-client verification) are not started. Plan, with the owner's four decisions and extra guardrails: [milestone-39-plan.md](milestone-39-plan.md).
+Status: **slices 39a and 39b merged to `master` on 2026-11-21** (PR #20 and PR #21; CI green on `master`, runs 44879506261 and 44879871735). **Slice 39c (OpenTelemetry span export) built; awaiting the owner's review.** 39d (real-client verification) is not started. Plan, with the owner's four decisions and extra guardrails: [milestone-39-plan.md](milestone-39-plan.md).
 
 ## Slice 39a: Java agent events and traces
 
@@ -84,3 +84,48 @@ Status: **slices 39a and 39b merged to `master` on 2026-11-21** (PR #20 and PR #
 ### Review checklist
 - [x] Contract file 17 and the Go change to plain argument errors: merged by the owner as PR #21. Whether a tool call sent as a notification should keep running is still open question 4 in [implementation-sync.md](../implementation-sync.md#5-open-questions-for-the-owner).
 - [x] CI green on the pull request (PR #21) and on `master` after the merge (run 44879871735).
+
+## Slice 39c: OpenTelemetry span export (Go, then Java)
+
+### Goals (met)
+- The spans both services record are sent to any OpenTelemetry collector over OTLP/HTTP JSON when `OTEL_EXPORTER_OTLP_ENDPOINT` is set; with it unset nothing changes.
+- Java gains Go's `traceparent` handling and the same spans (names, kinds, parents, attributes), so one caller's trace through either service looks the same.
+
+### Owner guardrails (all met)
+- **Explicit span context in Java.** `Telemetry.SpanContext` is passed as a parameter: request wrapper, then webhook, `/api/events` and MCP handlers, then `Pipeline.handle(event, parent)`, then each step. No `ThreadLocal`, and no `HttpExchange` attribute (the JDK server can keep those on the shared context).
+- **Retries only on a network error, 429 or 5xx**, once; any other 4xx is never retried and counts the batch as failed. A test matrix in each service (503, 429, 500/502, 400, 401, refused connection).
+- **OTLP JSON rules**: lower-case hex ids, nanosecond times written as strings, kinds and status codes as numbers, integer attributes as strings, `Content-Type: application/json`, path `/v1/traces`. Go and Java tests check the same expected strings.
+- **No secrets**: an allow-list of nine attribute keys (anything else is ignored, values cut to 200 characters), and a failed span's `status.message` is always the fixed word `failed`, never the error text (which stays in the local debug log). Tests export spans for events with secrets in the payload and errors with passwords in the message and find none of it in the export.
+- **Sampled flag identical in Go and Java**: only bit 0 of the flags means sampled (`00`, `02` not sampled; `01`, `03`, `ff` sampled); a new trace is sampled; a child keeps its parent's flag; only sampled spans are exported. Contract file 18 checks it in both.
+
+### Decisions
+- **Hand-written exporter** (owner decision 1): Go `pkg/telemetry/otlp.go`, Java `infrastructure/OtlpExporter.java`; no OpenTelemetry SDK. `Export` never blocks: a bounded buffer (`OTEL_EXPORT_BUFFER`, default 2048) drops and counts spans when full; a background loop sends batches (`OTEL_EXPORT_BATCH`, default 100) every two seconds or when one fills; each request has a five-second timeout; shutdown flushes within five seconds and logs `sent`, `dropped`, `failed`.
+- **Server spans** are named `<method> <route>` with Go's route labels (Java ports the same list in `Routes`, including routes only Go serves, so labels match), and carry method, route and status code; a 5xx marks the span failed. **`/health` is not traced** (as the plan says): no span and no `traceparent` header. This changes Go, which used to trace it; the Go test that used `/health` now uses `/events`.
+- **The pipeline span** names the decision: `event.source`, `event.type`, `agent.trace_id`, `attention.class`, `decision.status`, `rule.name`; a redelivery is not failed and adds no decision.
+- **Settings** (both services, same names): `OTEL_EXPORTER_OTLP_ENDPOINT` (http or https, no user, password, query or fragment), `OTEL_EXPORTER_OTLP_HEADERS` (URL-encoded values, never logged, a bad entry named by position only), `OTEL_SERVICE_NAME` (defaults `notification-service` and `notification-service-java`), `OTEL_EXPORT_BATCH`, `OTEL_EXPORT_BUFFER`. Invalid values stop the start. `service.version` is `APP_VERSION`.
+- Java's exporter never interrupts its worker: shutdown sets a flag the worker checks every 50 ms, so an interrupt can never cut a send short (found by a test, fixed before commit).
+- No database change. Exporting counters as metrics is milestone 41.
+
+### APIs
+No new endpoints. Every response except `/health` carries `traceparent`.
+
+### Folder changes
+- Go: `pkg/telemetry/telemetry.go` (kinds, attributes, exporter hook, server span with status), new `pkg/telemetry/otlp.go`, `pkg/config` (settings), `pkg/server` (wiring, flush on shutdown, `traceRoute`), `pkg/pipeline` (decision attributes).
+- Java: new `application/Telemetry.java`, `infrastructure/OtlpExporter.java`, `interfaces/Routes.java`; `Pipeline` (spans, `handle(event, parent)`), `HttpApi` (`serve`: request span, header, explicit context), `AgentApi`, `McpApi` (per-request backend), `Main`.
+- Contract: new `docs/contract/18-traceparent.json` (16 steps); both runners gain the `traceparent` expectation.
+
+### Risks and how they were handled
+- **A collector hurting requests:** a new invariant test in each service sends 20 critical events through a pipeline whose exporter points at a collector that never answers; all are delivered inline within two seconds and the full buffer drops spans. The exporters' own tests show `Export` returns at once and shutdown gives up at its deadline.
+- **Leaking data:** the allow-list, the fixed status message, and tests with secrets in payloads and error text.
+- **Hand-written OTLP drifting from the spec:** shared expected strings in both services; a real collector and trace viewer are slice 39d.
+
+### Tests
+- Contract: 18 files pass in Go and Java; the `traceparent` checks were each seen to fail on a wrong expectation.
+- Go: `otlp_test.go` (JSON rules, batching and headers, retry matrix, non-blocking and drop count, hanging collector, endpoint rules, sampling and the allow-list, server span), two pipeline tests (decision attributes without payload; the hanging-collector invariant), config tests (defaults, decoding, refusals, no header value in errors), `TestHealthIsNotTraced`. `go test ./...`, `go vet` and `gofmt` clean; the integration suite passes against PostgreSQL 16 and Redis 7; `pkg/telemetry` 97.6 percent, `pkg/pipeline` 96.2 percent.
+- Java: `TelemetryTest` (8), `OtlpExporterTest` (6), `HttpTracingTest` (4), one more `SacredInvariantTest` case (17 now). Offline `mvn verify`: **395 tests, 5 skipped, 90.7 percent**; with PostgreSQL and Redis: **424 tests, none skipped, 95.0 percent**. (A 39a test now looks only at its own rows, because the Go integration suite can share its database.)
+- Real stack: the Go binary and the Java jar on one PostgreSQL, both exporting to one fake OTLP collector; the same caller trace sent to `POST /api/events` on each gave the same span tree (`POST /api/events` then `pipeline.Handle` then `policy.Evaluate`, `dedup.Check`, `attention.Classify`) with identical attributes, under `notification-service` and `notification-service-java`, version `0.39.0`; the URL-encoded header arrived decoded; the payload secret was not exported; an unsampled request was not exported.
+
+### Review checklist
+- [ ] Contract file 18 reads as the behaviour we want (especially: `/health` is not traced, and only bit 0 of the flags means sampled).
+- [ ] The Go change that stops tracing `/health` is acceptable.
+- [ ] CI green on the pull request.

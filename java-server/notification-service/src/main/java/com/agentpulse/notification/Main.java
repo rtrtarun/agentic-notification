@@ -9,6 +9,7 @@ import com.agentpulse.notification.application.Overrides;
 import com.agentpulse.notification.application.Dispatcher;
 import com.agentpulse.notification.application.GuardedClassifier;
 import com.agentpulse.notification.application.Learning;
+import com.agentpulse.notification.application.Telemetry;
 import com.agentpulse.notification.application.Tuning;
 import com.agentpulse.notification.application.Heuristic;
 import com.agentpulse.notification.application.MemoryDeduper;
@@ -35,6 +36,7 @@ import com.agentpulse.notification.infrastructure.LearningStores;
 import com.agentpulse.notification.infrastructure.TuningStores;
 import com.agentpulse.notification.infrastructure.MemoryAccountStore;
 import com.agentpulse.notification.infrastructure.MemoryStores;
+import com.agentpulse.notification.infrastructure.OtlpExporter;
 import com.agentpulse.notification.infrastructure.PostgresAccountStore;
 import com.agentpulse.notification.infrastructure.PostgresDeliveryStore;
 import com.agentpulse.notification.infrastructure.PostgresEventRepository;
@@ -68,6 +70,14 @@ public final class Main {
     public static void main(String[] args) throws Exception {
         Config config = Config.load(System.getenv());
         Clock clock = Clock.systemUTC();
+        // Span export is off unless OTEL_EXPORTER_OTLP_ENDPOINT is set; a bad setting stops the start, as Go does.
+        OtlpExporter.Settings otel = OtlpExporter.Settings.load(System.getenv());
+        OtlpExporter spanExporter = otel.enabled() ? new OtlpExporter(otel, config.appVersion()) : null;
+        Telemetry.Tracer tracer = new Telemetry.Tracer(clock, spanExporter);
+        if (spanExporter != null) {
+            spanExporter.start();
+            LOG.info("span export on service={} batch={} buffer={}", otel.serviceName(), otel.batch(), otel.buffer());
+        }
 
         List<Rule> seed = config.rulesPath().isEmpty() ? defaultRules() : RulesLoader.loadFile(Path.of(config.rulesPath()));
 
@@ -166,7 +176,8 @@ public final class Main {
                 .withOverrides(overrides)
                 .withBudget(budget)
                 .withOutbox(outbox)
-                .withCriticalTargets(targets);
+                .withCriticalTargets(targets)
+                .withTracer(tracer);
         if (config.attentionClassify()) {
             pipeline.withClassifier(GuardedClassifier.of(heuristic));
         }
@@ -201,6 +212,7 @@ public final class Main {
         HttpServer server = new HttpApi(config, pipeline, repository, notify, rules, deliveryStore, clock, accounts, overrides, feedback)
                 .withLearning(learning, accounts)
                 .withTuning(tuner, accounts, config.learningTrainEvery())
+                .withTracer(tracer)
                 .withAttention(digests, digestStore, id -> eventsForLookup.listRecent(FEEDBACK_LOOKUP_WINDOW).stream()
                         .filter(e -> e.getId().equals(id)).findFirst(), config.attentionDigestEvery(), accounts)
                 .start(config.port());
@@ -220,6 +232,9 @@ public final class Main {
             digestScheduler.stop();
             tuningBackground.stop();
             server.stop(SHUTDOWN_SECONDS);
+            if (spanExporter != null) {
+                spanExporter.shutdown(Duration.ofSeconds(SHUTDOWN_SECONDS));
+            }
             if (cache != null) {
                 cache.close();
             }

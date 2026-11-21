@@ -139,7 +139,8 @@ class PostgresEventRepositoryTest {
                         + "'standard', '{}'::jsonb, 'done', 'tie-" + run + "', NULL, NULL, '2030-01-01T00:00:00Z')");
             }
         }
-        List<Event> newest = repo.listRecent(2);
+        // Other suites may share this database, so look only at this test's two rows, in the order the list gives them.
+        List<Event> newest = repo.listRecent(500).stream().filter(e -> e.getId().equals(a) || e.getId().equals(b)).toList();
         assertEquals(List.of(b, a), newest.stream().map(Event::getId).toList(), "created_at DESC, id DESC, as Go's List now orders");
         assertEquals("tie-" + run, newest.get(0).getTraceId());
         assertEquals("", newest.get(0).getParentEventId());

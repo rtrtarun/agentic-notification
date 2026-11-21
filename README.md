@@ -358,7 +358,7 @@ docker run --rm -v "$(pwd):/app" -v m2cache:/root/.m2 -w /app/java-server/notifi
 cd go-server/notification-service && go test ./pkg/server -run TestContract
 ```
 
-What to expect (counts from the last local runs): about 690 Go test functions across the packages and two commands (milestone 36 count; every package passed at milestone 39b), 238 Vitest tests (milestone 36; the console has not changed since), 21 SDK tests, and 376 Java tests offline (5 PostgreSQL and Redis tests skip) (milestone 39b), or 387 with PostgreSQL and Redis (milestone 39a), and a 17-file shared HTTP contract that both services pass. Integration tests skip themselves when `TEST_DATABASE_URL` or `TEST_REDIS_URL` is unset.
+What to expect (counts from the last local runs): about 690 Go test functions across the packages and two commands (milestone 36 count; every package passed at milestone 39b), 238 Vitest tests (milestone 36; the console has not changed since), 21 SDK tests, and 376 Java tests offline (5 PostgreSQL and Redis tests skip) (milestone 39b), or 387 with PostgreSQL and Redis (milestone 39a), and an 18-file shared HTTP contract that both services pass. Integration tests skip themselves when `TEST_DATABASE_URL` or `TEST_REDIS_URL` is unset.
 
 Status: locally (Windows, no C compiler) everything above except `-race` passes, and the Go integration tests and the Java PostgreSQL tests pass against PostgreSQL 16 and Redis 7 in Docker. `-race`, golangci-lint, govulncheck and an 80 percent coverage gate run in [CI](.github/workflows/ci.yml). **On `master` after merging milestone 39b (run 44879871735) the `go-service`, `java-service`, `web` and `python-sdk` jobs all passed**, including the PostgreSQL 16 and Redis 7 integration tests and `-race`. The first CI runs found about 25 lint findings and two real defects that in-memory tests could not see, which is why the integration tests exist. Some packages are below 80 percent when run without integration tests (their PostgreSQL code is covered only in CI); see [implementation-sync.md](docs/implementation-sync.md).
 
@@ -402,7 +402,7 @@ Everything lives in [`docs/`](docs/), grouped by what you want to do. **[docs/RE
 - NATS is part of the intended stack but is not used; the worker and delivery poll PostgreSQL.
 - Personal digests are stored and readable but not delivered.
 - Parts that have run only against fakes: Ollama, Claude, Novu, SNS, OpenID Connect; the MCP server has run only against scripted clients so far (a real client is slice 39d).
-- Spans are structured log lines in Go (none in Java yet), not an OpenTelemetry export (slice 39c).
+- Span export to an OpenTelemetry collector (`OTEL_EXPORTER_OTLP_ENDPOINT`, both services) has run only against a fake collector so far; a real collector and trace viewer are slice 39d.
 - The default attention budget (10 per hour) quiets busy workspaces; set `ATTENTION_BUDGET_PER_HOUR=0` to turn it off.
 
 ---

@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/agentpulse/notification-service/pkg/telemetry"
 )
 
 // Defaults for settings that have one. Exported so docs and tests can refer to them.
@@ -138,7 +140,16 @@ type Config struct {
 	AllowUnsignedWebhooks bool
 	// DispatcherDisabled stops this process claiming queued deliveries (DISPATCHER_ENABLED=false), so one
 	// service can own the queue when two share a database. Critical delivery is inline and unaffected.
-	DispatcherDisabled  bool
+	DispatcherDisabled bool
+	// OTLPEndpoint is the collector the service sends spans to (OTEL_EXPORTER_OTLP_ENDPOINT);
+	// empty turns span export off. OTLPHeaders go with every export and are never logged.
+	OTLPEndpoint string
+	OTLPHeaders  map[string]string
+	// OTELServiceName names this service in exported spans (OTEL_SERVICE_NAME).
+	OTELServiceName string
+	// OTELExportBatch and OTELExportBuffer bound one export request and the spans waiting.
+	OTELExportBatch     int
+	OTELExportBuffer    int
 	MaxBodyBytes        int64
 	RequestTimeout      time.Duration
 	CORSAllowedOrigins  []string
@@ -213,6 +224,9 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 	cfg.DispatcherDisabled = !dispatcherOn
+	if err = loadOTLP(&cfg); err != nil {
+		return nil, err
+	}
 
 	cfg.APIKey = os.Getenv("API_KEY")
 	cfg.DatabaseURL = os.Getenv("DATABASE_URL")
@@ -496,3 +510,47 @@ const (
 	defaultLearningMaxAdjustment   = 20
 	defaultLearningHalfLife        = 14 * 24 * time.Hour
 )
+
+// loadOTLP reads the span export settings. Nothing is exported unless an endpoint is set.
+func loadOTLP(cfg *Config) error {
+	if v := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); v != "" {
+		endpoint, err := telemetry.ParseOTLPEndpoint(v)
+		if err != nil {
+			return fmt.Errorf("invalid OTEL_EXPORTER_OTLP_ENDPOINT: %w", err)
+		}
+		cfg.OTLPEndpoint = endpoint
+	}
+	headers, err := parseOTLPHeaders(os.Getenv("OTEL_EXPORTER_OTLP_HEADERS"))
+	if err != nil {
+		return err
+	}
+	cfg.OTLPHeaders = headers
+	cfg.OTELServiceName = envDefault("OTEL_SERVICE_NAME", "notification-service")
+	if cfg.OTELExportBuffer, err = envInt("OTEL_EXPORT_BUFFER", telemetry.DefaultExportBuffer, 1, telemetry.MaxExportBuffer); err != nil {
+		return err
+	}
+	if cfg.OTELExportBatch, err = envInt("OTEL_EXPORT_BATCH", telemetry.DefaultExportBatch, 1, telemetry.MaxExportBatch); err != nil {
+		return err
+	}
+	if cfg.OTELExportBatch > cfg.OTELExportBuffer {
+		return errors.New("invalid OTEL_EXPORT_BATCH: larger than OTEL_EXPORT_BUFFER")
+	}
+	return nil
+}
+
+// parseOTLPHeaders reads OTEL_EXPORTER_OTLP_HEADERS, "name=value,name2=value2" with
+// URL-encoded values as the OpenTelemetry specification defines. A mistake is reported by
+// position only, because the value may be a credential.
+func parseOTLPHeaders(s string) (map[string]string, error) {
+	out := map[string]string{}
+	for i, pair := range splitList(s) {
+		name, value, ok := strings.Cut(pair, "=")
+		name = strings.TrimSpace(name)
+		decoded, err := url.QueryUnescape(strings.TrimSpace(value))
+		if !ok || name == "" || err != nil {
+			return nil, fmt.Errorf("invalid OTEL_EXPORTER_OTLP_HEADERS: entry %d must be name=value", i+1)
+		}
+		out[name] = decoded
+	}
+	return out, nil
+}

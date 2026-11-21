@@ -41,6 +41,13 @@ The API key is entered in the browser and kept per tab. Rotate it by changing `A
 - **Sign-up answers 404:** `AUTH_SIGNUP` is unset (off). Set `AUTH_SIGNUP=approval`. **429:** too many sign-up requests from one address in an hour; behind a proxy everyone shares one address (finding F11).
 - **Locked out of every admin:** the bootstrap admin is only created when there are no accounts. Use the API key to `PATCH /api/users/{id}` (a new password, or re-enable the account).
 
+### No spans reach the collector
+- **Export is off** unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set; the start-up log says `span export on` when it is.
+- **The caller asked for no sampling:** a request whose `traceparent` ends in `-00` (or another even flag) is traced locally but not exported, in both services. Requests without a `traceparent` are always sampled. `/health` is never traced.
+- **`span export failed ... status=4xx`** in the log: the collector refused the request (wrong path, missing or wrong `OTEL_EXPORTER_OTLP_HEADERS`). 4xx answers other than 429 are not retried.
+- **`status=0 network_error=true`:** the collector is unreachable; each batch is retried once, then counted as failed. Requests are never slowed by this.
+- **At shutdown** the log line `span export stopped sent=N dropped=N failed=N` gives the totals; a growing `dropped` means the collector is slower than the traffic: raise `OTEL_EXPORT_BUFFER` or fix the collector.
+
 ### Logs show `bind message has N result formats but query has M columns` or `prepared statement "" requires N`
 The database connection goes through a pooler (for Neon, a host with `-pooler`), which mixes up the Go driver's prepared statements between the background workers. Use the direct host and add `binary_parameters=yes` to `DATABASE_URL`, then redeploy.
 
