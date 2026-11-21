@@ -20,18 +20,11 @@ What is **not** built yet, as one numbered sequence of milestones. What exists i
 
 `DISPATCHER_ENABLED` (a setting in both services that turns a process's queue dispatcher off, so one service can own the queue when two share a database) is also merged (PR #13).
 
-## Milestone 38: Learning
-Feedback loops and dynamic model training. Layer 2 only: learn from the stored feedback signals (opened, dismissed, undo, always, never, replies) to suggest and refine preferences, overrides and scores.
-- Learning is an **offline or async process** that learns from stored feedback to adjust heuristic scores and routing preferences. It is not a black-box model sitting in the live path and it never intercepts live traffic.
-- Learning engine and suggestions API in both services; suggestions are visible and reviewable, never silent.
-- Guardrails: learning only moves non-critical events between standard and background, never touches critical events, and a person's explicit override always outranks it.
-- Reads of feedback must not depend on the 1000-event window (see milestone 42).
-
 ## Milestone 39: Observability and MCP
 Traces, an OpenTelemetry exporter and MCP integration.
 - Traces and agent event chaining (`traceId`, `parentEventId`) in Java; an OpenTelemetry exporter for the spans already recorded.
 - MCP server in Java, matching Go.
-- Verify against a real MCP client.
+- Verify against a real MCP client (Claude Code and the MCP Inspector) and a real trace viewer (Jaeger), slice 39d.
 
 ## Milestone 40: Delivery channels
 SMS, Novu and further providers behind `NotificationProvider`.
@@ -41,14 +34,14 @@ SMS, Novu and further providers behind `NotificationProvider`.
 
 ## Milestone 41: Metrics
 System health and usage metrics.
-- `/metrics` and the analytics endpoints in Java, matching Go; counters for decisions per class, queue depth, dead letters, budget use and digest counts.
+- `/metrics` and the analytics endpoints in Java, matching Go; counters for decisions per class, queue depth, dead letters, budget use and digest counts, and the OTLP span exporter's `sent`, `dropped` and `failed` counts (deferred here by the milestone 39 plan).
 - Documented names and an example dashboard.
 
 ## Milestone 42: Inbox and read-path optimization
 Inbox features, retention policies and finding F10.
 - Inbox in Java, and event retention (purging old events) in Java as well as Go.
-- **F10:** replace `inbox.Service.load` and the digest and learning reads of `event.List` with SQL filtering, sorting and keyset paging; counters for analytics.
-- Acceptance: the inbox shows events older than the newest 1000, results match the current behaviour for small data, and response time stays flat as events grow.
+- **F10:** replace `inbox.Service.load`, the digest and learning reads, `GET /api/traces` and `GET /api/traces/{id}`, and the MCP `get_recent_events` and explain lookups, all of which read the newest 1000 events through `event.List` (Go) or `listRecent` (Java), with SQL filtering, sorting and keyset paging, in both services; counters for analytics.
+- Acceptance: the inbox and a trace show events older than the newest 1000, results match the current behaviour for small data, and response time stays flat as events grow.
 
 ## Milestone 43: SDK foundation
 TypeScript/JavaScript and Go SDKs, and a standard `/api/events` contract. Today only Python has an SDK ([../sdk/python](../sdk/python/README.md)).
@@ -57,7 +50,7 @@ TypeScript/JavaScript and Go SDKs, and a standard `/api/events` contract. Today 
 - Open questions to settle in the plan: hand-written or generated from an OpenAPI description (none exists yet); whether `/notify` is covered or only agent traces. Java, .NET and Ruby SDKs and publishing (npm, Maven Central, pkg.go.dev, NuGet) come later, by demand.
 
 ## Milestone 44: Security and edge hardening
-- **F1** inbound rate limiting: per-key limits on `/webhooks/github`, `/api/events` and `/notify`, 429 when exceeded, the same in Go and Java, a new contract file. A flood is limited; critical events from a key within its limit are unaffected.
+- **F1** inbound rate limiting: per-key limits on `/webhooks/github`, `/api/events`, `/notify`, `/api/mcp` and `/api/traces` (the last two deferred here by the milestone 39 plan), 429 when exceeded, the same in Go and Java, a new contract file. A flood is limited; critical events from a key within its limit are unaffected.
 - **F11** trusted proxy: a `TRUSTED_PROXY` setting that reads `X-Forwarded-For` only from the proxy, in both services, so per-address limits are per person and a spoofed header from outside is ignored.
 - **F12** sessions across sites: host the console and the API on one site (custom domain) so sign-in works without `AUTH_COOKIE_SAMESITE=none`.
 - **F6** Java SSRF: check the address at connect time, or pin the resolved address, as Go does; a host whose DNS changes between check and connect is refused.
@@ -79,7 +72,7 @@ TypeScript/JavaScript and Go SDKs, and a standard `/api/events` contract. Today 
 - Acceptance: several replicas of Go and Java on one database and one broker behave as one service, and the invariant tests still pass.
 
 ## Milestone 48: Production and product
-- Verify against real services: PostgreSQL, Redis, Ollama, Claude, Novu, SNS, an OpenID provider and a real MCP client; record the results and fix what they find.
+- Verify against real services: PostgreSQL, Redis, Ollama, Claude, Novu, SNS and an OpenID provider; record the results and fix what they find. (A real MCP client is verified in slice 39d.)
 - Production hardening: AWS deployment, backup and restore drills, SLO dashboard, security review, load tests (the original milestone 10).
 - Product: multi-tenancy and billing for the hosted offering; event replay and an agent registry.
 
