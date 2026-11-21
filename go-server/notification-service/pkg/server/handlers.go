@@ -81,7 +81,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/health", s.corsMiddleware(s.loggingMiddleware(http.HandlerFunc(s.healthHandler))))
 	mux.Handle("/webhooks/github", s.corsMiddleware(s.loggingMiddleware(
 		s.webhookAuthMiddleware(s.timeoutMiddleware(http.HandlerFunc(s.githubWebhookHandler))))))
-	return requestIDMiddleware(s.tracer.Middleware(func(r *http.Request) string { return r.Method + " " + routeLabel(r.URL.Path) }, mux))
+	return requestIDMiddleware(s.tracer.Middleware(traceRoute, mux))
 }
 
 // Run serves HTTP until ctx is cancelled, then shuts down gracefully,
@@ -407,4 +407,13 @@ func (s *Server) eventsHandler(w http.ResponseWriter, r *http.Request) {
 		body["nextCursor"] = pagination.Encode(pagination.Cursor{At: last.CreatedAt, ID: last.ID})
 	}
 	util.WriteJSON(w, http.StatusOK, body)
+}
+
+// traceRoute names a request's server span: its low-cardinality route label, or "" for
+// /health, which is not traced (probes would otherwise fill the trace store).
+func traceRoute(r *http.Request) string {
+	if r.URL.Path == "/health" {
+		return ""
+	}
+	return routeLabel(r.URL.Path)
 }

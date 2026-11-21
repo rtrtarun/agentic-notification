@@ -29,7 +29,7 @@ The single place that says **what is built, what was proven, what is open and wh
 | Learning score tuning (offline, approval-gated) | Yes (M38b, contract 15) | Yes (M38c, contract 15) | Same arithmetic, ids and shared tables; one running run across both |
 | Agent steps and traces (`/api/events`, `/api/traces`) | Yes | Yes (M39a, contract 16) | Same tie order; chain columns NULL outside a run |
 | MCP server (`/api/mcp`; stdio through Go's `cmd/mcp-server`) | Yes | Yes (M39b, contract 17; the stdio server also works against Java) | Protocol `2024-11-05` |
-| `traceparent` propagation and span logs | Yes | **No** (M39c) | No export to a collector yet in either service |
+| `traceparent` propagation, spans and OTLP span export | Yes (M39c export) | Yes (M39c, contract 18) | Off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set; not yet tried against a real collector (39d) |
 | SMS, Novu, channels API | Yes | **No** (M40) | |
 | Metrics and analytics | Yes | **No** (M41) | |
 | Inbox, event retention | Yes | **No** (M42) | |
@@ -60,6 +60,8 @@ Finished milestone records, 1 to 38, are in [archived/milestones/](archived/mile
 | MCP argument refusals are the service's own words (`unknown argument "x"`, `argument limit must be a whole number`), not `encoding/json`'s text | Go's text named Go types and changed between Go versions | M39b |
 | MCP stays on protocol `2024-11-05` and answers it whatever the client proposes; revisit after the real-client check | Parity first | M39 plan |
 | The OTLP span export is hand-written OTLP/HTTP JSON in both services, off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set, and never carries payloads or secrets | No SDK dependency tree; a collector can never slow a request | M39 plan |
+| `/health` is not traced (no span, no `traceparent`); only bit 0 of the traceparent flags means sampled, and only sampled spans are exported | Probes would fill the trace store; the caller's sampling decision is respected | M39 plan, M39c |
+| Java passes the span context explicitly as a parameter (no `ThreadLocal`, no exchange attributes) | Owner guardrail; nothing hidden per thread | M39c |
 | Placeholder `example` identity renamed to `agentpulse` (Java package, Go module) | Owner decision after the M34 review | M34 |
 | `PROMPT_SPEC.md` stays untracked | It is an input prompt, not product documentation | M27 |
 
@@ -69,14 +71,14 @@ Finished milestone records, 1 to 38, are in [archived/milestones/](archived/mile
 | `gofmt`, `go vet` (with and without `-tags integration`), `go test ./...` | Pass locally (milestone 39b) |
 | Go integration tests (`-tags integration`) against PostgreSQL 16 and Redis 7 | Pass locally (milestone 39a, 2026-11-21) and in CI |
 | `go test -race`, `golangci-lint`, `govulncheck` | Not runnable locally; **green in CI** |
-| `mvn verify` (Maven container) | Offline: 376 tests, 5 skipped, 90.4 percent (milestone 39b). With PostgreSQL and Redis: 387 tests, none skipped, 94.7 percent (milestone 39a) |
+| `mvn verify` (Maven container) | Offline: 395 tests, 5 skipped, 90.7 percent. With PostgreSQL and Redis: 424 tests, none skipped, 95.0 percent (milestone 39c) |
 | `npm test -- --run`, `npm run build` | Pass locally (238 Vitest tests, milestone 36; the console has not changed since) |
-| Shared HTTP contract (17 files) | Pass on Go (`TestContract`) and Java (`ContractTest`) |
-| Go and Java on one PostgreSQL | One agent run published through both gave identical traces (M39a); Go's stdio MCP server answered against the Java jar as against Go (M39b) |
+| Shared HTTP contract (18 files) | Pass on Go (`TestContract`) and Java (`ContractTest`) |
+| Go and Java on one PostgreSQL | One agent run published through both gave identical traces (M39a); Go's stdio MCP server answered against the Java jar as against Go (M39b); both exported the same span tree for one caller trace to a fake OTLP collector (M39c) |
 | Latest recorded CI | `master` after merging PR #20 (run 44879506261) and PR #21 (run 44879871735): `go-service`, `java-service`, `web`, `python-sdk` all green. The "Publish service images" workflow succeeded on both merges (runs 44879506245, 44879871660); `VERSION` is still `0.36.0`, so no new GitHub Release was made |
 | Sign-up, approval and sign-in in a browser against the live service | **Not verified** |
 | Real Ollama, Claude, Novu, SNS, OpenID provider | **Not verified.** Fakes and replay tests only (milestone 48) |
-| Real MCP client, real trace viewer | **Not verified** (slice 39d) |
+| Real MCP client, real collector and trace viewer | **Not verified** (slice 39d) |
 
 Coverage is below 80 percent locally in `db`, `event`, `feedback`, `inbox`, `mail`, `delivery`, `rules` and `auth` (mostly PostgreSQL code only the integration tests reach); raising them is housekeeping in milestone 45. New code lands at 80 percent or more.
 

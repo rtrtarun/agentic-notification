@@ -54,6 +54,7 @@ public final class Pipeline {
     private Budget budget;
     private Overrides.Service overrides;
     private Outbox outbox;
+    private Telemetry.Tracer tracer;
     private Targets criticalTargets = Targets.none();
 
     public Pipeline(PolicyEngine policy, NotificationProvider provider, EventRepository repository) {
@@ -81,6 +82,12 @@ public final class Pipeline {
     }
 
     /** Applies people's always and never notify choices to non-critical events; they outrank judgement, quiet hours and the budget. */
+    /** Records each step as a span (the same names as Go: pipeline.Handle, policy.Evaluate, dedup.Check, attention.Classify, delivery.Send). */
+    public Pipeline withTracer(Telemetry.Tracer tracer) {
+        this.tracer = tracer;
+        return this;
+    }
+
     public Pipeline withOverrides(Overrides.Service overrides) {
         this.overrides = overrides;
         return this;
@@ -111,21 +118,68 @@ public final class Pipeline {
      * @throws PipelineException when a critical delivery or the save fails
      */
     public Event handle(Event incoming) {
+        return handle(incoming, null);
+    }
+
+    /**
+     * Processes one event as a child span of {@code parent} (the request's span, or null for a new trace). The span
+     * records the event's source, type and agent trace, then the class, status and rule it got; never the payload.
+     */
+    public Event handle(Event incoming, Telemetry.SpanContext parent) {
+        Telemetry.Span span = Telemetry.start(tracer, parent, "pipeline.Handle");
+        span.setAttribute(Telemetry.ATTR_EVENT_SOURCE, incoming.getSource());
+        span.setAttribute(Telemetry.ATTR_EVENT_TYPE, incoming.getEventType());
+        span.setAttribute(Telemetry.ATTR_AGENT_TRACE_ID, incoming.getTraceId());
+        Event[] working = new Event[1];
+        try {
+            Event out = handleTraced(incoming, span.context(), working);
+            decisionAttributes(span, out);
+            span.end();
+            return out;
+        } catch (DuplicateDeliveryException e) {
+            span.end(); // a redelivery is answered, not failed
+            throw e;
+        } catch (RuntimeException e) {
+            decisionAttributes(span, working[0]);
+            span.end(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            throw e;
+        }
+    }
+
+    private static void decisionAttributes(Telemetry.Span span, Event event) {
+        if (event == null) {
+            return;
+        }
+        span.setAttribute(Telemetry.ATTR_ATTENTION_CLASS, event.getAttentionClass());
+        if (event.getDecisionState() != null) {
+            span.setAttribute(Telemetry.ATTR_DECISION_STATUS, event.getDecisionState().getStatus());
+            span.setAttribute(Telemetry.ATTR_RULE_NAME, event.getDecisionState().getMatchedRule());
+        }
+    }
+
+    private Event handleTraced(Event incoming, Telemetry.SpanContext ctx, Event[] working) {
         if (repository.exists(incoming.getId())) {
             throw new DuplicateDeliveryException(incoming.getId());
         }
 
         Event event = incoming.copy();
+        working[0] = event;
+        Telemetry.Span policySpan = Telemetry.start(tracer, ctx, "policy.Evaluate");
         boolean adaptive = applyPolicy(event);
+        policySpan.end();
+        Telemetry.Span dedupSpan = Telemetry.start(tracer, ctx, "dedup.Check");
         boolean duplicate = applyDedup(event);
+        dedupSpan.end();
 
         if (event.isCritical()) {
             RuntimeException sendError = null;
+            Telemetry.Span sendSpan = Telemetry.start(tracer, ctx, "delivery.Send");
             try {
                 deliverCritical(event);
             } catch (RuntimeException e) {
                 sendError = e;
             }
+            sendSpan.end(sendError == null ? null : String.valueOf(sendError.getMessage()));
             logDirect(event, sendError);
             if (sendError != null) {
                 forgetDedup(event);
@@ -133,7 +187,7 @@ public final class Pipeline {
             }
             event.getDecisionState().setStatus(Status.SENT);
         } else {
-            attendNonCritical(event, adaptive, duplicate);
+            attendNonCritical(event, adaptive, duplicate, ctx);
         }
 
         try {
@@ -146,13 +200,13 @@ public final class Pipeline {
         return event;
     }
 
-    private void attendNonCritical(Event event, boolean adaptive, boolean duplicate) {
+    private void attendNonCritical(Event event, boolean adaptive, boolean duplicate, Telemetry.SpanContext ctx) {
         DecisionState state = event.getDecisionState();
         if (duplicate) {
             state.setStatus(Status.MERGED);
             return;
         }
-        applyAttention(event, adaptive);
+        applyAttention(event, adaptive, ctx);
         boolean overridden = applyPreferences(event);
         applyBudget(event, overridden);
         if (state.getStatus().isEmpty()) {
@@ -222,7 +276,7 @@ public final class Pipeline {
     }
 
     /** Only ever moves a standard event to background; a failure keeps the rule's decision. */
-    private void applyAttention(Event event, boolean adaptive) {
+    private void applyAttention(Event event, boolean adaptive, Telemetry.SpanContext ctx) {
         if (classifier == null || !adaptive || !Attention.STANDARD.equals(event.getAttentionClass())) {
             return;
         }
@@ -231,9 +285,12 @@ public final class Pipeline {
             return;
         }
         Classification c;
+        Telemetry.Span span = Telemetry.start(tracer, ctx, "attention.Classify");
         try {
             c = classifier.classify(event);
+            span.end();
         } catch (RuntimeException e) {
+            span.end(String.valueOf(e.getMessage()));
             LOG.warn("classification failed; keeping the rule's decision event_id={} error={}",
                     event.getId(), e.getMessage());
             return;

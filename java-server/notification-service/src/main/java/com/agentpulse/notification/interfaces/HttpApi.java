@@ -13,11 +13,11 @@ import com.agentpulse.notification.application.Pipeline;
 import com.agentpulse.notification.application.Ports.DeliveryStore;
 import com.agentpulse.notification.application.Ports.EventRepository;
 import com.agentpulse.notification.application.RulesService;
+import com.agentpulse.notification.application.Telemetry;
 import com.agentpulse.notification.domain.Event;
 import com.agentpulse.notification.infrastructure.Config;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,6 +60,7 @@ public final class HttpApi {
     private volatile AttentionApi attention;
     private volatile LearningApi learning;
     private volatile TuningApi tuning;
+    private volatile Telemetry.Tracer tracer;
 
     public HttpApi(Config config, Pipeline pipeline, EventRepository events, Notify.Service notifyService,
                    RulesService rulesService, DeliveryStore deliveryStore, Clock clock) {
@@ -79,6 +80,7 @@ public final class HttpApi {
         this.rules = new RulesApi(api, rulesService);
         this.deliveries = new DeliveriesApi(api, deliveryStore, clock);
         this.feedbackApi = new FeedbackApi(api, feedback, overrides, accounts);
+        this.tracer = new Telemetry.Tracer(clock);
         this.agent = new AgentApi(api, pipeline, events, this::listEvents);
         this.mcp = new McpApi(api, new McpApi.InProcess(pipeline, events, notifyService, new Heuristic()::explain, HttpApi::summary));
     }
@@ -95,6 +97,7 @@ public final class HttpApi {
         this.rules = new RulesApi(api, rulesService);
         this.deliveries = new DeliveriesApi(api, deliveryStore, clock);
         this.feedbackApi = new FeedbackApi(api, null, null, accounts);
+        this.tracer = new Telemetry.Tracer(clock);
         this.agent = new AgentApi(api, pipeline, events, this::listEvents);
         this.mcp = new McpApi(api, new McpApi.InProcess(pipeline, events, notifyService, new Heuristic()::explain, HttpApi::summary));
     }
@@ -121,16 +124,25 @@ public final class HttpApi {
         return this;
     }
 
+    /**
+     * Uses this tracer for request spans (normally one with an exporter; see {@code OtlpExporter}). Without it, request
+     * spans are only logged.
+     */
+    public HttpApi withTracer(Telemetry.Tracer tracer) {
+        this.tracer = tracer;
+        return this;
+    }
+
     /** Starts serving on the given port (0 picks a free one) and returns the running server. */
     public HttpServer start(int port) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
-        server.createContext("/", logged(this::route));
+        server.createContext("/", this::serve);
         server.setExecutor(Executors.newFixedThreadPool(16));
         server.start();
         return server;
     }
 
-    private void route(HttpExchange x) throws IOException {
+    private void route(HttpExchange x, Telemetry.SpanContext span) throws IOException {
         String path = x.getRequestURI().getPath();
         if (under(path, RulesApi.PREFIX)) {
             rules.rules(x);
@@ -155,10 +167,10 @@ public final class HttpApi {
         } else {
             switch (path) {
                 case "/health" -> api.reply(x, 200, Map.of("status", "ok", "service", "attention-orchestration", "version", config.appVersion()));
-                case "/webhooks/github" -> webhook(x);
+                case "/webhooks/github" -> webhook(x, span);
                 case "/events" -> listEvents(x);
-                case AgentApi.EVENTS_PATH -> agent.events(x);
-                case McpApi.PATH -> mcp.handle(x);
+                case AgentApi.EVENTS_PATH -> agent.events(x, span);
+                case McpApi.PATH -> mcp.handle(x, span);
                 case "/notify" -> notify.handle(x);
                 case FeedbackApi.FEEDBACK_PATH -> feedbackApi.feedback(x);
                 case AttentionApi.STATUS_PATH -> {
@@ -180,7 +192,7 @@ public final class HttpApi {
 
     // ---- webhook -------------------------------------------------------------------------------------------
 
-    private void webhook(HttpExchange x) throws IOException {
+    private void webhook(HttpExchange x, Telemetry.SpanContext span) throws IOException {
         String secret = config.githubWebhookSecret();
         if (secret.isEmpty() && !config.allowUnsignedWebhooks()) {
             api.error(x, 503, "webhook secret not configured");
@@ -215,7 +227,7 @@ public final class HttpApi {
         Event normalized = GitHubNormalizer.normalize(eventType, x.getRequestHeaders().getFirst("X-GitHub-Delivery"), payload);
         Event result;
         try {
-            result = pipeline.handle(normalized);
+            result = pipeline.handle(normalized, span);
         } catch (Pipeline.DuplicateDeliveryException e) {
             LOG.info("ignored redelivered event event_id={}", normalized.getId());
             api.reply(x, 200, Map.of("status", "duplicate", "eventId", normalized.getId()));
@@ -333,19 +345,37 @@ public final class HttpApi {
 
     // ---- shared --------------------------------------------------------------------------------------------
 
-    private HttpHandler logged(HttpHandler next) {
-        return x -> {
-            long started = System.nanoTime();
-            try {
-                next.handle(x);
-            } catch (RuntimeException e) {
-                LOG.error("unhandled error path={} error={}", x.getRequestURI().getPath(), e.toString());
-                api.error(x, 500, "internal error");
-            } finally {
-                LOG.info("request method={} path={} status={} ms={}", x.getRequestMethod(), x.getRequestURI().getPath(),
-                        x.getResponseCode(), (System.nanoTime() - started) / 1_000_000);
-                x.close();
+    /**
+     * Every request: a server span named {@code "<method> <route>"} (none for /health) that continues a valid incoming
+     * traceparent and keeps its sampled flag, the traceparent returned in the response, the request handled with the
+     * span's context passed explicitly, and one log line. A 5xx answer marks the span failed.
+     */
+    private void serve(HttpExchange x) throws IOException {
+        long started = System.nanoTime();
+        String path = x.getRequestURI().getPath();
+        String route = Routes.traced(path);
+        Telemetry.Span span = null;
+        if (route != null) {
+            Telemetry.SpanContext incoming = Telemetry.parseTraceparent(x.getRequestHeaders().getFirst(Telemetry.HEADER)).orElse(null);
+            span = tracer.start(incoming, x.getRequestMethod() + " " + route, Telemetry.Kind.SERVER);
+            span.setAttribute(Telemetry.ATTR_HTTP_METHOD, x.getRequestMethod());
+            span.setAttribute(Telemetry.ATTR_HTTP_ROUTE, route);
+            x.getResponseHeaders().set(Telemetry.HEADER, span.context().traceparent());
+        }
+        try {
+            route(x, span == null ? null : span.context());
+        } catch (RuntimeException e) {
+            LOG.error("unhandled error path={} error={}", path, e.toString());
+            api.error(x, 500, "internal error");
+        } finally {
+            int status = x.getResponseCode() < 0 ? 200 : x.getResponseCode();
+            LOG.info("request method={} path={} status={} ms={}", x.getRequestMethod(), path, status,
+                    (System.nanoTime() - started) / 1_000_000);
+            if (span != null) {
+                span.setIntAttribute(Telemetry.ATTR_HTTP_STATUS_CODE, status);
+                span.end(status >= 500 ? "server error" : null);
             }
-        };
+            x.close();
+        }
     }
 }

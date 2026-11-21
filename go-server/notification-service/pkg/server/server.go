@@ -59,6 +59,9 @@ const (
 )
 
 // Server wires the HTTP layer to the pipeline and its dependencies.
+// spanFlushTimeout bounds how long shutdown waits to send the spans still buffered.
+const spanFlushTimeout = 5 * time.Second
+
 type Server struct {
 	cfg             *config.Config
 	logger          *slog.Logger
@@ -191,6 +194,24 @@ func NewServer(ctx context.Context, cfg *config.Config, logger *slog.Logger) (*S
 	s.initTuning(ctx)
 	s.mcp = mcp.New(mcpBackend{s}, "service")
 	s.tracer = telemetry.NewTracer(logger)
+	if cfg.OTLPEndpoint != "" {
+		exporter, err := telemetry.NewOTLPExporter(telemetry.OTLPConfig{
+			Endpoint: cfg.OTLPEndpoint, Headers: cfg.OTLPHeaders, ServiceName: cfg.OTELServiceName,
+			ServiceVersion: cfg.AppVersion, BatchSize: cfg.OTELExportBatch, BufferSize: cfg.OTELExportBuffer, Logger: logger,
+		})
+		if err != nil {
+			s.releaseOnStartupFailure()
+			return nil, fmt.Errorf("init span export: %w", err)
+		}
+		exporter.Start()
+		s.tracer.WithExporter(exporter)
+		s.closers = append(s.closers, func() error {
+			ctx, cancel := context.WithTimeout(context.Background(), spanFlushTimeout)
+			defer cancel()
+			return exporter.Shutdown(ctx)
+		})
+		logger.Info("span export on", "service", cfg.OTELServiceName, "batch", cfg.OTELExportBatch, "buffer", cfg.OTELExportBuffer)
+	}
 	s.service = notification.NewValidatingService(
 		impl.NewNotificationServiceWith(provider),
 		notification.Limits{

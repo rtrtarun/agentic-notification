@@ -76,6 +76,45 @@ class SacredInvariantTest {
         assertEquals(2, provider.sent.size(), "both critical steps were delivered inline");
     }
 
+    /**
+     * Milestone 39c: spans go to a bounded buffer, so a collector that never answers cannot hold up inline critical
+     * delivery; spans are dropped instead.
+     */
+    @Test
+    void aCollectorThatHangsNeverDelaysACriticalEvent() throws Exception {
+        java.util.concurrent.CountDownLatch release = new java.util.concurrent.CountDownLatch(1);
+        com.sun.net.httpserver.HttpServer collector = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+        collector.createContext("/", x -> {
+            try {
+                release.await();
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
+            x.close();
+        });
+        collector.setExecutor(java.util.concurrent.Executors.newCachedThreadPool());
+        collector.start();
+        com.agentpulse.notification.infrastructure.OtlpExporter exporter = new com.agentpulse.notification.infrastructure.OtlpExporter(
+                new com.agentpulse.notification.infrastructure.OtlpExporter.Settings("http://127.0.0.1:" + collector.getAddress().getPort(),
+                        java.util.Map.of(), "svc", 1, 4), "test");
+        exporter.start();
+        try {
+            Pipeline pipeline = armed().withTracer(new Telemetry.Tracer(Clock.systemUTC(), exporter));
+            long start = System.nanoTime();
+            for (int i = 0; i < 20; i++) {
+                Event result = pipeline.handle(Fakes.event("c" + i, "security_advisory"));
+                assertEquals(Status.SENT, result.getDecisionState().getStatus());
+            }
+            assertTrue(System.nanoTime() - start < 2_000_000_000L, "20 critical events must not wait for the collector");
+            assertEquals(20, provider.sent.size(), "every critical event was delivered inline");
+            assertTrue(exporter.stats()[1] > 0, "the full buffer drops spans rather than waiting");
+        } finally {
+            release.countDown();
+            exporter.shutdown(Duration.ofMillis(100));
+            collector.stop(0);
+        }
+    }
+
     @Test
     void criticalEventsNeverReachTheClassifier() {
         Event result = armed().handle(Fakes.event("c1", "security_advisory"));

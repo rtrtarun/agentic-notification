@@ -123,7 +123,7 @@ func TestANilTracerAndSpanAreHarmless(t *testing.T) {
 func TestMiddlewareContinuesACallersTraceAndEchoesTheRequestsSpan(t *testing.T) {
 	tr, buf, _ := recorder()
 	var seen SpanContext
-	h := tr.Middleware(func(r *http.Request) string { return r.Method + " /x" }, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := tr.Middleware(func(*http.Request) string { return "/x" }, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = FromContext(r.Context())
 	}))
 	req := httptest.NewRequest(http.MethodGet, "/x", nil)

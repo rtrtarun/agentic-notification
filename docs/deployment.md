@@ -209,6 +209,10 @@ Everything in the earlier steps, as one checklist for going live at `https://rtr
 | | `ATTENTION_ASYNC`, `ATTENTION_WORKER_INTERVAL` | Defer the attention step to a background worker (default off); poll interval (default `2s`) |
 | Email (milestone 32) | `NOVU_API_KEY`, `NOVU_API_URL`, `NOVU_WORKFLOW_ID` | Email through Novu, with SMTP as the fallback when SMTP is configured; exactly one provider sends each email |
 | | `SMTP_REQUIRE_STARTTLS` | `true` refuses to send mail over a plaintext connection |
+| Span export (milestone 39c, both services) | `OTEL_EXPORTER_OTLP_ENDPOINT` | The collector's base URL, for example `http://jaeger:4318` (`/v1/traces` is added). Unset: nothing is exported. No user, password, query or fragment |
+| | `OTEL_EXPORTER_OTLP_HEADERS` | For a hosted collector: `name=value,name2=value2`, values URL-encoded. A secret: never logged, and a bad entry is reported by position only |
+| | `OTEL_SERVICE_NAME` | Defaults `notification-service` (Go) and `notification-service-java` (Java) |
+| | `OTEL_EXPORT_BATCH`, `OTEL_EXPORT_BUFFER` | Spans per request (default `100`, at most `1000`) and spans waiting (default `2048`); when the buffer is full new spans are dropped, never waited for |
 
 The budget, the worker, agent traces and the Novu provider are implemented. Their PostgreSQL, Redis and real-service parts have only run in CI or against local fakes; try Novu with one test recipient before relying on it. 
 

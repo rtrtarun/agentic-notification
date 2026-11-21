@@ -207,6 +207,29 @@ class ContractTest {
 
     private void check(String step, JsonNode expect, HttpResponse<String> response) throws Exception {
         assertEquals(expect.get("status").asInt(), response.statusCode(), step + ": status (body " + response.body() + ")");
+        if (expect.has("traceparent")) {
+            JsonNode tp = expect.get("traceparent");
+            String header = response.headers().firstValue("traceparent").orElse("");
+            if (!tp.path("present").asBoolean(false)) {
+                assertTrue(header.isEmpty(), step + ": want no traceparent, got " + header);
+            } else {
+                java.util.Optional<com.agentpulse.notification.application.Telemetry.SpanContext> sc =
+                        com.agentpulse.notification.application.Telemetry.parseTraceparent(header);
+                assertTrue(sc.isPresent(), step + ": want a valid traceparent, got " + header);
+                if (tp.has("traceId")) {
+                    assertEquals(tp.get("traceId").asText(), sc.get().traceId(), step + ": trace id (" + header + ")");
+                }
+                if (tp.has("notTraceId")) {
+                    assertFalse(tp.get("notTraceId").asText().equals(sc.get().traceId()), step + ": the trace must be new (" + header + ")");
+                }
+                if (tp.has("notSpanId")) {
+                    assertFalse(tp.get("notSpanId").asText().equals(sc.get().spanId()), step + ": the span must be new (" + header + ")");
+                }
+                if (tp.has("sampled")) {
+                    assertEquals(tp.get("sampled").asBoolean(), sc.get().sampled(), step + ": sampled (" + header + ")");
+                }
+            }
+        }
         if (expect.path("bodyEmpty").asBoolean(false)) {
             assertTrue(response.body().isEmpty(), step + ": want no body, got " + response.body());
         }

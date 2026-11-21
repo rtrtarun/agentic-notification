@@ -1,0 +1,85 @@
+{
+  "name": "every request except /health answers with a W3C traceparent: it continues a valid incoming trace and keeps its sampled flag, and starts a new sampled trace otherwise",
+  "steps": [
+    {
+      "name": "/health is not traced",
+      "request": { "method": "GET", "path": "/health", "headers": { "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" } },
+      "expect": { "status": 200, "traceparent": { "present": false } }
+    },
+    {
+      "name": "without a traceparent a new sampled trace starts",
+      "request": { "method": "GET", "path": "/events", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "traceparent": { "present": true, "sampled": true } }
+    },
+    {
+      "name": "a sampled caller's trace is continued with a new span",
+      "request": { "method": "GET", "path": "/events", "headers": { "X-API-Key": "contract-key", "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" } },
+      "expect": { "status": 200, "traceparent": { "present": true, "traceId": "4bf92f3577b34da6a3ce929d0e0e4736", "notSpanId": "00f067aa0ba902b7", "sampled": true } }
+    },
+    {
+      "name": "a caller that did not sample keeps that decision",
+      "request": { "method": "GET", "path": "/events", "headers": { "X-API-Key": "contract-key", "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00" } },
+      "expect": { "status": 200, "traceparent": { "present": true, "traceId": "4bf92f3577b34da6a3ce929d0e0e4736", "sampled": false } }
+    },
+    {
+      "name": "other flag bits are not the sampled bit: 02 is not sampled",
+      "request": { "method": "GET", "path": "/events", "headers": { "X-API-Key": "contract-key", "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-02" } },
+      "expect": { "status": 200, "traceparent": { "present": true, "traceId": "4bf92f3577b34da6a3ce929d0e0e4736", "sampled": false } }
+    },
+    {
+      "name": "03 is sampled",
+      "request": { "method": "GET", "path": "/events", "headers": { "X-API-Key": "contract-key", "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-03" } },
+      "expect": { "status": 200, "traceparent": { "present": true, "traceId": "4bf92f3577b34da6a3ce929d0e0e4736", "sampled": true } }
+    },
+    {
+      "name": "upper-case hex is refused, so a new trace starts",
+      "request": { "method": "GET", "path": "/events", "headers": { "X-API-Key": "contract-key", "traceparent": "00-4BF92F3577B34DA6A3CE929D0E0E4736-00f067aa0ba902b7-01" } },
+      "expect": { "status": 200, "traceparent": { "present": true, "notTraceId": "4bf92f3577b34da6a3ce929d0e0e4736", "sampled": true } }
+    },
+    {
+      "name": "an all-zero trace id is refused",
+      "request": { "method": "GET", "path": "/events", "headers": { "X-API-Key": "contract-key", "traceparent": "00-00000000000000000000000000000000-00f067aa0ba902b7-01" } },
+      "expect": { "status": 200, "traceparent": { "present": true, "notTraceId": "00000000000000000000000000000000", "sampled": true } }
+    },
+    {
+      "name": "an all-zero span id is refused",
+      "request": { "method": "GET", "path": "/events", "headers": { "X-API-Key": "contract-key", "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01" } },
+      "expect": { "status": 200, "traceparent": { "present": true, "notTraceId": "4bf92f3577b34da6a3ce929d0e0e4736" } }
+    },
+    {
+      "name": "another version is refused",
+      "request": { "method": "GET", "path": "/events", "headers": { "X-API-Key": "contract-key", "traceparent": "01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" } },
+      "expect": { "status": 200, "traceparent": { "present": true, "notTraceId": "4bf92f3577b34da6a3ce929d0e0e4736" } }
+    },
+    {
+      "name": "a malformed header is refused",
+      "request": { "method": "GET", "path": "/events", "headers": { "X-API-Key": "contract-key", "traceparent": "not-a-header" } },
+      "expect": { "status": 200, "traceparent": { "present": true, "sampled": true } }
+    },
+    {
+      "name": "spaces around a valid header are allowed",
+      "request": { "method": "GET", "path": "/events", "headers": { "X-API-Key": "contract-key", "traceparent": "  00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01  " } },
+      "expect": { "status": 200, "traceparent": { "present": true, "traceId": "4bf92f3577b34da6a3ce929d0e0e4736" } }
+    },
+    {
+      "name": "a refused request is still traced",
+      "request": { "method": "GET", "path": "/events", "headers": { "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" } },
+      "expect": { "status": 401, "traceparent": { "present": true, "traceId": "4bf92f3577b34da6a3ce929d0e0e4736" } }
+    },
+    {
+      "name": "an unknown path is still traced",
+      "request": { "method": "GET", "path": "/nope", "headers": { "traceparent": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" } },
+      "expect": { "status": 404, "traceparent": { "present": true, "traceId": "4bf92f3577b34da6a3ce929d0e0e4736" } }
+    },
+    {
+      "name": "a webhook continues the sender's trace",
+      "request": { "method": "POST", "path": "/webhooks/github", "headers": { "X-GitHub-Event": "push", "X-GitHub-Delivery": "tp-1", "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01" }, "body": { "repository": { "full_name": "acme/api" } }, "sign": true },
+      "expect": { "status": 202, "traceparent": { "present": true, "traceId": "0af7651916cd43dd8448eb211c80319c", "sampled": true } }
+    },
+    {
+      "name": "an agent step continues the agent's trace",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key", "traceparent": "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01" }, "body": { "eventType": "agent.plan" } },
+      "expect": { "status": 202, "traceparent": { "present": true, "traceId": "0af7651916cd43dd8448eb211c80319c" } }
+    }
+  ]
+}

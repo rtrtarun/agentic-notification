@@ -43,6 +43,8 @@ The API fails closed: with no `API_KEY` every protected route returns 503. Set `
 
 Routing and SMS (milestone 22; all optional): `NOTIFY_STANDARD_CHANNELS` and `NOTIFY_BACKGROUND_CHANNELS` (comma lists of `email`, `slack`, `teams`, `sms`; empty means that class is only recorded), `SMS_GATEWAY` (`mock`, `http`, `sns`), `SMS_RECIPIENTS` (E.164), `SMS_DAILY_LIMIT` (default `50`, `0` = no cap), `SMS_HTTP_URL`, `SMS_HTTP_HEADERS` (`Name=value,...`), `SMS_HTTP_BODY` (template with `{{to}}` and `{{text}}`), `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`.
 
+Span export (milestone 39c; off unless the endpoint is set): `OTEL_EXPORTER_OTLP_ENDPOINT` (collector base URL; spans go to `/v1/traces` as OTLP/HTTP JSON), `OTEL_EXPORTER_OTLP_HEADERS` (`name=value,...`, URL-encoded, never logged), `OTEL_SERVICE_NAME` (default `notification-service`), `OTEL_EXPORT_BATCH` (default `100`), `OTEL_EXPORT_BUFFER` (default `2048`). See [pkg/telemetry](pkg/telemetry/README.md).
+
 Sign-up and release (milestone 36): `AUTH_SIGNUP` (`off` default, or `approval`: people may ask for an account and an admin must approve it; a sign-up never gets a session or any data until approved), `APP_VERSION` (set by the image build from the `VERSION` file; returned by `/health`, `dev` otherwise).
 
 Accounts and sign-in (milestone 23; all optional, the API key keeps working): `AUTH_BOOTSTRAP_EMAIL` and `AUTH_BOOTSTRAP_PASSWORD` (first admin, together), `AUTH_SESSION_TTL` (default `12h`), `AUTH_COOKIE_SECURE` (`auto`, `true`, `false`), `AUTH_COOKIE_SAMESITE` (`lax`, `strict`, `none`), `AUTH_SECRET`, `PUBLIC_URL`, `CONSOLE_URL`, `ENTRA_TENANT_ID` or `OIDC_ISSUER`, `OIDC_NAME`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_ALLOWED_DOMAINS`.

@@ -3,6 +3,7 @@ package config
 import (
 	"log/slog"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -299,5 +300,55 @@ func TestLoadConfigCanDisableTheDispatcher(t *testing.T) {
 	}
 	if !cfg.DispatcherDisabled {
 		t.Fatal("DISPATCHER_ENABLED=false must disable the dispatcher")
+	}
+}
+
+// TestSpanExportSettings (milestone 39c): off unless an endpoint is set; headers are URL-decoded
+// and a bad entry is reported by position, never by its value.
+func TestSpanExportSettings(t *testing.T) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.OTLPEndpoint != "" || cfg.OTELServiceName != "notification-service" || cfg.OTELExportBatch != 100 || cfg.OTELExportBuffer != 2048 {
+		t.Fatalf("defaults: %q %q %d %d", cfg.OTLPEndpoint, cfg.OTELServiceName, cfg.OTELExportBatch, cfg.OTELExportBuffer)
+	}
+
+	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://jaeger:4318/")
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "x-api-key=a%2Cb%3Dc, X-Team = ops ")
+	t.Setenv("OTEL_SERVICE_NAME", "agentpulse-go")
+	t.Setenv("OTEL_EXPORT_BATCH", "10")
+	t.Setenv("OTEL_EXPORT_BUFFER", "50")
+	cfg, err = LoadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"x-api-key": "a,b=c", "X-Team": "ops"}
+	if cfg.OTLPEndpoint != "http://jaeger:4318" || !reflect.DeepEqual(cfg.OTLPHeaders, want) || cfg.OTELServiceName != "agentpulse-go" ||
+		cfg.OTELExportBatch != 10 || cfg.OTELExportBuffer != 50 {
+		t.Fatalf("read: %+v %v", cfg.OTLPEndpoint, cfg.OTLPHeaders)
+	}
+
+	for name, value := range map[string]string{
+		"OTEL_EXPORTER_OTLP_ENDPOINT": "http://user:pw@jaeger:4318",
+		"OTEL_EXPORT_BATCH":           "0",
+		"OTEL_EXPORT_BUFFER":          "100001",
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv(name, value)
+			if _, err := LoadConfig(); err == nil {
+				t.Fatalf("%s=%s should be refused", name, value)
+			}
+		})
+	}
+	t.Setenv("OTEL_EXPORT_BATCH", "60")
+	if _, err := LoadConfig(); err == nil {
+		t.Fatal("a batch larger than the buffer is refused")
+	}
+	t.Setenv("OTEL_EXPORT_BATCH", "10")
+	t.Setenv("OTEL_EXPORTER_OTLP_HEADERS", "good=1,sup3r-s3cret-no-equals")
+	_, err = LoadConfig()
+	if err == nil || strings.Contains(err.Error(), "sup3r") || !strings.Contains(err.Error(), "entry 2") {
+		t.Fatalf("a bad header entry is named by position only: %v", err)
 	}
 }

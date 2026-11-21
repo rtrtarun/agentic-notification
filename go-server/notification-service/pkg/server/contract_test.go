@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/agentpulse/notification-service/pkg/config"
+	"github.com/agentpulse/notification-service/pkg/telemetry"
 )
 
 // The shared HTTP contract (docs/contract) is replayed against this service. The Java service replays
@@ -56,6 +57,14 @@ type contractStep struct {
 		BodyEmpty bool `json:"bodyEmpty"`
 		// TextJSON parses result.content[0].text (an MCP tool result) as JSON and subset-matches it.
 		TextJSON json.RawMessage `json:"textJson"`
+		// Traceparent checks the response's W3C traceparent header.
+		Traceparent *struct {
+			Present    bool   `json:"present"`
+			TraceID    string `json:"traceId"`
+			NotTraceID string `json:"notTraceId"`
+			NotSpanID  string `json:"notSpanId"`
+			Sampled    *bool  `json:"sampled"`
+		} `json:"traceparent"`
 	} `json:"expect"`
 	Save map[string]string `json:"save"`
 }
@@ -145,6 +154,28 @@ func runContractFile(t *testing.T, file contractFile) {
 		answer, _ := io.ReadAll(rr.Body)
 		if rr.Code != step.Expect.Status {
 			t.Fatalf("%s: status %d, want %d (body %s)", step.Name, rr.Code, step.Expect.Status, answer)
+		}
+		if tp := step.Expect.Traceparent; tp != nil {
+			header := rr.Header().Get("traceparent")
+			if !tp.Present {
+				if header != "" {
+					t.Fatalf("%s: want no traceparent, got %q", step.Name, header)
+				}
+			} else {
+				sc, ok := telemetry.ParseTraceparent(header)
+				switch {
+				case !ok:
+					t.Fatalf("%s: want a valid traceparent, got %q", step.Name, header)
+				case tp.TraceID != "" && hex.EncodeToString(sc.TraceID[:]) != tp.TraceID:
+					t.Fatalf("%s: trace id %q, want %s", step.Name, header, tp.TraceID)
+				case tp.NotTraceID != "" && hex.EncodeToString(sc.TraceID[:]) == tp.NotTraceID:
+					t.Fatalf("%s: the trace must not be %s: %q", step.Name, tp.NotTraceID, header)
+				case tp.NotSpanID != "" && hex.EncodeToString(sc.SpanID[:]) == tp.NotSpanID:
+					t.Fatalf("%s: the span must be new, got %q", step.Name, header)
+				case tp.Sampled != nil && sc.Sampled != *tp.Sampled:
+					t.Fatalf("%s: sampled %v, want %v (%q)", step.Name, sc.Sampled, *tp.Sampled, header)
+				}
+			}
 		}
 		if step.Expect.BodyEmpty && len(answer) != 0 {
 			t.Fatalf("%s: want no body, got %s", step.Name, answer)

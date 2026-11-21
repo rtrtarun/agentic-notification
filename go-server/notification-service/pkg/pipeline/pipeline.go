@@ -148,7 +148,16 @@ func (p *Pipeline) WithDeduper(d dedup.Deduper) *Pipeline {
 // returns ErrDuplicateDelivery when the event ID was already processed.
 func (p *Pipeline) Handle(ctx context.Context, evt event.Event) (event.Event, error) {
 	ctx, span := p.tracer.Start(ctx, "pipeline.Handle")
+	span.SetAttribute(telemetry.AttrEventSource, evt.Source)
+	span.SetAttribute(telemetry.AttrEventType, evt.EventType)
+	span.SetAttribute(telemetry.AttrAgentTraceID, evt.TraceID)
 	out, err := p.handle(ctx, evt)
+	// Only the decision's names go on the span: never the payload, the reason text or the error.
+	span.SetAttribute(telemetry.AttrAttentionClass, out.AttentionClass)
+	if out.DecisionState != nil {
+		span.SetAttribute(telemetry.AttrDecisionStatus, out.DecisionState.Status)
+		span.SetAttribute(telemetry.AttrRuleName, out.DecisionState.MatchedRule)
+	}
 	if errors.Is(err, ErrDuplicateDelivery) {
 		span.End(nil)
 		return out, ErrDuplicateDelivery
