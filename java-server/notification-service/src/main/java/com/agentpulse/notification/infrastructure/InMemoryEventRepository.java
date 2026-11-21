@@ -5,6 +5,7 @@ import com.agentpulse.notification.domain.Event;
 
 import java.time.Clock;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /** Keeps events in memory. Used when no database is configured, and in tests. */
@@ -33,12 +34,16 @@ public final class InMemoryEventRepository implements EventRepository {
         return events.stream().anyMatch(e -> e.getId().equals(id));
     }
 
+    /**
+     * Newest first in the PostgreSQL order ({@code created_at DESC, id DESC}), whatever order events were saved in,
+     * so a run without a database orders events stored at the same instant exactly as one with it does (and as Go).
+     */
     @Override
     public synchronized List<Event> listRecent(int limit) {
-        List<Event> newestFirst = new ArrayList<>();
-        for (int i = events.size() - 1; i >= 0 && newestFirst.size() < limit; i--) {
-            newestFirst.add(events.get(i).copy());
-        }
-        return newestFirst;
+        return events.stream()
+                .sorted(Comparator.comparing(Event::getCreatedAt).thenComparing(Event::getId).reversed())
+                .limit(Math.max(0, limit))
+                .map(Event::copy)
+                .toList();
     }
 }

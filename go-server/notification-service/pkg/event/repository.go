@@ -2,6 +2,7 @@ package event
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 )
@@ -74,11 +75,18 @@ func (r *InMemoryRepository) List(ctx context.Context) ([]Event, error) {
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	events := r.events
-	if len(events) > DefaultListLimit {
-		events = events[len(events)-DefaultListLimit:]
+	// The same order as the PostgreSQL repository (created_at, then id), so a run without a
+	// database orders events stored at the same instant exactly as one with it does.
+	out := make([]Event, len(r.events))
+	copy(out, r.events)
+	sort.SliceStable(out, func(i, j int) bool {
+		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].CreatedAt.Before(out[j].CreatedAt)
+		}
+		return out[i].ID < out[j].ID
+	})
+	if len(out) > DefaultListLimit {
+		out = out[len(out)-DefaultListLimit:]
 	}
-	out := make([]Event, len(events))
-	copy(out, events)
 	return out, nil
 }

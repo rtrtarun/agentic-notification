@@ -116,10 +116,10 @@ class AgentApiTest {
     }
 
     @Test
-    void stepsStoredAtTheSameInstantKeepTheirOrderAndTracesTieByTraceId() throws Exception {
+    void stepsStoredAtTheSameInstantAreOrderedByIdAndTracesTieByTraceId() throws Exception {
         Clock frozen = Clock.fixed(Instant.parse("2026-11-21T00:00:00Z"), ZoneOffset.UTC);
         String base = start(new InMemoryEventRepository(frozen));
-        for (String[] s : new String[][] {{"zeta", "z-2", "agent.plan"}, {"zeta", "z-1", "agent.complete"}, {"alpha", "a-1", "agent.plan"}}) {
+        for (String[] s : new String[][] {{"zeta", "z-2", "agent.complete"}, {"zeta", "z-1", "agent.plan"}, {"alpha", "a-1", "agent.plan"}}) {
             String body = "{\"traceId\":\"" + s[0] + "\",\"id\":\"" + s[1] + "\",\"eventType\":\"" + s[2] + "\",\"metadata\":{\"step_kind\":\""
                     + (s[2].endsWith("complete") ? "complete" : "plan") + "\"}}";
             assertEquals(202, send("POST", base + "/api/events", body, KEY).statusCode());
@@ -128,8 +128,8 @@ class AgentApiTest {
         assertEquals("alpha", list.get(0).get("traceId").asText(), "traces that ended together are ordered by trace id");
         assertEquals("zeta", list.get(1).get("traceId").asText());
         JsonNode zeta = JSON.readTree(send("GET", base + "/api/traces/zeta/", null, KEY).body());
-        assertEquals("z-2", zeta.get("stepList").get(0).get("eventId").asText(), "steps at one instant keep the order they were stored in");
-        assertEquals("z-1", zeta.get("stepList").get(1).get("eventId").asText());
+        assertEquals("z-1", zeta.get("stepList").get(0).get("eventId").asText(), "steps at one instant are ordered by id, as in PostgreSQL and Go");
+        assertEquals("z-2", zeta.get("stepList").get(1).get("eventId").asText(), "even though z-2 was stored first");
         assertEquals("complete", zeta.get("status").asText());
     }
 

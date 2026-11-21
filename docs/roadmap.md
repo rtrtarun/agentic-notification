@@ -15,7 +15,7 @@ What is **not** built yet, as one numbered sequence of milestones. What exists i
 | 34 to 36 | Done and merged |
 | 37 Java parity part 3 (rule fields, feedback and overrides, heuristic Attention Intelligence) | **Done and merged** (PR #14, 2026-11-10; [record](milestones/milestone-37.md)) |
 | 38 Learning | **Done and merged** (PRs #17, #18, #19; [plan](milestones/milestone-38-plan.md), [record](milestones/milestone-38.md)) |
-| 39 Observability and MCP | **Plan approved 2026-11-21** ([plan](milestones/milestone-39-plan.md)); slice 39a (Java agent events and traces) built, awaiting review ([record](milestones/milestone-39.md)); 39b to 39d not started |
+| 39 Observability and MCP | **Plan approved 2026-11-21** ([plan](milestones/milestone-39-plan.md)); slice 39a (Java agent events and traces) approved 2026-11-21 ([record](milestones/milestone-39.md)); 39b to 39d not started |
 | 40 to 48 | Not started; no plan approved yet. Each needs its plan and owner approval first |
 
 `DISPATCHER_ENABLED` (a setting in both services that turns a process's queue dispatcher off, so one service can own the queue when two share a database) is also merged (PR #13).

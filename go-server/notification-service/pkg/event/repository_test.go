@@ -48,8 +48,9 @@ func TestInMemoryListIsCappedToNewest(t *testing.T) {
 	repo := NewInMemoryRepository()
 	ctx := context.Background()
 	total := DefaultListLimit + 5
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	for i := 0; i < total; i++ {
-		repo.Save(ctx, Event{ID: fmt.Sprintf("e%d", i)})
+		repo.Save(ctx, Event{ID: fmt.Sprintf("e%d", i), CreatedAt: start.Add(time.Duration(i) * time.Second)})
 	}
 	stored, _ := repo.List(ctx)
 	if len(stored) != DefaultListLimit {
@@ -57,6 +58,30 @@ func TestInMemoryListIsCappedToNewest(t *testing.T) {
 	}
 	if stored[0].ID != "e5" || stored[len(stored)-1].ID != fmt.Sprintf("e%d", total-1) {
 		t.Fatalf("expected the newest events oldest-first, got %s..%s", stored[0].ID, stored[len(stored)-1].ID)
+	}
+}
+
+// TestInMemoryListOrdersLikePostgres pins milestone 39a's order: by created_at, then by id,
+// whatever order the events were saved in, so runs without a database match runs with one.
+func TestInMemoryListOrdersLikePostgres(t *testing.T) {
+	repo := NewInMemoryRepository()
+	ctx := context.Background()
+	at := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, e := range []Event{
+		{ID: "tie-b", CreatedAt: at}, {ID: "late", CreatedAt: at.Add(time.Second)},
+		{ID: "tie-a", CreatedAt: at}, {ID: "early", CreatedAt: at.Add(-time.Second)},
+	} {
+		if err := repo.Save(ctx, e); err != nil {
+			t.Fatalf("save: %v", err)
+		}
+	}
+	stored, _ := repo.List(ctx)
+	var ids []string
+	for _, e := range stored {
+		ids = append(ids, e.ID)
+	}
+	if got := strings.Join(ids, ","); got != "early,tie-a,tie-b,late" {
+		t.Fatalf("order = %s, want early,tie-a,tie-b,late", got)
 	}
 }
 
