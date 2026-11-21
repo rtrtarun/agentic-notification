@@ -2,7 +2,7 @@
 
 The single place that says **what is built, what was proven, what is open and who decided what**. Rule: the code and tests are the truth; if this file disagrees with them, this file is the bug. Update it in the same commit as any milestone work. Never mark something done that has not been run.
 
-*Last updated: 2026-11-21, after milestone 39b (merged to `master` as PR #21). The version before the 2026-11-07 cleanup, with the decision log for milestones 26 to 33, is [archived/design-notes/implementation-sync-through-m35.md](archived/design-notes/implementation-sync-through-m35.md).*
+*Last updated: 2026-11-21, after slice 39d (real-client verification; awaiting the owner's milestone review). The version before the 2026-11-07 cleanup, with the decision log for milestones 26 to 33, is [archived/design-notes/implementation-sync-through-m35.md](archived/design-notes/implementation-sync-through-m35.md).*
 
 ## 1. Ground rules
 1. Critical events never touch AI and are never merged, muted, budgeted, delayed, deferred or queued. They are delivered inline. Every milestone adds a test proving it.
@@ -15,7 +15,7 @@ The single place that says **what is built, what was proven, what is open and wh
 | Area | Go service | Java service | Detail |
 |---|---|---|---|
 | Webhook ingestion, normalization, rules (strict YAML, locked critical rules) | Yes | Yes (M34) | [architecture.md](architecture.md), [java-service.md](java-service.md) |
-| Dedup and threading (memory, or Redis shared across replicas and services) | Yes | Yes (M34, M35) | |
+| Dedup and threading (memory, or Redis shared across replicas and services) | Yes | Yes (M34, M35; agent runs threaded per run since 39d) | One run is one thread (`<source>:trace:<run>`) in both; the keys are the same text, so Redis dedups across services |
 | Critical path (inline, never suppressed) | Yes | Yes (16 invariant tests) | |
 | `/notify`, rules and policies API, durable delivery queue | Yes | Yes (M35, contract 07 to 09) | [contract/](contract/README.md) |
 | Rule `payloadMatch` and per-rule `channels` | Yes | Yes (M37a, contract 11) | |
@@ -28,13 +28,13 @@ The single place that says **what is built, what was proven, what is open and wh
 | Learning suggestions (review, apply, dismiss) | Yes | Yes (M38a, contract 14) | Same suggestion id hash |
 | Learning score tuning (offline, approval-gated) | Yes (M38b, contract 15) | Yes (M38c, contract 15) | Same arithmetic, ids and shared tables; one running run across both |
 | Agent steps and traces (`/api/events`, `/api/traces`) | Yes | Yes (M39a, contract 16) | Same tie order; chain columns NULL outside a run |
-| MCP server (`/api/mcp`; stdio through Go's `cmd/mcp-server`) | Yes | Yes (M39b, contract 17; the stdio server also works against Java) | Protocol `2024-11-05` |
-| `traceparent` propagation, spans and OTLP span export | Yes (M39c export) | Yes (M39c, contract 18) | Off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set; not yet tried against a real collector (39d) |
+| MCP server (`/api/mcp`; stdio through Go's `cmd/mcp-server`) | Yes | Yes (M39b, contract 17; the stdio server also works against Java) | Protocol `2024-11-05`; Claude Code 2.1.328 and MCP Inspector 2.16.0 call all four tools against both (39d) |
+| `traceparent` propagation, spans and OTLP span export | Yes (M39c export) | Yes (M39c, contract 18) | Off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set; read back from Jaeger 2.11.0 by `scripts/verify_jaeger.py` (39d) |
 | SMS, Novu, channels API | Yes | **No** (M40) | |
 | Metrics and analytics | Yes | **No** (M41) | |
 | Inbox, event retention | Yes | **No** (M42) | |
-| Web console, 15 screens, demo mode | Talks to Go | Not wired | [frontend.md](frontend.md) |
-| Python SDK | Talks to Go | Uses only `/api/events`, which Java serves since M39a; not yet run against Java | [../sdk/python/README.md](../sdk/python/README.md) |
+| Web console, 15 screens, demo mode | Talks to Go | Not wired: Java has no CORS, inbox or live stream; the Traces screen shows Java's runs when served from the same origin (39d) | [frontend.md](frontend.md) |
+| Python SDK | Talks to Go | Yes: `example.py` run against Java gives the same trace as against Go, apart from ids and times (39d) | [../sdk/python/README.md](../sdk/python/README.md) |
 
 Finished milestone records, 1 to 38, are in [archived/milestones/](archived/milestones/); the current one is in [milestones/](milestones/README.md).
 
@@ -58,7 +58,7 @@ Finished milestone records, 1 to 38, are in [archived/milestones/](archived/mile
 | Learning is offline or asynchronous and never in the live path; **every adjustment needs an admin's approval**, whatever its size; defaults ±20 points, 5 signals from 2 people, 30-day lookback, 14-day half-life | Predictability and auditability first | M38 plan |
 | Event lists break `created_at` ties by `id` in every store (PostgreSQL and memory, Go and Java) | One order everywhere, so traces match between services and between test and production | M39a |
 | MCP argument refusals are the service's own words (`unknown argument "x"`, `argument limit must be a whole number`), not `encoding/json`'s text | Go's text named Go types and changed between Go versions | M39b |
-| MCP stays on protocol `2024-11-05` and answers it whatever the client proposes; revisit after the real-client check | Parity first | M39 plan |
+| MCP stays on protocol `2024-11-05` and answers it whatever the client proposes | Parity first. Checked in 39d: Claude Code 2.1.328 and the MCP Inspector 2.16.0 propose `2025-11-25` and work with the `2024-11-05` answer, so no upgrade is needed yet | M39 plan, 39d |
 | The OTLP span export is hand-written OTLP/HTTP JSON in both services, off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set, and never carries payloads or secrets | No SDK dependency tree; a collector can never slow a request | M39 plan |
 | `/health` is not traced (no span, no `traceparent`); only bit 0 of the traceparent flags means sampled, and only sampled spans are exported | Probes would fill the trace store; the caller's sampling decision is respected | M39 plan, M39c |
 | Java passes the span context explicitly as a parameter (no `ThreadLocal`, no exchange attributes) | Owner guardrail; nothing hidden per thread | M39c |
@@ -68,17 +68,17 @@ Finished milestone records, 1 to 38, are in [archived/milestones/](archived/mile
 ## 4. Verification gates
 | Gate | Status |
 |---|---|
-| `gofmt`, `go vet` (with and without `-tags integration`), `go test ./...` | Pass locally (milestone 39b) |
+| `gofmt`, `go vet` (with and without `-tags integration`), `go test ./...` | Pass locally (slice 39d) |
 | Go integration tests (`-tags integration`) against PostgreSQL 16 and Redis 7 | Pass locally (milestone 39a, 2026-11-21) and in CI |
 | `go test -race`, `golangci-lint`, `govulncheck` | Not runnable locally; **green in CI** |
-| `mvn verify` (Maven container) | Offline: 395 tests, 5 skipped, 90.7 percent. With PostgreSQL and Redis: 424 tests, none skipped, 95.0 percent (milestone 39c) |
+| `mvn verify` (Maven container) | With PostgreSQL and Redis: 426 tests, none skipped, 95.0 percent (slice 39d). Offline: 395 tests, 5 skipped, 90.7 percent (milestone 39c) |
 | `npm test -- --run`, `npm run build` | Pass locally (238 Vitest tests, milestone 36; the console has not changed since) |
 | Shared HTTP contract (18 files) | Pass on Go (`TestContract`) and Java (`ContractTest`) |
-| Go and Java on one PostgreSQL | One agent run published through both gave identical traces (M39a); Go's stdio MCP server answered against the Java jar as against Go (M39b); both exported the same span tree for one caller trace to a fake OTLP collector (M39c) |
-| Latest recorded CI | `master` after merging PR #20 (run 44879506261) and PR #21 (run 44879871735): `go-service`, `java-service`, `web`, `python-sdk` all green. The "Publish service images" workflow succeeded on both merges (runs 44879506245, 44879871660); `VERSION` is still `0.36.0`, so no new GitHub Release was made |
+| Go and Java on one PostgreSQL | One agent run published through both gave identical traces (M39a); Go's stdio MCP server answered against the Java jar as against Go (M39b); both exported the same span tree for one caller trace to a fake OTLP collector (M39c) and to Jaeger (39d); one agent step sent to Go and again to Java is merged by Java through the shared Redis key (39d) |
+| Latest recorded CI | `master` after merging PR #24 (slice 39c): CI run 44913179270 and "Publish service images" run 44913179273, both green. Earlier: PR #20 (run 44879506261) and PR #21 (run 44879871735): `go-service`, `java-service`, `web`, `python-sdk` all green. The "Publish service images" workflow succeeded on both merges (runs 44879506245, 44879871660); `VERSION` is still `0.36.0`, so no new GitHub Release was made |
 | Sign-up, approval and sign-in in a browser against the live service | **Not verified** |
 | Real Ollama, Claude, Novu, SNS, OpenID provider | **Not verified.** Fakes and replay tests only (milestone 48) |
-| Real MCP client, real collector and trace viewer | **Not verified** (slice 39d) |
+| Real MCP client, real collector and trace viewer | **Verified 2026-11-21 (slice 39d)** in Docker Compose: Claude Code 2.1.328 (`claude mcp add`, `claude -p`) and MCP Inspector 2.16.0 (CLI) called all four tools through the stdio server against Go and against Java; `scripts/verify_jaeger.py` read both services' spans back from Jaeger 2.11.0, including one trace across both. Details in [milestones/milestone-39.md](milestones/milestone-39.md#slice-39d-real-client-verification) |
 
 Coverage is below 80 percent locally in `db`, `event`, `feedback`, `inbox`, `mail`, `delivery`, `rules` and `auth` (mostly PostgreSQL code only the integration tests reach); raising them is housekeeping in milestone 45. New code lands at 80 percent or more.
 
@@ -103,7 +103,8 @@ First logged on 2026-11-07 by a reverse-engineering audit of the code (archived 
 | F6 | Medium | Java SSRF check is pre-flight, not dial-time, so a changing DNS answer is not covered | Open; milestone 44 |
 | F7 | Medium | Dedup, budget and classifier fail open by design: no alert is hidden, duplicates or extra interruptions are possible | Accepted behaviour; documented in [architecture.md](architecture.md) |
 | F8 | Medium | Java had no accounts; the API key was its only gate | **Closed** in milestone 36 |
-| F9 | Medium | Ollama, Claude, Novu, SNS, OpenID Connect, a real MCP client and the Java SMTP success path have only run against fakes | Open; MCP client in slice 39d, the rest in milestone 48 |
+| F9 | Medium | Ollama, Claude, Novu, SNS, OpenID Connect and the Java SMTP success path have only run against fakes | Open; milestone 48. **Narrowed in slice 39d:** the MCP server has now been driven by real clients (Claude Code, MCP Inspector) and the span export read back from a real trace viewer (Jaeger) |
+| F15 | High | Java ignored the agent run when threading and deduplicating: every agent step of one source shared one thread (`agent:`), so steps of different runs were merged and grouped together, and Java's Redis keys never matched Go's | **Closed** in slice 39d (found by the real-client check); `Dedup` now writes Go's thread and key text, pinned by tests in both services and two new steps in contract file 16 |
 | F10 | Medium | Inbox, digests, learning, traces, MCP reads and explanations read the newest 1000 events into memory (`event.List` in Go, `listRecent` in Java): older events are invisible to them and cost grows per request | Open; milestone 42 |
 | F11 | Medium | Behind a proxy every person shares one address, so the per-address sign-up and sign-in limits are shared by everyone | Open; milestone 44 |
 | F12 | Medium | Sessions need the console and the API on one site, or `AUTH_COOKIE_SAMESITE=none`; browsers that block third-party cookies still refuse it | Open; milestone 44 |
@@ -116,6 +117,7 @@ First logged on 2026-11-07 by a reverse-engineering audit of the code (archived 
 | L5 | Low | Not searched: every discarded error | Milestone 45 |
 
 ## 7. Owner decisions (dated)
+- **2026-11-21, slice 39c review:** contract file 18 and the Go change that stops tracing `/health` accepted; merged as PR #24. For 39d: check spans as Jaeger parsed them (not only the collector's 200), one trace across both services, the Python SDK and console against Java, record client versions and protocol findings, fix bugs but keep any protocol upgrade out of scope.
 - **2026-11-21, milestone 39 plan:** approved with four decisions (hand-written OTLP/HTTP JSON exporter in both services; slices 39a to 39d with a stop after each; Claude Code, the MCP Inspector and Jaeger v2 for the real-client check; MCP protocol `2024-11-05` kept) and extra guardrails per slice, recorded in [milestones/milestone-39-plan.md](milestones/milestone-39-plan.md).
 - **2026-11-21, slice 39a review:** the Go tie-break change and Java's fixed order for two bad ids accepted; the in-memory stores to order like PostgreSQL (done). Merged as PR #20.
 - **2026-11-21, roadmap:** F2 moves into milestone 44; milestone 48 is split into 48 Production readiness and 49 Hosted product; milestone 43 records the SDK leanings (hand-written, TypeScript and Go first, `/notify` covered).

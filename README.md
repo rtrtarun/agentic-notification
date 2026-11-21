@@ -386,7 +386,7 @@ Everything lives in [`docs/`](docs/), grouped by what you want to do. **[docs/RE
 
 **Next** (details in [roadmap.md](docs/roadmap.md)):
 
-1. **Milestone 39, continued**: an OpenTelemetry (OTLP) export of the spans both services record (39c), then a real MCP client and trace viewer (39d).
+1. **Milestone 39 review**: all four slices are built (39d checked Claude Code, the MCP Inspector and Jaeger against both services); the milestone awaits its final review.
 2. **Finish Java parity** (milestones 40 to 42): SMS, Novu and the channels API; metrics; the inbox, event retention and SQL read paths for everything that reads the newest 1000 events (F10).
 3. **SDKs** (milestone 43): TypeScript and Go first, hand-written, held to a shared test contract.
 4. **Security and resilience** (milestones 44 and 45): ingestion rate limits, the critical double send (F2), a trusted proxy, sessions on one site, Java SSRF at connect time, secrets; then the audit gaps.
@@ -395,14 +395,13 @@ Everything lives in [`docs/`](docs/), grouped by what you want to do. **[docs/RE
 
 **Known issues**
 
-- The Java service does not yet have SMS, Novu, the channels API, metrics, the inbox, event retention, single sign-on, a language model or span export (milestones 39c to 46). Two services sharing one database must run one queue dispatcher, one digest schedule and one learning schedule. See [java-service.md](docs/java-service.md).
+- The Java service does not yet have SMS, Novu, the channels API, metrics, the inbox, event retention, single sign-on, CORS or a language model (milestones 40 to 46). Two services sharing one database must run one queue dispatcher, one digest schedule and one learning schedule. See [java-service.md](docs/java-service.md).
 - **Sign-up and one workspace:** an approved member sees every event (no tenants); that is why sign-up needs an admin's approval. There is no email verification or password reset yet.
 - **Sessions across sites:** the console on `github.io` and the service elsewhere need `AUTH_COOKIE_SAMESITE=none` (or one shared site); browsers that block third-party cookies still refuse it. Behind a proxy every person shares one address for the per-address sign-in and sign-up limits.
 - **No ingestion rate limiting**, and a critical event can be sent twice if the same delivery arrives twice at once; the full audit list is in [implementation-sync.md](docs/implementation-sync.md).
 - NATS is part of the intended stack but is not used; the worker and delivery poll PostgreSQL.
 - Personal digests are stored and readable but not delivered.
-- Parts that have run only against fakes: Ollama, Claude, Novu, SNS, OpenID Connect; the MCP server has run only against scripted clients so far (a real client is slice 39d).
-- Span export to an OpenTelemetry collector (`OTEL_EXPORTER_OTLP_ENDPOINT`, both services) has run only against a fake collector so far; a real collector and trace viewer are slice 39d.
+- Parts that have run only against fakes: Ollama, Claude, Novu, SNS, OpenID Connect. (The MCP server and span export were checked with Claude Code, the MCP Inspector and Jaeger in slice 39d; to see traces locally, start Compose with `--profile observability`, see [deployment.md](docs/deployment.md#seeing-traces-locally-slice-39d).)
 - The default attention budget (10 per hour) quiets busy workspaces; set `ATTENTION_BUDGET_PER_HOUR=0` to turn it off.
 
 ---

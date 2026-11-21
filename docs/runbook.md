@@ -47,6 +47,14 @@ The API key is entered in the browser and kept per tab. Rotate it by changing `A
 - **`span export failed ... status=4xx`** in the log: the collector refused the request (wrong path, missing or wrong `OTEL_EXPORTER_OTLP_HEADERS`). 4xx answers other than 429 are not retried.
 - **`status=0 network_error=true`:** the collector is unreachable; each batch is retried once, then counted as failed. Requests are never slowed by this.
 - **At shutdown** the log line `span export stopped sent=N dropped=N failed=N` gives the totals; a growing `dropped` means the collector is slower than the traffic: raise `OTEL_EXPORT_BUFFER` or fix the collector.
+- **Docker Compose:** the endpoint must name the collector as the containers see it (`http://jaeger:4318`, not `localhost`), and the `observability` profile must be up. After changing the variable, recreate the services (`docker compose up -d --force-recreate ...`); `--build` alone rebuilds the image but can leave the old container running.
+- **Spans arrive late:** each service sends every two seconds or when a batch fills, so wait a few seconds before searching.
+- **Check what the viewer stored, not only that it answered:** a collector can answer 200 and still drop fields it cannot read. `python scripts/verify_jaeger.py` reads the traces back from Jaeger and names the first thing that is wrong.
+
+### An MCP client cannot use AgentPulse
+- **`claude mcp list` says failed, or the Inspector cannot connect:** run the stdio server by hand with `AGENTPULSE_URL` and `AGENTPULSE_API_KEY` set; it logs to stderr only. A wrong key answers each tool call with an error, not a failed connection.
+- **`unknown method server/discover` in a capture:** expected. Claude Code probes with it first and falls back to `initialize`.
+- **Tool calls are refused in `claude -p`:** allow them with `--allowedTools mcp__<name>__publish_event,...` (the server name you gave `claude mcp add`).
 
 ### Logs show `bind message has N result formats but query has M columns` or `prepared statement "" requires N`
 The database connection goes through a pooler (for Neon, a host with `-pooler`), which mixes up the Go driver's prepared statements between the background workers. Use the direct host and add `binary_parameters=yes` to `DATABASE_URL`, then redeploy.

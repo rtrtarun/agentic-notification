@@ -41,6 +41,8 @@ services:
       REDIS_URL: redis://redis:6379/0
       # Browser origins allowed to call the API (the Vite dev server and preview).
       CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
+      # Span export is off unless set; with the observability profile use http://jaeger:4318.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,6 +73,8 @@ services:
       DEFAULT_NOTIFY_EMAIL: ops@example.com
       API_KEY: local-dev-key
       GITHUB_WEBHOOK_SECRET: local-dev-webhook-secret
+      # Span export is off unless set; with the observability profile use http://jaeger:4318.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
     volumes:
       - ./go-server/notification-service/config:/app/config:ro
     depends_on:
@@ -80,3 +84,12 @@ services:
         condition: service_started
       go-notification-service:
         condition: service_started
+
+  # Optional trace viewer, started only with `--profile observability`. Jaeger v2 takes OTLP over
+  # HTTP on 4318 and shows traces on http://localhost:16686. It keeps traces in memory only.
+  jaeger:
+    image: jaegertracing/jaeger:2.11.0
+    profiles: ["observability"]
+    ports:
+      - "16686:16686"
+      - "4318:4318"

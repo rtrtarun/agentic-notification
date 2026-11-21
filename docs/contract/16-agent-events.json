@@ -141,7 +141,7 @@
       "expect": {
         "status": 200,
         "json": { "events": [
-          { "id": "run1-done", "source": "agent", "eventType": "agent.complete", "traceId": "run-1", "parentEventId": "run1-retry", "agentName": "research-agent", "attentionClass": "standard" },
+          { "id": "run1-done", "source": "agent", "eventType": "agent.complete", "traceId": "run-1", "parentEventId": "run1-retry", "agentName": "research-agent", "attentionClass": "standard", "threadId": "agent:trace:run-1" },
           { "id": "run1-retry", "parentEventId": "run1-call" },
           { "id": "run1-call", "parentEventId": "run1-plan" },
           { "id": "run1-plan", "traceId": "run-1", "agentName": "research-agent" }
@@ -225,6 +225,17 @@
       "name": "a deeper path is not found",
       "request": { "method": "GET", "path": "/api/traces/run-1/steps", "headers": { "X-API-Key": "contract-key" } },
       "expect": { "status": 404, "json": { "error": "not found" } }
+    },
+    {
+      "name": "the same kind of step in another run is not merged into run-1's: each run is its own thread",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": {
+        "id": "run5-plan", "traceId": "run-5", "eventType": "agent.plan", "agentName": "research-agent", "metadata": { "step_kind": "plan" } } },
+      "expect": { "status": 202, "json": { "status": "accepted", "eventId": "run5-plan", "traceId": "run-5", "attentionClass": "standard", "decisionState": { "status": "queued" } } }
+    },
+    {
+      "name": "a run's thread is named after the run",
+      "request": { "method": "GET", "path": "/api/events?traceId=run-5", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "events": [ { "id": "run5-plan", "threadId": "agent:trace:run-5" } ] } }
     }
   ]
 }

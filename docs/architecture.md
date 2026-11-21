@@ -1156,7 +1156,7 @@ Unit tests use in-memory fakes behind the same interfaces as production. Real-in
 | Layer 3: email (SMTP, Novu), Slack, Teams, SMS, retry queue | **Done** | Locally; Novu and SNS against fakes only |
 | Layer 4: feedback, overrides, audit | **Done** | Locally; PostgreSQL stores in CI |
 | Accounts, sessions, roles, OpenID Connect | **Done** | OIDC against a fake provider only |
-| Agent events, traces, MCP server, Python SDK | **Done** (Go; Java since milestone 39) | MCP and SDK against local servers and Go's stdio server against Java; no real MCP client yet (slice 39d) |
+| Agent events, traces, MCP server, Python SDK | **Done** (Go; Java since milestone 39) | Claude Code and the MCP Inspector through the stdio server against both services; the Python SDK against both; spans read back from Jaeger (slice 39d) |
 | PostgreSQL persistence and retention | **Done** | CI |
 | Redis dedup and budget across replicas | **Done** | CI |
 | Security hardening | **Done** | Lint and vulnerability scan passed in CI |
