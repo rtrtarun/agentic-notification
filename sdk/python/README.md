@@ -38,3 +38,6 @@ python -m unittest        # the tests; no service needed
 ```
 
 See [docs/milestones/milestone-31.md](../../docs/archived/milestones/milestone-31.md) for the API this uses and [docs/milestones/milestone-33.md](../../docs/archived/milestones/milestone-33.md) for what was verified.
+
+## License
+Apache License, Version 2.0, like the rest of the repository: see [LICENSE](../../LICENSE).

@@ -64,4 +64,4 @@ Please report a vulnerability through a private security advisory on the reposit
 
 ## Licence of contributions
 
-The project does not have a licence yet (see the [README](README.md#license)). Until one is added, hold off on outside contributions, or ask in an issue first.
+The project is licensed under the [Apache License, Version 2.0](LICENSE). Unless you say otherwise, anything you submit for inclusion is licensed under the same terms (section 5 of the license), with no extra conditions.

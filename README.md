@@ -7,7 +7,7 @@
 ![Java](https://img.shields.io/badge/Java-17-ED8B00?logo=openjdk&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Python SDK](https://img.shields.io/badge/Python%20SDK-stdlib%20only-3776AB?logo=python&logoColor=white)
-![License](https://img.shields.io/badge/license-not%20chosen%20yet-lightgrey)
+![License](https://img.shields.io/badge/license-Apache%202.0-blue)
 
 > **Notifications are cheap. Human attention is expensive.** This platform decides *when, where, whether and how* someone should be interrupted, and sits above delivery providers such as email, Slack, SMS and Novu.
 
@@ -423,7 +423,7 @@ Commit messages are short and imperative, and carry no `Co-Authored-By` trailer.
 
 ## License
 
-**No license has been chosen yet**, so by default all rights are reserved and nobody else may legally use, copy or modify the code. The design brief calls this an open-core project that stays self-hostable; before accepting outside contributions, add a `LICENSE` file (MIT or Apache 2.0 are the usual choices for that model) and update the badge above.
+Licensed under the **Apache License, Version 2.0**: see [LICENSE](LICENSE) and [NOTICE](NOTICE). You may use, copy, modify and distribute the code, including commercially and in a self-hosted deployment, provided you keep the license and the notice, state significant changes you make, and accept that it comes without warranty. The license also grants a patent licence from every contributor for their contributions.
 
 ---
 
