@@ -2,7 +2,7 @@
 
 The files in this folder are the shared contract for the Go service and the Java service. Each service has a test that reads these files, starts itself, replays the requests and checks the answers. If a service disagrees with a file, that service's build fails, so "the two services behave the same" is checked by tests rather than by reading code.
 
-The contract covers milestones 34 to 39: `/health`, `/webhooks/github`, `/events`, `/notify`, `/api/rules`, `/api/policies`, `/api/deliveries`, and accounts (`/api/auth/status`, `/api/auth/signup`, `/api/auth/login`, `/api/users`). Rule `payloadMatch` and `channels` are in `11-rule-predicates.json`; feedback and overrides in `12-feedback.json`; digests, the heuristic's highlights and explanations in `13-attention.json`; learning suggestions in `14-learning-suggestions.json`; offline score tuning (runs, proposals, approval, the heuristic's learned score) in `15-learning-adjustments.json`; agent steps and traces (`/api/events`, `/api/traces`) in `16-agent-events.json`. It grows with each parity milestone.
+The contract covers milestones 34 to 39: `/health`, `/webhooks/github`, `/events`, `/notify`, `/api/rules`, `/api/policies`, `/api/deliveries`, and accounts (`/api/auth/status`, `/api/auth/signup`, `/api/auth/login`, `/api/users`). Rule `payloadMatch` and `channels` are in `11-rule-predicates.json`; feedback and overrides in `12-feedback.json`; digests, the heuristic's highlights and explanations in `13-attention.json`; learning suggestions in `14-learning-suggestions.json`; offline score tuning (runs, proposals, approval, the heuristic's learned score) in `15-learning-adjustments.json`; agent steps and traces (`/api/events`, `/api/traces`) in `16-agent-events.json`; the MCP server (`/api/mcp`) in `17-mcp.json`. It grows with each parity milestone.
 
 ## Environment both services run with
 
@@ -42,7 +42,9 @@ Every file starts a fresh service, so files do not depend on each other. Steps i
         "json": { "subset": "of the answer" },
         "absent": ["top-level keys that must not exist"],
         "present": ["top-level keys that must exist"],
-        "absentInEach": { "events": ["keys no element of the array may have"] }
+        "absentInEach": { "events": ["keys no element of the array may have"] },
+        "bodyEmpty": true,
+        "textJson": { "subset": "of the JSON in result.content[0].text" }
       },
       "save": { "variable": "topLevelKeyOfTheAnswer" }
     }
@@ -52,6 +54,8 @@ Every file starts a fresh service, so files do not depend on each other. Steps i
 
 - `sign: true` adds `X-Hub-Signature-256`, the HMAC-SHA256 of the exact body bytes with `contract-secret`.
 - `json` is a **subset** match: every key written must be present and equal; extra keys in the answer are fine. Arrays must have the same length, and each element is a subset match of the same position.
+- `bodyEmpty: true` requires an answer with no body at all (a JSON-RPC notification's 202).
+- `textJson` parses the MCP tool result text, `result.content[0].text`, as JSON and subset-matches it like `json` (the text holds timestamps, and Go escapes `< > &` in it, so it is not compared as a string).
 - `save` keeps a value of the answer by dotted path (`"rules.0.id"`; a number selects an array element); later `path` values and request bodies may use `{{variable}}`.
 - Fields that vary between runs (`createdAt`, generated ids) are never compared.
 

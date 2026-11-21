@@ -52,6 +52,10 @@ type contractStep struct {
 		Absent       []string            `json:"absent"`
 		Present      []string            `json:"present"`
 		AbsentInEach map[string][]string `json:"absentInEach"`
+		// BodyEmpty requires an answer with no body at all (a JSON-RPC notification's 202).
+		BodyEmpty bool `json:"bodyEmpty"`
+		// TextJSON parses result.content[0].text (an MCP tool result) as JSON and subset-matches it.
+		TextJSON json.RawMessage `json:"textJson"`
 	} `json:"expect"`
 	Save map[string]string `json:"save"`
 }
@@ -142,8 +146,11 @@ func runContractFile(t *testing.T, file contractFile) {
 		if rr.Code != step.Expect.Status {
 			t.Fatalf("%s: status %d, want %d (body %s)", step.Name, rr.Code, step.Expect.Status, answer)
 		}
+		if step.Expect.BodyEmpty && len(answer) != 0 {
+			t.Fatalf("%s: want no body, got %s", step.Name, answer)
+		}
 		var got map[string]any
-		if len(step.Expect.JSON) > 0 || len(step.Expect.Absent) > 0 || len(step.Expect.Present) > 0 || len(step.Expect.AbsentInEach) > 0 || len(step.Save) > 0 {
+		if len(step.Expect.JSON) > 0 || len(step.Expect.Absent) > 0 || len(step.Expect.Present) > 0 || len(step.Expect.AbsentInEach) > 0 || len(step.Save) > 0 || len(step.Expect.TextJSON) > 0 {
 			if err := json.Unmarshal(answer, &got); err != nil {
 				t.Fatalf("%s: answer is not a JSON object: %s", step.Name, answer)
 			}
@@ -155,6 +162,19 @@ func runContractFile(t *testing.T, file contractFile) {
 			}
 			if msg := subsetOf(want, got, "$"); msg != "" {
 				t.Fatalf("%s: %s (body %s)", step.Name, msg, answer)
+			}
+		}
+		if len(step.Expect.TextJSON) > 0 {
+			text, _ := lookup(got, "result.content.0.text").(string)
+			var inner, want any
+			if err := json.Unmarshal([]byte(text), &inner); err != nil {
+				t.Fatalf("%s: the tool result text is not JSON: %q", step.Name, text)
+			}
+			if err := json.Unmarshal(step.Expect.TextJSON, &want); err != nil {
+				t.Fatal(err)
+			}
+			if msg := subsetOf(want, inner, "$text"); msg != "" {
+				t.Fatalf("%s: %s (text %s)", step.Name, msg, text)
 			}
 		}
 		for _, k := range step.Expect.Absent {

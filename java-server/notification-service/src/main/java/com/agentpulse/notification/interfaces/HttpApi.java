@@ -56,6 +56,7 @@ public final class HttpApi {
     private final AuthApi auth;
     private final FeedbackApi feedbackApi;
     private final AgentApi agent;
+    private final McpApi mcp;
     private volatile AttentionApi attention;
     private volatile LearningApi learning;
     private volatile TuningApi tuning;
@@ -79,6 +80,7 @@ public final class HttpApi {
         this.deliveries = new DeliveriesApi(api, deliveryStore, clock);
         this.feedbackApi = new FeedbackApi(api, feedback, overrides, accounts);
         this.agent = new AgentApi(api, pipeline, events, this::listEvents);
+        this.mcp = new McpApi(api, new McpApi.InProcess(pipeline, events, notifyService, new Heuristic()::explain, HttpApi::summary));
     }
 
     /** With an accounts service, people can sign up, sign in and use the API with a session as well as the API key. */
@@ -94,6 +96,7 @@ public final class HttpApi {
         this.deliveries = new DeliveriesApi(api, deliveryStore, clock);
         this.feedbackApi = new FeedbackApi(api, null, null, accounts);
         this.agent = new AgentApi(api, pipeline, events, this::listEvents);
+        this.mcp = new McpApi(api, new McpApi.InProcess(pipeline, events, notifyService, new Heuristic()::explain, HttpApi::summary));
     }
 
     /**
@@ -155,6 +158,7 @@ public final class HttpApi {
                 case "/webhooks/github" -> webhook(x);
                 case "/events" -> listEvents(x);
                 case AgentApi.EVENTS_PATH -> agent.events(x);
+                case McpApi.PATH -> mcp.handle(x);
                 case "/notify" -> notify.handle(x);
                 case FeedbackApi.FEEDBACK_PATH -> feedbackApi.feedback(x);
                 case AttentionApi.STATUS_PATH -> {
@@ -301,8 +305,8 @@ public final class HttpApi {
         api.reply(x, 200, out);
     }
 
-    /** The read model for the list: the payload is left out because it can carry names and emails. */
-    private static Map<String, Object> summary(Event e) {
+    /** The read model for the list (and MCP's get_recent_events): the payload is left out because it can carry names and emails. */
+    static Map<String, Object> summary(Event e) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("id", e.getId());
         m.put("source", e.getSource());

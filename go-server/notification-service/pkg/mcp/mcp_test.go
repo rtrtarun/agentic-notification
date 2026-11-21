@@ -210,8 +210,46 @@ func TestExplainDecisionNeedsAnEventID(t *testing.T) {
 func TestMisspeltArgumentsAreToolErrorsNotSilentlyIgnored(t *testing.T) {
 	b := &fakeBackend{}
 	text, isErr := toolText(t, rpc(t, New(b, ""), call("publish_event", `{"eventTpye":"x"}`)))
-	if !isErr || !strings.Contains(text, "unknown field") || len(b.published) != 0 {
+	if !isErr || text != `invalid request: unknown argument "eventTpye"` || len(b.published) != 0 {
 		t.Fatalf("%s %v %d", text, isErr, len(b.published))
+	}
+}
+
+// TestArgumentErrorsArePlainAndStable pins the words the Java service copies (milestone 39b):
+// they never name Go types, so they do not change with the Go version.
+func TestArgumentErrorsArePlainAndStable(t *testing.T) {
+	s := New(&fakeBackend{}, "")
+	cases := []struct{ tool, args, want string }{
+		{"get_recent_events", `{"traceId":5}`, "invalid request: argument traceId must be text"},
+		{"get_recent_events", `{"LIMIT":1.5}`, "invalid request: argument limit must be a whole number"},
+		{"get_recent_events", `{"limit":"3"}`, "invalid request: argument limit must be a whole number"},
+		{"get_recent_events", `{"limit":99999999999999999999}`, "invalid request: argument limit must be a whole number"},
+		{"get_recent_events", `"text"`, "invalid request: arguments must be an object"},
+		{"get_recent_events", `[1]`, "invalid request: arguments must be an object"},
+		{"get_recent_events", `{"limit":0}`, ""},
+		{"publish_event", `{"eventType":"a","metadata":[1]}`, "invalid request: argument metadata must be an object"},
+		{"notify_user", `{"title":"t","message":"m","emailRecipients":"a@b.c"}`, "invalid request: argument emailRecipients must be a list of text"},
+		{"notify_user", `{"title":"t","message":"m","emailRecipients":["a@b.c",5]}`, "invalid request: argument emailRecipients must be a list of text"},
+		{"explain_decision", `{"eventId":"e","x":1}`, `invalid request: unknown argument "x"`},
+	}
+	for _, c := range cases {
+		text, isErr := toolText(t, rpc(t, s, call(c.tool, c.args)))
+		if c.want == "" {
+			if isErr {
+				t.Errorf("%s %s: unexpected error %s", c.tool, c.args, text)
+			}
+			continue
+		}
+		if !isErr || text != c.want {
+			t.Errorf("%s %s: got %q, want %q", c.tool, c.args, text, c.want)
+		}
+	}
+	if got := argumentError(errors.New("something else"), nil); got != "the arguments could not be read" {
+		t.Fatalf("fallback = %q", got)
+	}
+	var notAStruct int
+	if got := argumentKind(&notAStruct, "x"); got != "of another type" {
+		t.Fatalf("kind = %q", got)
 	}
 }
 

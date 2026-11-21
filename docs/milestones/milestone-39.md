@@ -1,6 +1,6 @@
 # Milestone 39: Observability and MCP
 
-Status: **slice 39a reviewed and approved by the owner on 2026-11-21** (both decisions accepted); 39b in progress; 39c and 39d not started. Plan, with the owner's four decisions and extra guardrails: [milestone-39-plan.md](milestone-39-plan.md).
+Status: **slice 39a approved by the owner on 2026-11-21** (both decisions accepted; PR #20, CI green). **Slice 39b built; awaiting the owner's review.** 39c and 39d are not started. Plan, with the owner's four decisions and extra guardrails: [milestone-39-plan.md](milestone-39-plan.md).
 
 ## Slice 39a: Java agent events and traces
 
@@ -41,4 +41,47 @@ Status: **slice 39a reviewed and approved by the owner on 2026-11-21** (both dec
 - [x] Contract file 16 reads as the behaviour we want (approved 2026-11-21).
 - [x] The Go tie-break change (`created_at DESC, id DESC`) is accepted; the in-memory stores now match it.
 - [x] Java's fixed order for two bad ids (Go's is random) is accepted.
+- [x] CI green on the pull request (PR #20: go-service, java-service, python-sdk, web all passed).
+
+## Slice 39b: Java MCP
+
+### Goals (met)
+- Java answers `POST /api/mcp` exactly as Go does: `initialize`, `ping`, `tools/list`, `tools/call` with the four tools (`publish_event`, `get_recent_events`, `notify_user`, `explain_decision`), notifications, and every JSON-RPC error, held to a new shared contract file written and run against Go first.
+- Go's stdio `cmd/mcp-server` works against the Java service unchanged (`AGENTPULSE_URL` pointed at Java), so Java has a stdio MCP server without a second binary.
+
+### Owner guardrails
+- **Notification status locked.** A message without an id (such as `notifications/initialized`) gets **HTTP 202 with no body** in both services; contract file 17 checks the status and that the body is empty (new `bodyEmpty` expectation).
+- **Protocol negotiation.** A client proposing a newer protocol (`2025-06-18`) or an older one (`2024-10-07`) is answered with `2024-11-05`; Go already did this (it never rejected a proposed version), so **no Go fix was needed**. Locked in the contract.
+
+### Decisions
+- **A port of `pkg/mcp`**: the same methods, the same four tool descriptions and schemas (contract file 17 holds Go's whole `tools/list` answer, so a changed word in either service fails), the same limits (arguments at most 64 KiB, titles 200 and messages 4000 **bytes**, 10 recipients per channel, `limit` 1 to 50, default 20), and the same answers for duplicates, refusals and backend failures.
+- **Go's JSON-RPC decoding, exactly.** The request id is echoed as Go writes a `json.RawMessage` (the written bytes, compacted, `< > &` escaped), so `1.50` stays `1.50`; keys match without regard to case with the last match winning; a `jsonrpc` or `method` of the wrong type is a parse error (-32700), as Go's decoder reports it; `id: null` is a request, not a notification. New `RawJson` reads raw byte spans with Jackson so none of this depends on a parsed tree.
+- **Kept for parity (documented):** a request without an id for a method outside `notifications/` still runs (a `tools/call` sent as a notification publishes its event) but is never answered. The contract locks it.
+- **Go change: plain argument errors.** Go's `decodeStrict` returned `encoding/json`'s text, which names Go types (`Go struct field In.limit of type int`, `agentevents.Input`) and changes between Go versions. It now says `unknown argument "x"`, `argument limit must be a whole number`, `argument emailRecipients must be a list of text`, `arguments must be an object`. Java writes the same words; the first problem in document order wins in both. Tested in Go (`TestArgumentErrorsArePlainAndStable`) and Java (`McpTest`).
+- **Tool results** are written with sorted map keys, as Go writes a map, so the same answer is the same text where Go uses maps.
+- **In process, like Go.** `McpApi.InProcess` uses the same pipeline, the validating `Notify.Service`, the event list's summary and the heuristic explainer as the REST API; the in-process server reports version `service`, as Go's does. Java explains with the heuristic only (Java has no language model, as before).
+- No database change.
+
+### APIs
+`POST /api/mcp` (API key or session): 200 with the JSON-RPC answer, 202 with no body for a notification, 405 for other methods, 413 for a body over `MAX_BODY_BYTES`.
+
+### Folder changes
+- Java: new `application/Mcp.java` (server, tools, strict arguments), `application/RawJson.java`, `interfaces/McpApi.java` (HTTP and the in-process backend); `interfaces/HttpApi.java` (route; the list summary is shared with MCP).
+- Go: `pkg/mcp/mcp.go` (argument messages) and its tests; the contract runner (`bodyEmpty`, `textJson`).
+- Contract: `docs/contract/17-mcp.json` (39 steps); `README.md` documents the two new expectations, also implemented in the Java runner.
+
+### Risks and how they were handled
+- Drift from Go: file 17 covers auth, methods, both negotiations, three kinds of notification, text and null ids, the full tool list, batches, parse and invalid-request errors, unknown methods and tools, every tool's success, duplicate and refusal paths, argument type errors, and a rule-made critical step through MCP. The new `bodyEmpty` and `textJson` checks were each seen to fail on a wrong expectation before the file was trusted.
+- Critical leakage: `severity: critical` through MCP stays standard without a rule (contract and `McpApiTest`); with a rule it is critical and delivered inline before the answer.
+- Known differences left: Go accepts invalid UTF-8 (replacing it) where Jackson refuses the message as invalid JSON; Go escapes `< > &` inside tool-result text, Java does not (the JSON means the same).
+
+### Tests
+- Contract: file 17 passes in Go (`TestContract`) and Java (`ContractTest`, 17 files).
+- Java: `McpTest` (12: raw id echo, key matching, malformed messages, notifications, every argument error, Go decoding of repeated and null values, byte limits, sorted result keys), `McpApiTest` (5: critical path, storage, provider and explainer failures, HTTP rules, recent events). Offline `mvn verify`: **376 tests (5 skipped), 90.4 percent of lines**; the MCP classes 94 to 100 percent.
+- Go: `go test ./...`, `go vet` (with and without `-tags integration`) and `gofmt` clean.
+- Real stack: Go's stdio `mcp-server` against the Java jar: `initialize` (proposing `2025-06-18`), `notifications/initialized` (no answer), `publish_event`, `get_recent_events`, `explain_decision` and a refused `notify_user` all answered as against Go. A real MCP client (Claude Code, MCP Inspector) is slice 39d.
+
+### Review checklist
+- [ ] Contract file 17 reads as the behaviour we want (especially: a tool call sent as a notification still runs).
+- [ ] The Go change to plain argument errors is acceptable.
 - [ ] CI green on the pull request.

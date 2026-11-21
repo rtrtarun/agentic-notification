@@ -207,11 +207,22 @@ class ContractTest {
 
     private void check(String step, JsonNode expect, HttpResponse<String> response) throws Exception {
         assertEquals(expect.get("status").asInt(), response.statusCode(), step + ": status (body " + response.body() + ")");
-        boolean needsJson = expect.has("json") || expect.has("absent") || expect.has("present") || expect.has("absentInEach");
+        if (expect.path("bodyEmpty").asBoolean(false)) {
+            assertTrue(response.body().isEmpty(), step + ": want no body, got " + response.body());
+        }
+        boolean needsJson = expect.has("json") || expect.has("absent") || expect.has("present") || expect.has("absentInEach")
+                || expect.has("textJson");
         if (!needsJson) {
             return;
         }
         JsonNode got = JSON.readTree(response.body());
+        if (expect.has("textJson")) {
+            // An MCP tool result carries its answer as JSON text in result.content[0].text.
+            JsonNode text = got.path("result").path("content").path(0).path("text");
+            assertTrue(text.isTextual(), step + ": no tool result text in " + response.body());
+            String problem = subsetOf(expect.get("textJson"), JSON.readTree(text.asText()), "$text");
+            assertTrue(problem.isEmpty(), step + ": " + problem + " (text " + text.asText() + ")");
+        }
         if (expect.has("json")) {
             String problem = subsetOf(expect.get("json"), got, "$");
             assertTrue(problem.isEmpty(), step + ": " + problem + " (body " + response.body() + ")");
