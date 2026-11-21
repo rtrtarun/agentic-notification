@@ -15,7 +15,7 @@ What is **not** built yet, as one numbered sequence of milestones. What exists i
 | 34 to 36 | Done and merged |
 | 37 Java parity part 3 (rule fields, feedback and overrides, heuristic Attention Intelligence) | **Done and merged** (PR #14, 2026-11-10; [record](archived/milestones/milestone-37.md)) |
 | 38 Learning | **Done and merged** (PRs #17, #18, #19; [plan](archived/milestones/milestone-38-plan.md), [record](archived/milestones/milestone-38.md)) |
-| 39 Observability and MCP | **Plan approved 2026-11-21** ([plan](milestones/milestone-39-plan.md)); 39a (Java agent events and traces) and 39b (Java MCP) merged 2026-11-21 (PR #20, PR #21; [record](milestones/milestone-39.md)); 39c (OTLP span export) built, awaiting review ([record](milestones/milestone-39.md)); 39d (real MCP client and trace viewer) not started |
+| 39 Observability and MCP | **Plan approved 2026-11-21** ([plan](milestones/milestone-39-plan.md)); 39a (Java agent events and traces) and 39b (Java MCP) merged 2026-11-21 (PR #20, PR #21; [record](milestones/milestone-39.md)); 39c (OTLP span export) merged 2026-11-21 (PR #24); 39d (real MCP clients and Jaeger) done 2026-11-21, awaiting the final milestone review ([record](milestones/milestone-39.md)) |
 | 40 to 49 | Not started; no plan approved yet. Each needs its plan and owner approval first |
 
 `DISPATCHER_ENABLED` (a setting in both services that turns a process's queue dispatcher off, so one service can own the queue when two share a database) is also merged (PR #13).
@@ -24,7 +24,7 @@ What is **not** built yet, as one numbered sequence of milestones. What exists i
 Traces, an OpenTelemetry exporter and MCP integration.
 - Traces and agent event chaining (`traceId`, `parentEventId`) in Java; an OpenTelemetry exporter for the spans already recorded.
 - MCP server in Java, matching Go.
-- Verify against a real MCP client (Claude Code and the MCP Inspector) and a real trace viewer (Jaeger), slice 39d.
+- Verify against a real MCP client (Claude Code and the MCP Inspector) and a real trace viewer (Jaeger), slice 39d: done 2026-11-21; it found and fixed Java's agent-run threading (F15).
 
 ## Milestone 40: Delivery channels
 SMS, Novu and further providers behind `NotificationProvider`.
@@ -72,7 +72,7 @@ TypeScript/JavaScript and Go SDKs, and a standard `/api/events` contract. Today 
 - Acceptance: several replicas of Go and Java on one database and one broker behave as one service, and the invariant tests still pass.
 
 ## Milestone 48: Production readiness
-- Verify against real services: PostgreSQL, Redis, Ollama, Claude, Novu, SNS and an OpenID provider; record the results and fix what they find. (A real MCP client is verified in slice 39d.)
+- Verify against real services: PostgreSQL, Redis, Ollama, Claude, Novu, SNS and an OpenID provider; record the results and fix what they find. (MCP clients and the trace viewer were verified in slice 39d and are no longer part of this item.)
 - Production hardening: AWS deployment, backup and restore drills, SLO dashboard, security review, load tests (the original milestone 10).
 
 ## Milestone 49: Hosted product

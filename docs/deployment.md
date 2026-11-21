@@ -216,8 +216,34 @@ Everything in the earlier steps, as one checklist for going live at `https://rtr
 
 The budget, the worker, agent traces and the Novu provider are implemented. Their PostgreSQL, Redis and real-service parts have only run in CI or against local fakes; try Novu with one test recipient before relying on it. 
 
-### Claude Desktop or Cursor (built in milestone 31)
-Build the MCP server once with `go build -o bin/mcp-server ./cmd/mcp-server` in `go-server/notification-service`, then configure the client (the same tools are also served over HTTP at `POST /api/mcp`, by both the Go and the Java service; `AGENTPULSE_URL` may point at either). It has not been tried with a real MCP client yet:
+### Seeing traces locally (slice 39d)
+The optional `observability` profile adds Jaeger 2.11.0 (OTLP over HTTP on 4318, the UI on http://localhost:16686, traces kept in memory). Both services read `OTEL_EXPORTER_OTLP_ENDPOINT` from your shell and leave export off when it is empty:
+
+```sh
+OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318 docker compose --profile observability up -d --build
+python scripts/verify_jaeger.py            # --go and --java if the services are not on 8080 and 8081
+```
+
+The script sends a step to each service with a `traceparent`, then reads the traces back from Jaeger's query API and checks what Jaeger stored: service names, the span tree, times, kinds, attribute types, the attribute allow-list, and that the payload is not exported. In the Jaeger UI pick `notification-service` or `notification-service-java`. A root span's parent shows as missing when the caller does not export its own span; that is expected.
+
+### MCP clients (built in milestone 31, checked with real clients in slice 39d)
+Build the MCP server once with `go build -o bin/mcp-server ./cmd/mcp-server` in `go-server/notification-service`. The same tools are also served over HTTP at `POST /api/mcp` by both services; `AGENTPULSE_URL` may point at either. Checked on 2026-11-21 with Claude Code 2.1.328 and the MCP Inspector 2.16.0 against both services (protocol `2024-11-05`; both clients propose `2025-11-25` and accept it).
+
+Claude Code:
+
+```sh
+claude mcp add agentpulse -e AGENTPULSE_URL=http://localhost:8080 -e AGENTPULSE_API_KEY=local-dev-key -- /path/to/bin/mcp-server
+claude mcp list      # agentpulse ... Connected
+```
+
+MCP Inspector (Node 22 or 24; it warns below Node 24.22.1 but works):
+
+```sh
+npx @modelcontextprotocol/inspector@2.16.0 --cli /path/to/bin/mcp-server \
+  -e AGENTPULSE_URL=http://localhost:8080 -e AGENTPULSE_API_KEY=local-dev-key --method tools/list
+```
+
+Claude Desktop, Cursor and other clients take the usual JSON:
 
 ```json
 {

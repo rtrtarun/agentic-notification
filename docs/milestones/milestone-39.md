@@ -1,6 +1,6 @@
 # Milestone 39: Observability and MCP
 
-Status: **slices 39a and 39b merged to `master` on 2026-11-21** (PR #20 and PR #21; CI green on `master`, runs 44879506261 and 44879871735). **Slice 39c (OpenTelemetry span export) built; awaiting the owner's review.** 39d (real-client verification) is not started. Plan, with the owner's four decisions and extra guardrails: [milestone-39-plan.md](milestone-39-plan.md).
+Status: **slices 39a, 39b and 39c merged to `master` on 2026-11-21** (PR #20, PR #21, PR #24; CI green on `master`, runs 44879506261, 44879871735 and 44913179270). **Slice 39d (real-client verification) done; the milestone awaits the owner's final review.** Plan, with the owner's four decisions and extra guardrails: [milestone-39-plan.md](milestone-39-plan.md).
 
 ## Slice 39a: Java agent events and traces
 
@@ -126,6 +126,68 @@ No new endpoints. Every response except `/health` carries `traceparent`.
 - Real stack: the Go binary and the Java jar on one PostgreSQL, both exporting to one fake OTLP collector; the same caller trace sent to `POST /api/events` on each gave the same span tree (`POST /api/events` then `pipeline.Handle` then `policy.Evaluate`, `dedup.Check`, `attention.Classify`) with identical attributes, under `notification-service` and `notification-service-java`, version `0.39.0`; the URL-encoded header arrived decoded; the payload secret was not exported; an unsampled request was not exported.
 
 ### Review checklist
-- [ ] Contract file 18 reads as the behaviour we want (especially: `/health` is not traced, and only bit 0 of the flags means sampled).
-- [ ] The Go change that stops tracing `/health` is acceptable.
+- [x] Contract file 18 reads as the behaviour we want (accepted 2026-11-21).
+- [x] The Go change that stops tracing `/health` is acceptable (accepted 2026-11-21).
+- [x] CI green on the pull request (PR #24) and on `master` after the merge (run 44913179270).
+
+## Slice 39d: real-client verification
+
+### Goals (met)
+- Spans from both services checked **as Jaeger stored them**, not only that the collector answered 200: service name and version, the span tree and parents, times, kinds, typed attributes and the allow-list, plus one caller trace crossing both services.
+- The MCP server driven by real clients (Claude Code and the MCP Inspector) through the stdio server, against Go and against Java, with all four tools.
+- The planned Python SDK run (plan, tool failures, retries, success) against Java, shown on the console Traces screen.
+- Results, client versions and protocol findings recorded; defects fixed.
+
+### Set-up (owner decision 3)
+- New optional `observability` profile in `docker-compose.yml`: **Jaeger 2.11.0** (`jaegertracing/jaeger:2.11.0`), OTLP over HTTP on 4318, UI and query API on 16686, traces in memory. Both services take `OTEL_EXPORTER_OTLP_ENDPOINT` from the shell, empty (off) by default: `OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318 docker compose --profile observability up -d`.
+- New `scripts/verify_jaeger.py` (standard library only) does the Jaeger check and can be rerun at any time.
+- Run on 2026-11-21, Windows 11, Docker 28.3.0, the whole stack from this branch (PostgreSQL 16, Redis 7, both services on one database and one Redis). Host port 8080 was taken by another project, so Go ran on 8082 through a local override file; nothing in the repository changed for that.
+
+### Results
+**Jaeger (both services).** `scripts/verify_jaeger.py` sends one agent step to each service under its own sampled `traceparent`, then one step to each under the same trace, and reads every trace back from `GET /api/traces/{id}` on Jaeger's query API. It passed for all three traces, twice in a row:
+- service names `notification-service` and `notification-service-java`, each with `service.version`;
+- `POST /api/events` (kind `server`, parent = the caller's span id) → `pipeline.Handle` (kind `internal`) → `policy.Evaluate`, `dedup.Check`, `attention.Classify`; every span's parent inside the trace, start and duration within the server span;
+- `http.response.status_code` stored as `int64` 202, `http.route` `/api/events`, `agent.trace_id` equal to the run, decision attributes present; no tag outside the nine allowed keys and the ones Jaeger derives (`span.kind`, `otel.scope.name`, `otel.status_code`, `error`); no span marked failed;
+- the secret placed in each payload is nowhere in the stored trace;
+- the shared trace holds 10 spans from both services.
+A wrong `--java-service` name was seen to fail the script before it was trusted. Jaeger's UI marks each root span's parent as missing, because the caller (the script) does not export its own span; that is expected.
+
+**MCP clients (stdio server against Go and against Java).**
+| Client | Version | How | Result against Go and against Java |
+|---|---|---|---|
+| Claude Code | 2.1.328 (the VS Code extension's bundled CLI) | `claude mcp add <name> -s local -e AGENTPULSE_URL=… -e AGENTPULSE_API_KEY=… -- mcp-server`; `claude mcp list`; `claude -p` asked to call the four tools | Connected; `publish_event` accepted (standard, queued), `get_recent_events` returned the run, `explain_decision` explained it, `notify_user` with a bad address refused with `invalid email recipient` |
+| MCP Inspector | 2.16.0 (`npx @modelcontextprotocol/inspector@2.16.0 --cli`) | `--method tools/list`, `--method tools/call` for each tool | Four tools listed with their schemas; the same answers as above, plus `duplicate` for a repeated id; an unknown tool is refused |
+
+Protocol findings (messages captured with a `tee` wrapper around the stdio server):
+- **MCP Inspector 2.16.0** proposes `2025-11-25`, accepts our `2024-11-05` answer and carries on. It warns that it wants Node `^24.22.1` (this machine has 24.18.0) but works.
+- **Claude Code 2.1.328** first sends `server/discover` (a stateless probe naming protocol `2026-07-28`); our server answers `-32601 unknown method server/discover`, which is correct JSON-RPC, and Claude Code falls back to `initialize` proposing `2025-11-25` and accepts `2024-11-05`.
+- Both clients send `notifications/initialized` and get no answer, as contract file 17 locks. **No protocol bug, and no upgrade needed now** (owner decision 4 holds; an upgrade stays out of scope).
+
+**Python SDK and console (Java).** `sdk/python/example.py` against Java: `status: complete | steps: 10 | retries: 3 | cost: $0.0128`. The same script against Go gave a trace that is identical field by field apart from ids and times. The console's Traces screen, served with the Java service behind a same-origin proxy (Java has no CORS; a temporary Vite config, not committed), showed the run: plan, three failed `web_search` calls each followed by a retry, the fourth call succeeding, reflect and complete, with depth from the parent chain, tokens, cost and each step's decision. The header shows "Reconnecting" and the Inbox fails against Java because Java has no `/api/stream` or `/api/notifications`, which were never in Java's scope (inbox is milestone 42).
+
+### Defect found and fixed
+- **F15, Java threaded agent runs wrongly.** `get_recent_events` through the Inspector showed Java's `threadId` as `agent:` where Go wrote `agent:trace:<run>`. Java's `Dedup.threadId` and `Dedup.dedupKey` had never gained Go's milestone 31 branches for agent runs, so **every agent step of one source shared one thread in Java**: steps of different runs were merged into each other (the Jaeger check first showed Java's steps as `merged` with no `attention.Classify` span), grouped together, and their Redis keys never matched Go's. Contract file 16 did not catch it because it never compared `threadId` or sent the same kind of step in two runs.
+- **Fix:** `Dedup` now writes Go's text exactly: thread `<source>:trace:<run>`; key `thread|type|parent|step_kind|attempt`, the attempt written as Go's `fmt.Sprint` writes a decoded JSON number (`<nil>` when absent, `2`, `2.5`, `1e+06`, `1e-05`), so Redis dedups one step across the two services.
+- **Tests:** Java `DedupAndNormalizerTest` (agent thread and key text; 22 numbers whose expected strings were printed by Go, including the switch to exponent form at 1e6 and below 1e-4); Go `TestAgentKeyTextIsStable` pins the same three key strings; contract file 16 gains two steps (the same kind of step in another run is `queued`, not merged; a run's thread is named after it) and checks `threadId` in the run listing. Without the fix, Java's `ContractTest` fails on the `threadId` check; with it, both pass.
+- Live after the fix: Java's own trace in Jaeger has the full five spans; one agent step sent to Go and then, with another id, to Java is `queued` by Go and `merged` by Java through the shared Redis key.
+
+### Not changed, recorded
+- Java writes trailing zeros in fractional seconds (`.379830Z`) where Go trims them (`.6277Z`); both are RFC 3339 and the console reads both. Left as is.
+- The Traces screen shows list bullets beside the run cards (console styling, both services). Left for console housekeeping.
+- Java has no CORS, so the console cannot call Java from another origin; documented since milestone 36.
+
+### Tests
+- `go test ./...`, `go vet` (with and without `-tags integration`) and `gofmt` clean.
+- `mvn verify` with PostgreSQL 16 and Redis 7: **426 tests, none skipped, 95.0 percent of lines**; `Dedup` fully covered.
+- Contract: 18 files pass in Go (`TestContract`) and Java (`ContractTest`).
+
+### Folder changes
+- `docker-compose.yml` (the `observability` profile, `OTEL_EXPORTER_OTLP_ENDPOINT` on both services), new `scripts/verify_jaeger.py`.
+- Java: `application/Dedup.java` and `DedupAndNormalizerTest`. Go: `pkg/dedup/dedup_test.go` (test only). Contract: `docs/contract/16-agent-events.json`.
+- Docs: this record, `implementation-sync.md` (F9 narrowed, F15, gates), `roadmap.md`, `deployment.md` (tracing and MCP client set-up), `runbook.md` (missing spans), `java-service.md`, `architecture.md`, `CHANGELOG.md`.
+
+### Review checklist
+- [ ] The Java dedup fix (F15) and the two new contract steps read as the behaviour we want.
+- [ ] The `observability` compose profile and `scripts/verify_jaeger.py` are worth keeping as they are.
+- [ ] Protocol `2024-11-05` stays for now (both clients work with it); revisit when a client stops accepting it.
 - [ ] CI green on the pull request.

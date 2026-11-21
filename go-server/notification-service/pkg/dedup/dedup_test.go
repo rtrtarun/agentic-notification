@@ -120,3 +120,21 @@ func TestAnAgentRunIsOneThreadAndDifferentRunsAreSeparate(t *testing.T) {
 		t.Fatal("two runs must never share a dedup key")
 	}
 }
+
+// The Java service writes the same text (DedupAndNormalizerTest), so a step seen by one
+// service is a duplicate for the other through the shared Redis store. Keep both in step.
+func TestAgentKeyTextIsStable(t *testing.T) {
+	noMetadata := event.Event{ID: "v", Source: "agent", EventType: "agent.plan", TraceID: "run-1"}
+	for _, c := range []struct {
+		evt  event.Event
+		want string
+	}{
+		{agentStep("x", "agent.plan", "", nil), "agent:trace:run-1|agent.plan||retry|<nil>"},
+		{agentStep("y", "tool.call", "x", float64(2)), "agent:trace:run-1|tool.call|x|retry|2"},
+		{noMetadata, "agent:trace:run-1|agent.plan|||<nil>"},
+	} {
+		if got := DedupKey(c.evt); got != c.want {
+			t.Fatalf("DedupKey = %q, want %q", got, c.want)
+		}
+	}
+}
