@@ -54,7 +54,7 @@ Finished milestone records, 1 to 38, are in [archived/milestones/](archived/mile
 | Sign-up is off by default; when on, an account starts **pending** and an admin must approve it | One workspace: everyone signed in sees every event | M36 |
 | The API key is for services; the console hides it under "Advanced", and signing out forgets it | People use accounts; a key left in the tab is access | M36 |
 | Java hashes passwords as Go does (argon2id, same format, BouncyCastle) | An account made by one service signs in on the other | M36 |
-| Images are published for both services tagged with the `VERSION` file (`0.36.0`, `0.36`, `latest`, `sha-<commit>`); `/health` returns the version; each new version also gets a GitHub Release | A running service can be identified without a commit hash | M36 |
+| Images are published for both services tagged with the `VERSION` file (for example `0.39.0`, `0.39`, `latest`, `sha-<commit>`); `/health` returns the version; each new version also gets a GitHub Release | A running service can be identified without a commit hash | M36 |
 | Learning is offline or asynchronous and never in the live path; **every adjustment needs an admin's approval**, whatever its size; defaults ±20 points, 5 signals from 2 people, 30-day lookback, 14-day half-life | Predictability and auditability first | M38 plan |
 | Event lists break `created_at` ties by `id` in every store (PostgreSQL and memory, Go and Java) | One order everywhere, so traces match between services and between test and production | M39a |
 | MCP argument refusals are the service's own words (`unknown argument "x"`, `argument limit must be a whole number`), not `encoding/json`'s text | Go's text named Go types and changed between Go versions | M39b |
@@ -83,7 +83,7 @@ Coverage is below 80 percent locally in `db`, `event`, `feedback`, `inbox`, `mai
 ## 5. Open questions for the owner
 1. **Default budget.** `ATTENTION_BUDGET_PER_HOUR=10` quietly holds events in busy workspaces after an upgrade. Keep it, or default to 0 and announce it?
 2. **Critical delivery inside the request (F3).** Keep it (a failure makes the sender retry) or accept a bounded wait? Today the slowest channel sets webhook latency (10 s provider timeout, 40 s server write timeout).
-3. **Versioning policy.** `VERSION` is `0.36.0` and was not bumped for milestones 37 to 39, so the images published on those merges carry `0.36.0`. Bump per milestone, or start at `1.0.0` for the first hosted release?
+3. **Versioning policy.** Answered for now: a release is cut when the owner asks, with the minor number following the milestone (`0.39.0` covers milestones 37 to 39b). Still open: start at `1.0.0` for the first hosted release?
 4. **MCP and notifications.** A `tools/call` sent as a JSON-RPC notification (no id) still runs, in both services, and is locked in contract file 17 for parity. Keep it, or refuse to run tools without an id?
 
 Answered or scheduled: two dispatchers (`DISPATCHER_ENABLED`, PR #13); Java retention and the F10 read window (milestone 42); rate limiting F1, the critical double send F2 and the trusted proxy F11 (milestone 44); per-person delivery, email verification and password reset (milestone 46); multi-tenancy (milestone 49). See [roadmap.md](roadmap.md).
@@ -117,6 +117,7 @@ First logged on 2026-11-07 by a reverse-engineering audit of the code (archived 
 - **2026-11-21, milestone 39 plan:** approved with four decisions (hand-written OTLP/HTTP JSON exporter in both services; slices 39a to 39d with a stop after each; Claude Code, the MCP Inspector and Jaeger v2 for the real-client check; MCP protocol `2024-11-05` kept) and extra guardrails per slice, recorded in [milestones/milestone-39-plan.md](milestones/milestone-39-plan.md).
 - **2026-11-21, slice 39a review:** the Go tie-break change and Java's fixed order for two bad ids accepted; the in-memory stores to order like PostgreSQL (done). Merged as PR #20.
 - **2026-11-21, roadmap:** F2 moves into milestone 44; milestone 48 is split into 48 Production readiness and 49 Hosted product; milestone 43 records the SDK leanings (hand-written, TypeScript and Go first, `/notify` covered).
+- **2026-11-21, release:** cut release `0.39.0` (milestones 37 to 39b), the first since `0.36.0`.
 - **2026-11-21, documentation:** finished milestone records (34 to 38), the AgentPulse MVP vision and the milestone 36 audit moved to the archive; current documents brought up to milestone 39b.
 - **2026-11-10, milestone 38 plan:** approved with six decisions (admin approval for every adjustment; the defaults in section 3; per-person preferences left to milestone 46; manual runs by default; Go changes accepted; three slices).
 - **2026-11-10, milestone 37:** Java parity for rule fields, feedback and overrides, and heuristic Attention Intelligence, built in three slices with a contract file each; merged as PR #14.

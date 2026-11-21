@@ -110,7 +110,7 @@ A digest covers events whose outcome is `digest` or `delayed` since the last one
 
 ## Deploying
 
-0. Pick the release: images are tagged with the version from the `VERSION` file (`0.36.0`, `0.36`, `latest`, `sha-<commit>`); deploy a version tag, not `latest`. After the rollout `GET /health` must return that `version`. See [deployment.md](deployment.md#releases-and-images).
+0. Pick the release: images are tagged with the version from the `VERSION` file (for example `0.39.0`, `0.39`, `latest`, `sha-<commit>`); deploy a version tag, not `latest`. After the rollout `GET /health` must return that `version`. See [deployment.md](deployment.md#releases-and-images).
 1. Create the Secret (`k8s/secret.example.yaml` shows the keys). Never commit real values.
 2. Apply the ConfigMap and Deployment. Rolling updates are safe: migrations are idempotent and run under an advisory lock.
 3. Verify: `/health` is 200, then send a signed test webhook.
