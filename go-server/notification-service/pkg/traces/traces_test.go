@@ -140,6 +140,31 @@ func TestGroupSeparatesTracesIgnoresOtherEventsAndSortsNewestFirst(t *testing.T)
 	}
 }
 
+// TestTiesKeepTheOrderTheyArriveIn pins the tie-breaking the Java service copies: steps stored
+// at the same instant stay in the order the repository listed them (oldest first, then by id),
+// and traces that ended at the same instant are listed by trace ID.
+func TestTiesKeepTheOrderTheyArriveIn(t *testing.T) {
+	a := mk("b-step", "", "agent.plan", StepPlan, 0, "background", nil)
+	b := mk("a-step", "", "agent.reflect", StepReflect, 0, "background", nil)
+	c := mk("c-step", "", "agent.complete", StepComplete, 0, "background", nil)
+	got, _ := Find([]event.Event{a, b, c}, "run-1")
+	if got.StepList[0].EventID != "b-step" || got.StepList[1].EventID != "a-step" || got.StepList[2].EventID != "c-step" {
+		t.Fatalf("steps at one instant must keep their input order: %+v", got.StepList)
+	}
+	if got.Status != StatusComplete {
+		t.Fatalf("status reads the last step in that order, got %q", got.Status)
+	}
+
+	x := mk("x1", "", "agent.plan", StepPlan, 5, "background", nil)
+	x.TraceID = "zeta"
+	y := mk("y1", "", "agent.plan", StepPlan, 5, "background", nil)
+	y.TraceID = "alpha"
+	traces := Group([]event.Event{x, y})
+	if traces[0].TraceID != "alpha" || traces[1].TraceID != "zeta" {
+		t.Fatalf("traces that ended together are ordered by trace ID: %s, %s", traces[0].TraceID, traces[1].TraceID)
+	}
+}
+
 func TestFindReportsAMissingTrace(t *testing.T) {
 	if _, ok := Find(failingRun(), "nope"); ok {
 		t.Fatal("unknown trace found")

@@ -2,7 +2,7 @@
 
 Event model and persistence.
 
-- `Repository` — `Save` (idempotent on `ID`), `Exists`, `List` (newest `DefaultListLimit` rows, oldest first).
+- `Repository` — `Save` (idempotent on `ID`), `Exists`, `List` (newest `DefaultListLimit` rows, oldest first, ordered by `created_at` then `id` in both the PostgreSQL and the in-memory repository, so the order is fixed and matches the Java service).
 - `Purger` — `DeleteOlderThan`, used by the retention loop (`EVENT_RETENTION`).
 - `InMemoryRepository` for tests and local runs; `PostgresRepository` for production (parameterised SQL only).
 

@@ -99,6 +99,55 @@ class PostgresEventRepositoryTest {
         assertEquals("", read.getMergedInto());
     }
 
+    /** Milestone 39a: the chain columns are stored exactly as Go stores them, NULL outside a run, never ''. */
+    @Test
+    void theChainColumnsAreNullOutsideARunAndRoundTripInsideOne() throws Exception {
+        Event step = event("step");
+        step.setTraceId("run-" + run);
+        step.setParentEventId("java-test-" + run + "-plan");
+        step.setAgentName("researcher");
+        repo.save(step);
+        Event webhook = event("hook");
+        repo.save(webhook);
+
+        Event read = repo.listRecent(500).stream().filter(e -> e.getId().equals(step.getId())).findFirst().orElseThrow();
+        assertEquals("run-" + run, read.getTraceId());
+        assertEquals("java-test-" + run + "-plan", read.getParentEventId());
+        assertEquals("researcher", read.getAgentName());
+        try (Connection c = source.getConnection(); Statement s = c.createStatement();
+             java.sql.ResultSet rs = s.executeQuery("SELECT trace_id, parent_event_id, agent_name FROM events WHERE id = '" + webhook.getId() + "'")) {
+            assertTrue(rs.next());
+            assertNull(rs.getString(1), "no trace is NULL, as Go's nullString writes it");
+            assertNull(rs.getString(2));
+            assertNull(rs.getString(3));
+        }
+        Event hook = repo.listRecent(500).stream().filter(e -> e.getId().equals(webhook.getId())).findFirst().orElseThrow();
+        assertEquals("", hook.getTraceId(), "NULL reads back as empty");
+        assertEquals("", hook.getParentEventId());
+        assertEquals("", hook.getAgentName());
+    }
+
+    /** A row written the way the Go service writes it, at one instant with another row: read the same, ties by id. */
+    @Test
+    void rowsGoWroteReadTheSameAndTiesAreOrderedById() throws Exception {
+        String a = "java-test-" + run + "-tie-a";
+        String b = "java-test-" + run + "-tie-b";
+        try (Connection c = source.getConnection(); Statement s = c.createStatement()) {
+            for (String id : List.of(b, a)) {
+                s.execute("INSERT INTO events (id, source, event_type, repository, attention_class, payload, attention_state, "
+                        + "trace_id, parent_event_id, agent_name, created_at) VALUES ('" + id + "', 'agent', 'agent.plan', '', "
+                        + "'standard', '{}'::jsonb, 'done', 'tie-" + run + "', NULL, NULL, '2030-01-01T00:00:00Z')");
+            }
+        }
+        List<Event> newest = repo.listRecent(2);
+        assertEquals(List.of(b, a), newest.stream().map(Event::getId).toList(), "created_at DESC, id DESC, as Go's List now orders");
+        assertEquals("tie-" + run, newest.get(0).getTraceId());
+        assertEquals("", newest.get(0).getParentEventId());
+        try (Connection c = source.getConnection(); Statement s = c.createStatement()) {
+            s.execute("DELETE FROM events WHERE id IN ('" + a + "', '" + b + "')");
+        }
+    }
+
     @Test
     void aMissingEventDoesNotExistAndAnEventWithoutADecisionReadsBack() {
         assertFalse(repo.exists("java-test-" + run + "-missing"));

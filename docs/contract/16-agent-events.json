@@ -1,0 +1,230 @@
+{
+  "name": "agent steps go through the same pipeline as webhooks, an agent's severity is only data for rules, and stored steps are grouped into traces",
+  "steps": [
+    {
+      "name": "publishing needs the API key",
+      "request": { "method": "POST", "path": "/api/events", "body": { "eventType": "agent.plan" } },
+      "expect": { "status": 401, "json": { "error": "missing or invalid api key" } }
+    },
+    {
+      "name": "reading traces needs the API key",
+      "request": { "method": "GET", "path": "/api/traces" },
+      "expect": { "status": 401, "json": { "error": "missing or invalid api key" } }
+    },
+    {
+      "name": "DELETE on the events endpoint is not allowed",
+      "request": { "method": "DELETE", "path": "/api/events", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 405, "json": { "error": "method not allowed" } }
+    },
+    {
+      "name": "traces are read only",
+      "request": { "method": "POST", "path": "/api/traces", "headers": { "X-API-Key": "contract-key" }, "body": {} },
+      "expect": { "status": 405, "json": { "error": "method not allowed" } }
+    },
+    {
+      "name": "a body that is not JSON is refused",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "rawBody": "not json" },
+      "expect": { "status": 400, "json": { "error": "invalid request payload" } }
+    },
+    {
+      "name": "the event type is required",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": { "traceId": "run-x" } },
+      "expect": { "status": 400, "json": { "error": "invalid agent event: eventType is required, such as tool.call.failed" } }
+    },
+    {
+      "name": "a source with spaces or capitals after tidying is refused",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": { "eventType": "agent.plan", "source": "my agent" } },
+      "expect": { "status": 400, "json": { "error": "invalid agent event: source must be lower-case letters, digits, dots, dashes or underscores" } }
+    },
+    {
+      "name": "an id with a space is refused",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": { "eventType": "agent.plan", "id": "has space" } },
+      "expect": { "status": 400, "json": { "error": "invalid agent event: id may only contain letters, digits and . _ : - (at most 200 characters)" } }
+    },
+    {
+      "name": "a parent needs a trace",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": { "eventType": "agent.plan", "parentEventId": "p1" } },
+      "expect": { "status": 400, "json": { "error": "invalid agent event: parentEventId needs a traceId" } }
+    },
+    {
+      "name": "an event cannot be its own parent",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": { "eventType": "agent.plan", "id": "s1", "traceId": "run-x", "parentEventId": "s1" } },
+      "expect": { "status": 400, "json": { "error": "invalid agent event: an event cannot be its own parent" } }
+    },
+    {
+      "name": "an unknown severity is refused",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": { "eventType": "agent.plan", "severity": "urgent" } },
+      "expect": { "status": 400, "json": { "error": "invalid agent event: severity must be info, low, medium, high or critical" } }
+    },
+    {
+      "name": "an unknown step kind is refused",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": { "eventType": "agent.plan", "metadata": { "step_kind": "dance" } } },
+      "expect": { "status": 400, "json": { "error": "invalid agent event: metadata.step_kind must be plan, tool_call, retry, reflect, human_approval or complete" } }
+    },
+    {
+      "name": "telemetry cannot be negative",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": { "eventType": "agent.retry", "metadata": { "attempt": -1 } } },
+      "expect": { "status": 400, "json": { "error": "invalid agent event: metadata.attempt must be a number of zero or more" } }
+    },
+    {
+      "name": "telemetry sent as text is refused",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": { "eventType": "agent.plan", "metadata": { "tokens_in": "12" } } },
+      "expect": { "status": 400, "json": { "error": "invalid agent event: metadata.tokens_in must be a number of zero or more" } }
+    },
+    {
+      "name": "confidence is from 0 to 1",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": { "eventType": "agent.reflect", "metadata": { "confidence": 1.5 } } },
+      "expect": { "status": 400, "json": { "error": "invalid agent event: metadata.confidence must be a number from 0 to 1" } }
+    },
+    {
+      "name": "the first step of a run is decided by the rules; no rule matches, so it is standard",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": {
+        "id": "run1-plan", "traceId": "run-1", "eventType": "agent.plan", "agentName": "research-agent", "severity": "info",
+        "metadata": { "step_kind": "plan", "duration_ms": 120, "tokens_in": 100, "tokens_out": 20, "cost_usd": 0.0012 } } },
+      "expect": { "status": 202, "json": { "status": "accepted", "eventId": "run1-plan", "traceId": "run-1", "attentionClass": "standard", "decisionState": { "status": "queued", "reason": "no matching rule, default standard" } } }
+    },
+    {
+      "name": "an agent saying critical does not make its step critical: severity is only data for rules",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": {
+        "id": "run1-call", "traceId": "run-1", "parentEventId": "run1-plan", "eventType": "tool.call.failed", "agentName": "research-agent", "severity": "CRITICAL",
+        "metadata": { "step_kind": "tool_call", "tool_name": "web_search", "attempt": 1, "duration_ms": 3000 } } },
+      "expect": { "status": 202, "json": { "status": "accepted", "eventId": "run1-call", "traceId": "run-1", "attentionClass": "standard", "decisionState": { "status": "queued" } } }
+    },
+    {
+      "name": "sending the same id again stores one event",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": {
+        "id": "run1-call", "traceId": "run-1", "parentEventId": "run1-plan", "eventType": "tool.call.failed" } },
+      "expect": { "status": 200, "json": { "status": "duplicate", "eventId": "run1-call" } }
+    },
+    {
+      "name": "a retry follows the failed call",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": {
+        "id": "run1-retry", "traceId": "run-1", "parentEventId": "run1-call", "eventType": "agent.retry", "agentName": "research-agent",
+        "metadata": { "step_kind": "retry", "tool_name": "web_search", "attempt": 2, "duration_ms": 2500, "tokens_in": 300, "tokens_out": 80 } } },
+      "expect": { "status": 202, "json": { "eventId": "run1-retry", "attentionClass": "standard" } }
+    },
+    {
+      "name": "the run completes",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": {
+        "id": "run1-done", "traceId": "run-1", "parentEventId": "run1-retry", "eventType": "agent.complete", "agentName": "research-agent",
+        "metadata": { "step_kind": "complete", "duration_ms": 800, "tokens_in": 50, "tokens_out": 200, "cost_usd": 0.0021, "confidence": 0.9 } } },
+      "expect": { "status": 202, "json": { "eventId": "run1-done", "attentionClass": "standard" } }
+    },
+    {
+      "name": "a rule may use the agent's severity to make a step critical",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": {
+        "name": "agent critical", "when": { "source": "agent", "payloadMatch": [ { "field": "severity", "value": "critical" } ] },
+        "then": { "attentionClass": "critical", "reason": "the agent reported a critical step" } } },
+      "expect": { "status": 201, "json": { "name": "agent critical" } }
+    },
+    {
+      "name": "with that rule a critical step is critical and is sent inline",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": {
+        "id": "run2-approve", "traceId": "run-2", "eventType": "agent.approval.needed", "agentName": "deploy-agent", "severity": "critical",
+        "metadata": { "step_kind": "human_approval", "confidence": 0 } } },
+      "expect": { "status": 202, "json": { "status": "accepted", "eventId": "run2-approve", "traceId": "run-2", "attentionClass": "critical", "decisionState": { "status": "sent", "reason": "the agent reported a critical step", "matchedRule": "agent critical" } } }
+    },
+    {
+      "name": "a step whose parent is unknown starts its own branch",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": {
+        "id": "run3-orphan", "traceId": "run-3", "parentEventId": "ghost-step", "eventType": "agent.reflect", "metadata": { "step_kind": "reflect" } } },
+      "expect": { "status": 202, "json": { "eventId": "run3-orphan", "traceId": "run-3" } }
+    },
+    {
+      "name": "without an id one is made, and an event outside a run answers an empty traceId",
+      "request": { "method": "POST", "path": "/api/events", "headers": { "X-API-Key": "contract-key" }, "body": { "eventType": "agent.heartbeat" } },
+      "expect": { "status": 202, "json": { "status": "accepted", "traceId": "", "attentionClass": "standard" }, "present": ["eventId"] }
+    },
+    {
+      "name": "the event list narrows to one run, newest first, with the chain fields and without the payload",
+      "request": { "method": "GET", "path": "/api/events?traceId=run-1", "headers": { "X-API-Key": "contract-key" } },
+      "expect": {
+        "status": 200,
+        "json": { "events": [
+          { "id": "run1-done", "source": "agent", "eventType": "agent.complete", "traceId": "run-1", "parentEventId": "run1-retry", "agentName": "research-agent", "attentionClass": "standard" },
+          { "id": "run1-retry", "parentEventId": "run1-call" },
+          { "id": "run1-call", "parentEventId": "run1-plan" },
+          { "id": "run1-plan", "traceId": "run-1", "agentName": "research-agent" }
+        ] },
+        "absent": ["nextCursor"],
+        "absentInEach": { "events": ["payload"] }
+      }
+    },
+    {
+      "name": "a run's events page with a cursor",
+      "request": { "method": "GET", "path": "/api/events?traceId=run-1&limit=2", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "events": [ { "id": "run1-done" }, { "id": "run1-retry" } ] }, "present": ["nextCursor"] }
+    },
+    {
+      "name": "traces are listed most recently active first, without their steps",
+      "request": { "method": "GET", "path": "/api/traces", "headers": { "X-API-Key": "contract-key" } },
+      "expect": {
+        "status": 200,
+        "json": { "traces": [
+          { "traceId": "run-3", "steps": 1, "retries": 0, "failures": 0, "tokensIn": 0, "tokensOut": 0, "costUsd": 0, "durationMs": 0, "worstClass": "standard", "status": "running" },
+          { "traceId": "run-2", "agentName": "deploy-agent", "steps": 1, "worstClass": "critical", "status": "waiting" },
+          { "traceId": "run-1", "agentName": "research-agent", "steps": 4, "retries": 1, "failures": 1, "tokensIn": 450, "tokensOut": 300, "costUsd": 0.0033, "durationMs": 6420, "worstClass": "standard", "status": "complete" }
+        ] },
+        "absentInEach": { "traces": ["stepList"] }
+      }
+    },
+    {
+      "name": "the trace list is bounded by limit",
+      "request": { "method": "GET", "path": "/api/traces?limit=1", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "traces": [ { "traceId": "run-3" } ] } }
+    },
+    {
+      "name": "limit 0 is refused",
+      "request": { "method": "GET", "path": "/api/traces?limit=0", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 400, "json": { "error": "limit must be between 1 and 100" } }
+    },
+    {
+      "name": "limit above 100 is refused",
+      "request": { "method": "GET", "path": "/api/traces?limit=101", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 400, "json": { "error": "limit must be between 1 and 100" } }
+    },
+    {
+      "name": "a limit that is not a number is refused",
+      "request": { "method": "GET", "path": "/api/traces?limit=abc", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 400, "json": { "error": "limit must be between 1 and 100" } }
+    },
+    {
+      "name": "one run has its ordered steps, depth from the parent chain, and the decision for each",
+      "request": { "method": "GET", "path": "/api/traces/run-1", "headers": { "X-API-Key": "contract-key" } },
+      "expect": {
+        "status": 200,
+        "json": {
+          "traceId": "run-1", "agentName": "research-agent", "steps": 4, "retries": 1, "failures": 1, "durationMs": 6420, "status": "complete",
+          "stepList": [
+            { "eventId": "run1-plan", "eventType": "agent.plan", "stepKind": "plan", "durationMs": 120, "tokensIn": 100, "tokensOut": 20, "costUsd": 0.0012, "attentionClass": "standard", "decisionStatus": "queued", "decisionReason": "no matching rule, default standard", "depth": 0 },
+            { "eventId": "run1-call", "parentEventId": "run1-plan", "eventType": "tool.call.failed", "stepKind": "tool_call", "toolName": "web_search", "attempt": 1, "durationMs": 3000, "attentionClass": "standard", "depth": 1 },
+            { "eventId": "run1-retry", "parentEventId": "run1-call", "stepKind": "retry", "attempt": 2, "durationMs": 2500, "tokensIn": 300, "tokensOut": 80, "depth": 2 },
+            { "eventId": "run1-done", "parentEventId": "run1-retry", "stepKind": "complete", "durationMs": 800, "costUsd": 0.0021, "confidence": 0.9, "depth": 3 }
+          ]
+        }
+      }
+    },
+    {
+      "name": "a confidence of zero is kept, and a critical step carries its decision",
+      "request": { "method": "GET", "path": "/api/traces/run-2", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "traceId": "run-2", "worstClass": "critical", "status": "waiting", "stepList": [
+        { "eventId": "run2-approve", "stepKind": "human_approval", "confidence": 0, "attentionClass": "critical", "decisionStatus": "sent", "decisionReason": "the agent reported a critical step", "depth": 0 }
+      ] } }
+    },
+    {
+      "name": "a step whose parent is not in the trace has depth 0",
+      "request": { "method": "GET", "path": "/api/traces/run-3", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 200, "json": { "traceId": "run-3", "status": "running", "stepList": [ { "eventId": "run3-orphan", "parentEventId": "ghost-step", "depth": 0 } ] } }
+    },
+    {
+      "name": "an unknown trace is not found",
+      "request": { "method": "GET", "path": "/api/traces/nope", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 404, "json": { "error": "trace not found" } }
+    },
+    {
+      "name": "a deeper path is not found",
+      "request": { "method": "GET", "path": "/api/traces/run-1/steps", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 404, "json": { "error": "not found" } }
+    }
+  ]
+}

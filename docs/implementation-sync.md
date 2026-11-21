@@ -30,7 +30,8 @@ The single place that says **what is built, what was proven, what is open and wh
 | OpenID Connect single sign-on | Yes | **No** | |
 | Attention Intelligence (heuristic, Ollama, Claude), digests, budgets, async worker | Yes | **No** | |
 | Feedback, overrides, learning engine | Yes | **No** | |
-| AgentPulse traces, MCP server | Yes | **No** | [agentpulse.md](agentpulse.md) |
+| AgentPulse traces | Yes | Yes (milestone 39a, contract file 16) |
+| MCP server | Yes | **No** (milestone 39b) | [agentpulse.md](agentpulse.md) |
 | Web console, 15 screens, demo mode | Talks to Go | Not wired | [frontend.md](frontend.md) |
 | Python SDK | Talks to Go | n/a | [../sdk/python/README.md](../sdk/python/README.md) |
 

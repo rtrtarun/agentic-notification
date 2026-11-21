@@ -168,6 +168,25 @@ class InfrastructureTest {
         assertEquals(1, repo.listRecent(1).size());
     }
 
+    /** Milestone 39a: the in-memory order is PostgreSQL's (created_at DESC, id DESC), whatever the order of saving. */
+    @Test
+    void theInMemoryStoreOrdersLikePostgres() {
+        Instant at = Instant.parse("2026-01-01T00:00:00Z");
+        InMemoryEventRepository repo = new InMemoryEventRepository(Clock.fixed(at, ZoneOffset.UTC));
+        Event late = new Event("late", "github", "push", "", null);
+        late.setCreatedAt(at.plusSeconds(1));
+        Event early = new Event("early", "github", "push", "", null);
+        early.setCreatedAt(at.minusSeconds(1));
+        repo.save(new Event("tie-b", "github", "push", "", null));
+        repo.save(late);
+        repo.save(new Event("tie-a", "github", "push", "", null));
+        repo.save(early);
+
+        assertEquals(List.of("late", "tie-b", "tie-a", "early"), repo.listRecent(10).stream().map(Event::getId).toList());
+        assertEquals(List.of("late", "tie-b"), repo.listRecent(2).stream().map(Event::getId).toList(), "the cap keeps the newest");
+        assertTrue(repo.listRecent(0).isEmpty());
+    }
+
     // ---- providers ---------------------------------------------------------------------------------------------
 
     private static NotificationProvider stub(String name, boolean fail, List<String> calls) {

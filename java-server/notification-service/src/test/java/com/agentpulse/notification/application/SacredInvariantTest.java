@@ -50,6 +50,32 @@ class SacredInvariantTest {
                 .withOutbox(outbox);
     }
 
+    /** Milestone 39a: an agent's word is data. Only a rule makes its step critical, and then nothing else touches it. */
+    @Test
+    void anAgentCannotDeclareItsOwnStepCriticalAndARuleMadeCriticalStepIsUntouched() {
+        Event said = armed().handle(AgentEvents.normalize(new AgentEvents.Input("a1", null, "tool.call.failed", null, "run",
+                null, "bot", "critical", null, null)));
+        assertFalse(said.isCritical(), "severity critical without a rule is not critical");
+        assertTrue(provider.sent.isEmpty(), "and it is not delivered inline");
+
+        Rule byRule = new Rule("r", "agent critical", "", new Rule.Condition("agent", "", "",
+                List.of(new com.agentpulse.notification.domain.Predicate("severity", "eq", "critical"))),
+                new Rule.Outcome("critical", "the agent reported a critical step", false), false, false);
+        int classified = classifier.calls;
+        Pipeline pipeline = new Pipeline(new PolicyEngine(List.of(byRule)), provider, repository)
+                .withDeduper(new MemoryDeduper(Duration.ofMinutes(10), Clock.systemUTC()))
+                .withClassifier(classifier).withPreferences(preferences).withBudget(budget).withOutbox(outbox);
+        Event first = pipeline.handle(AgentEvents.normalize(new AgentEvents.Input("a2", null, "tool.call.failed", null, "run",
+                null, "bot", "critical", null, null)));
+        Event repeat = pipeline.handle(AgentEvents.normalize(new AgentEvents.Input("a3", null, "tool.call.failed", null, "run",
+                null, "bot", "critical", null, null)));
+        assertEquals("critical", first.getAttentionClass());
+        assertEquals(Status.SENT, first.getDecisionState().getStatus());
+        assertEquals(Status.SENT, repeat.getDecisionState().getStatus(), "an identical critical step is never merged");
+        assertEquals(classified, classifier.calls, "a critical step never reaches the classifier");
+        assertEquals(2, provider.sent.size(), "both critical steps were delivered inline");
+    }
+
     @Test
     void criticalEventsNeverReachTheClassifier() {
         Event result = armed().handle(Fakes.event("c1", "security_advisory"));
