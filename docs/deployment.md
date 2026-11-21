@@ -1,6 +1,6 @@
 # Deployment and hosting
 
-> **Status after milestone 39b** (merged to `master` 2026-11-21; images republished on each merge, still tagged `0.36.0`; whether the live service has picked them up is in "Where we have deployed" and the log below).
+> **Status after milestone 39b** (merged to `master` 2026-11-21; released as `0.39.0`; whether the live service has picked them up is in "Where we have deployed" and the log below).
 >
 > Two services exist: the Go service (the one the console talks to) and the Java service (milestones 34 to 39b; see "The Java service" at the end). Both have accounts and sign-up with admin approval, the delivery retry queue, feedback, heuristic Attention Intelligence, learning, agent traces and an MCP server; only the Go service has single sign-on, SMS, Novu, optional Ollama or Claude, metrics, the inbox and retention. The environment variables for all of it are in "Production reference" at the end of this document, and each milestone document lists its own settings.
 
@@ -52,6 +52,7 @@ Names only; values are never written in this repository. Where each one lives, s
 ## Deployment log
 What was done to get here, newest first. Dates are 2026-11-07 unless stated.
 
+1. **2026-11-21: release `0.39.0` prepared** (`VERSION` and [releases/0.39.0.md](releases/0.39.0.md)); merging it to `master` publishes both images as `0.39.0` and creates the GitHub Release `v0.39.0`. The live service still has to be pointed at the new tag.
 1. **2026-11-21: milestones up to 39b are on `master`**: milestone 37 (PR #14, 2026-11-10), 38 (PRs #17 to #19, 2026-11-11), 39a and 39b (PRs #20 and #21, 2026-11-21). "Publish service images" succeeded on the merges of PRs #18, #20 and #21 (runs 42976237449, 44879506245, 44879871660), so `notification-service` and `notification-service-java` at `latest` and `0.36.0` now carry milestone 39b; `VERSION` was not bumped, so no new GitHub Release was made. Not checked: whether Render redeployed the new `latest` image.
 1. **`AUTH_COOKIE_SAMESITE=none` set on Render** (confirmed from outside: the sign-in cookie changed from `SameSite=Lax` to `SameSite=None; Secure`). Not yet verified in a browser; Safari and some privacy settings block third-party cookies even with `none`.
 1. **Milestone 36 built, not deployed.** Sign-in first, sign-up with admin approval, Java accounts, two versioned images, `VERSION` `0.36.0`, CI on `master`. On branch `feature/signup-and-sign-in`; merging it will run the publish workflow and redeploy the console.
@@ -74,13 +75,13 @@ Every release publishes **two images** to GitHub Container Registry, built by [p
 | `ghcr.io/rtrtarun/agentic-notification/notification-service` | Go (the one the console talks to) | Render today |
 | `ghcr.io/rtrtarun/agentic-notification/notification-service-java` | Java | nothing yet |
 
-- **The release number is the `VERSION` file** at the repository root (`0.36.0` for milestone 36). Pre-1.0 the minor number follows the milestone; patch numbers are fixes.
-- **Tags on each image:** `0.36.0` (this release), `0.36` (latest patch of that minor), `latest`, and `sha-<commit>` (always unique).
+- **The release number is the `VERSION` file** at the repository root (`0.39.0` for milestones 37 to 39b; `0.36.0` was milestone 36). Pre-1.0 the minor number follows the milestone; patch numbers are fixes.
+- **Tags on each image:** `0.39.0` (this release), `0.39` (latest patch of that minor), `latest`, and `sha-<commit>` (always unique).
 - **Running service identification:** the version is baked into the image (`APP_VERSION`, also the `org.opencontainers.image.version` label) and `GET /health` returns it, so you can tell what is running without a commit hash. A build outside the workflow reports `dev`.
 - **GitHub Release:** after both images are pushed, the workflow creates a GitHub Release named `v<VERSION>` (for example `v0.36.0`) on the default branch only, targeting the merged commit. It is marked a **pre-release** while the version starts with `0.`; its notes list the two image references, how to check `/health`, the hand-written **"Changes included"** note from `docs/releases/<VERSION>.md` (highlights, what changed, upgrade notes, what was and was not checked, known issues), links to this changelog and deployment guide, and the pull requests merged since the previous release. A release that already exists is never changed (the run prints a notice), so a version is released once.
 - **To release:** edit `VERSION`, write `docs/releases/<VERSION>.md` (copy the previous one), update `docs/CHANGELOG.md`, merge to the default branch. The workflow runs when `VERSION`, either service or the workflow changes (or by hand from the Actions tab). Publishing a version that already exists moves the image tags to the new build and prints a warning, but leaves the existing GitHub Release alone; the `sha-` tag never moves. **Bump `VERSION` for every release you want a new GitHub Release for.**
-- **To deploy a release:** point the host at a version tag instead of `latest`, for example `notification-service:0.36.0`, so a restart never picks up an unreviewed build. On Render: the service's settings, image URL, then redeploy.
-- **Check:** `docker run --rm -p 8080:8080 -e API_KEY=k ghcr.io/rtrtarun/agentic-notification/notification-service:0.36.0` then `curl localhost:8080/health`.
+- **To deploy a release:** point the host at a version tag instead of `latest`, for example `notification-service:0.39.0`, so a restart never picks up an unreviewed build. On Render: the service's settings, image URL, then redeploy.
+- **Check:** `docker run --rm -p 8080:8080 -e API_KEY=k ghcr.io/rtrtarun/agentic-notification/notification-service:0.39.0` then `curl localhost:8080/health`.
 
 ## Go live under GitHub
 
