@@ -1,6 +1,6 @@
 # Milestone 39 plan: Observability and MCP
 
-Status: **drafted 2026-11-21, awaiting owner approval.** No code is written until the owner approves. Follows [milestone 38](milestone-38.md). Roadmap entry: [roadmap.md](../roadmap.md#milestone-39-observability-and-mcp).
+Status: **approved by the owner on 2026-11-21** (decisions and extra guardrails recorded at the end). Build order: 39a, 39b, 39c, 39d, stopping after each slice for review. Follows [milestone 38](milestone-38.md). Roadmap entry: [roadmap.md](../roadmap.md#milestone-39-observability-and-mcp).
 
 ## What exists today
 - **Go** (milestones 31 and 32): `pkg/agentevents` normalises an agent step (`POST /api/events`; `GET /api/events?traceId=`), `pkg/traces` groups stored events by `traceId` into runs (`GET /api/traces`, `GET /api/traces/{id}`), `pkg/mcp` is a JSON-RPC 2.0 MCP server (protocol `2024-11-05`; tools `publish_event`, `get_recent_events`, `notify_user`, `explain_decision`) served in process at `POST /api/mcp` and over stdio by `cmd/mcp-server`, which calls the REST API with an API key. `pkg/telemetry` reads and writes the W3C `traceparent` header and records spans (`pipeline.Handle`, `policy.Evaluate`, `dedup.Check`, `attention.Classify`, `delivery.Send`) as debug log records. **Spans are not exported anywhere.** The `events.trace_id` and `events.parent_event_id` columns and their index exist.
@@ -69,8 +69,13 @@ None. `events.trace_id`, `events.parent_event_id` and `events_trace_id_idx` exis
 - No payload, title, message, recipient or secret appears in an exported span.
 - Every invariant test passes; a real MCP client and a real trace viewer were used and the results are recorded in `milestone-39.md` and `implementation-sync.md` (F9 updated for MCP).
 
-## Decisions needed from the owner
-1. **Exporter:** a small hand-written OTLP/HTTP JSON exporter in each service (recommended), or the official OpenTelemetry SDKs?
-2. **Slicing:** four slices in this order, 39a Java events and traces, 39b Java MCP, 39c OTLP export (Go then Java), 39d real-client verification, with a stop and review after each?
-3. **Real clients:** Claude Code and the MCP Inspector for MCP, and Jaeger all-in-one as the trace viewer in an optional compose profile?
-4. **MCP protocol:** keep `2024-11-05` for parity now and decide an upgrade from what 39d finds (recommended), or upgrade in this milestone?
+## Decisions (owner, 2026-11-21)
+1. **Exporter:** a hand-written OTLP/HTTP JSON exporter in both services; no OpenTelemetry SDK.
+2. **Slicing:** 39a, then 39b, then 39c, then 39d, with a stop and review after each slice.
+3. **Real clients:** Claude Code and the MCP Inspector for MCP; Jaeger v2 (OTLP over HTTP on port 4318) in an optional compose profile.
+4. **MCP protocol:** keep `2024-11-05` for parity; revisit after the 39d findings.
+
+## Extra guardrails (owner, 2026-11-21)
+- **39a:** Java stores `trace_id` and `parent_event_id` exactly as Go does (NULL versus empty string), and `Traces` breaks ties in exactly Go's order.
+- **39b:** `17-mcp.json` locks the HTTP status returned for a JSON-RPC notification (such as `notifications/initialized`). `initialize` answers `2024-11-05` when a client proposes a newer version; if Go rejects that today, Go is fixed.
+- **39c:** Java passes the span context explicitly (no `ThreadLocal`). The exporter retries only on a network error, 429 or 5xx, never on another 4xx. OTLP JSON rules are enforced and tested: hex ids, nanosecond times as strings, `Content-Type: application/json`. The no-secret rule covers span `status.message` as well as attributes. The `traceparent` sampled flag is handled identically in Go and Java.

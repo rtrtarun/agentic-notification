@@ -25,7 +25,7 @@ public final class PostgresEventRepository implements EventRepository {
 
     private static final String COLUMNS = "id, source, event_type, repository, attention_class, decision_status, "
             + "decision_reason, decision_model_version, decision_confidence, decision_matched_rule, payload, "
-            + "dedup_key, thread_id, merged_into, created_at";
+            + "dedup_key, thread_id, merged_into, created_at, trace_id, parent_event_id, agent_name";
 
     private final DataSource dataSource;
 
@@ -44,8 +44,8 @@ public final class PostgresEventRepository implements EventRepository {
         DecisionState d = event.getDecisionState();
         String sql = "INSERT INTO events (id, source, event_type, repository, attention_class, decision_status, "
                 + "decision_reason, decision_model_version, decision_confidence, decision_matched_rule, payload, "
-                + "dedup_key, thread_id, merged_into, attention_state) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, 'done') ON CONFLICT (id) DO NOTHING";
+                + "dedup_key, thread_id, merged_into, attention_state, trace_id, parent_event_id, agent_name) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, ?, 'done', ?, ?, ?) ON CONFLICT (id) DO NOTHING";
         try (Connection c = dataSource.getConnection(); PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, event.getId());
             ps.setString(2, event.getSource());
@@ -65,6 +65,10 @@ public final class PostgresEventRepository implements EventRepository {
             setNullable(ps, 12, event.getDedupKey());
             setNullable(ps, 13, event.getThreadId());
             setNullable(ps, 14, event.getMergedInto());
+            // An event outside an agent run stores NULL, never an empty string, exactly as Go's nullString does.
+            setNullable(ps, 15, event.getTraceId());
+            setNullable(ps, 16, event.getParentEventId());
+            setNullable(ps, 17, event.getAgentName());
             ps.executeUpdate();
         } catch (SQLException e) {
             throw new PortException("save event", e);
@@ -115,6 +119,9 @@ public final class PostgresEventRepository implements EventRepository {
         event.setThreadId(rs.getString("thread_id"));
         event.setMergedInto(rs.getString("merged_into"));
         event.setCreatedAt(rs.getTimestamp("created_at").toInstant());
+        event.setTraceId(rs.getString("trace_id"));
+        event.setParentEventId(rs.getString("parent_event_id"));
+        event.setAgentName(rs.getString("agent_name"));
 
         String status = rs.getString("decision_status");
         String reason = rs.getString("decision_reason");

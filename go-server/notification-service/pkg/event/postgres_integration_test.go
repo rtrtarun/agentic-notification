@@ -173,3 +173,42 @@ func TestMigrateLockedRollsBackOnFailure(t *testing.T) {
 		t.Fatal("DDL must be transactional in PostgreSQL; migration relies on it")
 	}
 }
+
+// TestPostgresListBreaksTimeTiesByID pins the order the Java service copies (milestone 39a):
+// rows stored at the same instant come back oldest first and then by id, so traces built
+// from them break ties the same way every time and in both services. It also pins that
+// an event outside a run stores NULL in the chain columns, never an empty string.
+func TestPostgresListBreaksTimeTiesByID(t *testing.T) {
+	conn := connect(t)
+	repo := event.NewPostgresRepository(conn)
+	ctx := context.Background()
+	for _, id := range []string{"tie-b", "tie-a", "tie-c"} {
+		if err := repo.Save(ctx, event.Event{ID: id, Source: "agent", EventType: "agent.plan", TraceID: "tie-run", Payload: map[string]any{}}); err != nil {
+			t.Fatalf("save %s: %v", id, err)
+		}
+	}
+	if err := repo.Save(ctx, event.Event{ID: "hook", Source: "github", EventType: "push", Payload: map[string]any{}}); err != nil {
+		t.Fatalf("save hook: %v", err)
+	}
+	if _, err := conn.ExecContext(ctx, `UPDATE events SET created_at = '2030-01-01T00:00:00Z' WHERE id LIKE 'tie-%'`); err != nil {
+		t.Fatalf("align times: %v", err)
+	}
+	list, err := repo.List(ctx)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var ids []string
+	for _, e := range list {
+		ids = append(ids, e.ID)
+	}
+	if got := fmt.Sprint(ids); got != "[hook tie-a tie-b tie-c]" {
+		t.Fatalf("order = %s, want oldest first and ties by id", got)
+	}
+	var trace, parent, agent sql.NullString
+	if err := conn.QueryRowContext(ctx, `SELECT trace_id, parent_event_id, agent_name FROM events WHERE id = 'hook'`).Scan(&trace, &parent, &agent); err != nil {
+		t.Fatalf("read hook: %v", err)
+	}
+	if trace.Valid || parent.Valid || agent.Valid {
+		t.Fatalf("an event outside a run must store NULL, got %v %v %v", trace, parent, agent)
+	}
+}

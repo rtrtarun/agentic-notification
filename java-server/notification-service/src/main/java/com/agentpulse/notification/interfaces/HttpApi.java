@@ -55,6 +55,7 @@ public final class HttpApi {
     private final DeliveriesApi deliveries;
     private final AuthApi auth;
     private final FeedbackApi feedbackApi;
+    private final AgentApi agent;
     private volatile AttentionApi attention;
     private volatile LearningApi learning;
     private volatile TuningApi tuning;
@@ -77,6 +78,7 @@ public final class HttpApi {
         this.rules = new RulesApi(api, rulesService);
         this.deliveries = new DeliveriesApi(api, deliveryStore, clock);
         this.feedbackApi = new FeedbackApi(api, feedback, overrides, accounts);
+        this.agent = new AgentApi(api, pipeline, events, this::listEvents);
     }
 
     /** With an accounts service, people can sign up, sign in and use the API with a session as well as the API key. */
@@ -91,6 +93,7 @@ public final class HttpApi {
         this.rules = new RulesApi(api, rulesService);
         this.deliveries = new DeliveriesApi(api, deliveryStore, clock);
         this.feedbackApi = new FeedbackApi(api, null, null, accounts);
+        this.agent = new AgentApi(api, pipeline, events, this::listEvents);
     }
 
     /**
@@ -130,6 +133,8 @@ public final class HttpApi {
             rules.rules(x);
         } else if (under(path, DeliveriesApi.PREFIX)) {
             deliveries.handle(x);
+        } else if (under(path, AgentApi.TRACES_PREFIX)) {
+            agent.traces(x);
         } else if (under(path, FeedbackApi.OVERRIDES_PREFIX)) {
             feedbackApi.overrides(x);
         } else if (learning != null && under(path, LearningApi.PREFIX)) {
@@ -149,6 +154,7 @@ public final class HttpApi {
                 case "/health" -> api.reply(x, 200, Map.of("status", "ok", "service", "attention-orchestration", "version", config.appVersion()));
                 case "/webhooks/github" -> webhook(x);
                 case "/events" -> listEvents(x);
+                case AgentApi.EVENTS_PATH -> agent.events(x);
                 case "/notify" -> notify.handle(x);
                 case FeedbackApi.FEEDBACK_PATH -> feedbackApi.feedback(x);
                 case AttentionApi.STATUS_PATH -> {
@@ -249,6 +255,7 @@ public final class HttpApi {
                 return;
             }
         }
+        String traceId = query.getOrDefault("traceId", "");
         Cursor cursor = null;
         if (query.containsKey("cursor")) {
             cursor = Cursor.decode(query.get("cursor"));
@@ -273,6 +280,9 @@ public final class HttpApi {
         boolean more = false;
         Event last = null;
         for (Event e : stored) {
+            if (!traceId.isEmpty() && !traceId.equals(e.getTraceId())) {
+                continue;
+            }
             if (cursor != null && !cursor.isAfter(e)) {
                 continue;
             }
@@ -305,6 +315,9 @@ public final class HttpApi {
         putIfNotEmpty(m, "threadId", e.getThreadId());
         putIfNotEmpty(m, "mergedInto", e.getMergedInto());
         m.put("createdAt", DateTimeFormatter.ISO_INSTANT.format(e.getCreatedAt()));
+        putIfNotEmpty(m, "traceId", e.getTraceId());
+        putIfNotEmpty(m, "parentEventId", e.getParentEventId());
+        putIfNotEmpty(m, "agentName", e.getAgentName());
         return m;
     }
 

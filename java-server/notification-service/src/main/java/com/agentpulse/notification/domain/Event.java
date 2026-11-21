@@ -21,6 +21,9 @@ public final class Event {
     private String dedupKey = "";
     private String threadId = "";
     private String mergedInto = "";
+    private String traceId = "";
+    private String parentEventId = "";
+    private String agentName = "";
     private Instant createdAt;
     private List<String> routeChannels = List.of();
 
@@ -40,6 +43,9 @@ public final class Event {
         c.dedupKey = dedupKey;
         c.threadId = threadId;
         c.mergedInto = mergedInto;
+        c.traceId = traceId;
+        c.parentEventId = parentEventId;
+        c.agentName = agentName;
         c.createdAt = createdAt;
         c.routeChannels = routeChannels;
         return c;
@@ -60,6 +66,15 @@ public final class Event {
     public void setThreadId(String threadId) { this.threadId = threadId == null ? "" : threadId; }
     public String getMergedInto() { return mergedInto; }
     public void setMergedInto(String mergedInto) { this.mergedInto = mergedInto == null ? "" : mergedInto; }
+    /** The agent run this step belongs to; empty for events that are not part of one (webhooks). */
+    public String getTraceId() { return traceId; }
+    public void setTraceId(String traceId) { this.traceId = traceId == null ? "" : traceId; }
+    /** The step of the same run that led to this one; empty for a first step. */
+    public String getParentEventId() { return parentEventId; }
+    public void setParentEventId(String parentEventId) { this.parentEventId = parentEventId == null ? "" : parentEventId; }
+    /** Which agent reported this step; empty when none was named. */
+    public String getAgentName() { return agentName; }
+    public void setAgentName(String agentName) { this.agentName = agentName == null ? "" : agentName; }
     public Instant getCreatedAt() { return createdAt; }
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
 

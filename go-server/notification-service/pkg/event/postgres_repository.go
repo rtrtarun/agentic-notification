@@ -88,7 +88,7 @@ const eventColumns = `id, source, event_type, repository,
 	payload, dedup_key, thread_id, merged_into, created_at, trace_id, parent_event_id, agent_name`
 
 func (r *PostgresRepository) List(ctx context.Context) ([]Event, error) {
-	rows, err := r.queryer.QueryContext(ctx, `SELECT `+eventColumns+` FROM events ORDER BY created_at DESC LIMIT $1`, DefaultListLimit)
+	rows, err := r.queryer.QueryContext(ctx, `SELECT `+eventColumns+` FROM events ORDER BY created_at DESC, id DESC LIMIT $1`, DefaultListLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,9 @@ func (r *PostgresRepository) List(ctx context.Context) ([]Event, error) {
 	if err != nil {
 		return nil, err
 	}
-	// The query returns newest first so LIMIT keeps the most recent rows.
+	// The query returns newest first so LIMIT keeps the most recent rows. Ties in created_at are
+	// broken by id, so the order (and the traces built from it) is the same every time and the
+	// same as the Java service's.
 	for i, j := 0, len(results)-1; i < j; i, j = i+1, j-1 {
 		results[i], results[j] = results[j], results[i]
 	}
