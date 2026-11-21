@@ -11,7 +11,7 @@
 
 > **Notifications are cheap. Human attention is expensive.** This platform decides *when, where, whether and how* someone should be interrupted, and sits above delivery providers such as email, Slack, SMS and Novu.
 
-Status: built through **milestone 36** on branch `feature/signup-and-sign-in` (the previous release, milestone 35, is merged to `master` and live). The Go service, console and Python SDK are complete through milestone 33; **milestone 36** adds sign-in first, sign-up with admin approval and real sign-out; the **Java service** (milestones 34 to 36) has the deterministic core, `/notify`, the rules API, the durable delivery queue, Redis dedup and the same accounts, and passes the same shared HTTP contract as Go. Both services are published as versioned images (see [deployment](docs/deployment.md#releases-and-images)); where it runs today is in [deployment](docs/deployment.md#where-we-have-deployed). Several parts have so far run only against local fakes; [what is proven and what is not](docs/implementation-sync.md) is written down, not hidden.
+Status: built through **milestone 39b**, all merged to `master` (2026-11-21). The Go service, console and Python SDK are complete through milestone 33, with offline learning score tuning added in milestone 38; the **Java service** (milestones 34 to 39b) now matches Go for the deterministic core, `/notify`, rules, the durable delivery queue, Redis dedup, accounts with sign-up, feedback and overrides, heuristic Attention Intelligence, learning, agent traces and the MCP server, and passes the same 17-file shared HTTP contract. What Java still lacks (SMS, Novu, metrics, inbox, retention, single sign-on, a language model) and the order it arrives in are in the [roadmap](docs/roadmap.md). Both services are published as versioned images (see [deployment](docs/deployment.md#releases-and-images)); where it runs today is in [deployment](docs/deployment.md#where-we-have-deployed). Several parts have so far run only against local fakes; [what is proven and what is not](docs/implementation-sync.md) is written down, not hidden.
 
 > **Screenshots:** none are committed yet. The console has a complete **demo mode** that needs no backend: run it locally (see [Running the console](#running-the-console)) or, once GitHub Pages is enabled ([deployment guide](docs/deployment.md)), open `https://rtrtarun.github.io/agentic-notification/`.
 
@@ -157,7 +157,7 @@ Dependencies are deliberately few: the Go module uses `lib/pq`, `go-redis`, `gol
 │   └── contract/                     HTTP contract both services must pass
 ├── deploy/  k8s/                     Local and Kubernetes deployment files
 ├── .github/workflows/                CI, GitHub Pages, GHCR image
-├── java-server/notification-service/ The Java service (milestones 34 to 36; see docs/java-service.md)
+├── java-server/notification-service/ The Java service (milestones 34 to 39; see docs/java-service.md)
 ├── VERSION                           The release number; drives the image tags and /health
 ├── docker-compose.yml
 └── AGENTS.md                         The design brief this project is built from
@@ -358,9 +358,9 @@ docker run --rm -v "$(pwd):/app" -v m2cache:/root/.m2 -w /app/java-server/notifi
 cd go-server/notification-service && go test ./pkg/server -run TestContract
 ```
 
-What to expect (counts from the last local run, milestone 36): about 690 Go test functions across 33 packages and two commands (87 percent total coverage with the integration tests), 238 Vitest tests, 21 SDK tests, and 156 Java tests (170 with PostgreSQL; the PostgreSQL and Redis tests skip unless `TEST_DATABASE_URL` and `TEST_REDIS_URL` are set), and a ten-file shared HTTP contract that both services pass. Integration tests skip themselves when `TEST_DATABASE_URL` or `TEST_REDIS_URL` is unset.
+What to expect (counts from the last local runs): about 690 Go test functions across the packages and two commands (milestone 36 count; every package passed at milestone 39b), 238 Vitest tests (milestone 36; the console has not changed since), 21 SDK tests, and 376 Java tests offline (5 PostgreSQL and Redis tests skip) (milestone 39b), or 387 with PostgreSQL and Redis (milestone 39a), and a 17-file shared HTTP contract that both services pass. Integration tests skip themselves when `TEST_DATABASE_URL` or `TEST_REDIS_URL` is unset.
 
-Status: locally (Windows, no C compiler, no Docker) everything above except `-race` and the integration tests passes. Those two run in [CI](.github/workflows/ci.yml), together with golangci-lint, govulncheck and an 80 percent coverage gate. **On commit `acc8b8c` (run 42370422148) the `go-service`, `java-service`, `web` and `python-sdk` jobs all passed**, including the PostgreSQL 16 and Redis 7 integration tests and `-race`. The first CI runs found about 25 lint findings and two real defects that in-memory tests could not see (overrides could not be saved in PostgreSQL), which is why the integration tests exist. Some packages are below 80 percent when run without integration tests (their PostgreSQL code is covered only in CI); the table is in [implementation-sync.md](docs/implementation-sync.md). **Milestone 36's first CI run** (pull request 11): `web`, `python-sdk` and `java-service` passed; `go-service` failed on one lint finding (staticcheck QF1001), fixed in `ef6433f` and verified locally with the integration tests; the re-run result is shown by the CI badge above.
+Status: locally (Windows, no C compiler) everything above except `-race` passes, and the Go integration tests and the Java PostgreSQL tests pass against PostgreSQL 16 and Redis 7 in Docker. `-race`, golangci-lint, govulncheck and an 80 percent coverage gate run in [CI](.github/workflows/ci.yml). **On `master` after merging milestone 39b (run 44879871735) the `go-service`, `java-service`, `web` and `python-sdk` jobs all passed**, including the PostgreSQL 16 and Redis 7 integration tests and `-race`. The first CI runs found about 25 lint findings and two real defects that in-memory tests could not see, which is why the integration tests exist. Some packages are below 80 percent when run without integration tests (their PostgreSQL code is covered only in CI); see [implementation-sync.md](docs/implementation-sync.md).
 
 ---
 
@@ -375,10 +375,9 @@ Everything lives in [`docs/`](docs/), grouped by what you want to do. **[docs/RE
 | Know what is built and what is proven | [Implementation status](docs/implementation-sync.md), [Changelog](docs/CHANGELOG.md) |
 | See how a feature was designed and tested | The milestone record: [current](docs/milestones/README.md) (34 to 36) or [archived](docs/archived/milestones/) (1 to 33) |
 | See where it is deployed, the secrets and the releases | [Deployment](docs/deployment.md#where-we-have-deployed), [Releases and images](docs/deployment.md#releases-and-images) |
-| See every feature as a flow diagram and the audit findings | [feature-flows.md](docs/feature-flows.md) ([HTML](docs/feature-flows.html)) |
 | Work on the console | [Frontend](docs/frontend.md) |
 | Work on the Java service | [Java service](docs/java-service.md), [HTTP contract](docs/contract/README.md) |
-| Build an AI agent integration | [AgentPulse](docs/agentpulse.md), [Python SDK](sdk/python/README.md), [Milestone 31](docs/archived/milestones/milestone-31.md) |
+| Build an AI agent integration | [Python SDK](sdk/python/README.md), [API endpoints](docs/architecture.md#19--key-api-endpoints), [MCP client set-up](docs/deployment.md), [Milestone 31](docs/archived/milestones/milestone-31.md) |
 | Contribute code | [CONTRIBUTING](CONTRIBUTING.md), [Coding standards](docs/rules/coding-standards.md) |
 
 ---
@@ -387,24 +386,23 @@ Everything lives in [`docs/`](docs/), grouped by what you want to do. **[docs/RE
 
 **Next** (details in [roadmap.md](docs/roadmap.md)):
 
-1. **Prove it against real services**: PostgreSQL, Redis, Ollama, Claude, Novu, SNS, an OpenID provider and a real MCP client; CI is already green for the Go, Java, web and SDK jobs.
-2. **Java parity, continued** (milestone 37 is next: Attention Intelligence, feedback, learning): milestones 34 to 36 built the core, `/notify`, the rules API, the durable delivery queue, Redis dedup and the accounts with sign-up in Java, with a ten-file shared contract in `docs/contract`; the rest of the Go service (Attention Intelligence, feedback, learning, traces, MCP) follows milestone by milestone.
-3. **SDKs for other languages** (documented, not started): TypeScript/JavaScript, Go and Java first, modelled on the Python SDK; see [roadmap.md](docs/roadmap.md).
-4. **Per-person delivery**: resolve a person's address at send time and deliver personal digests, schedules and budgets.
-5. **Console completeness**: screens for rule predicates, per-rule channels and personal preferences; translations for the newer screens.
-6. **Scale**: a real queue instead of polling if needed; a shared circuit breaker; an OpenTelemetry exporter.
-7. **Product**: event replay, an agent registry, multi-tenancy and billing for a hosted offering.
+1. **Milestone 39, continued**: an OpenTelemetry (OTLP) export of the spans both services record (39c), then a real MCP client and trace viewer (39d).
+2. **Finish Java parity** (milestones 40 to 42): SMS, Novu and the channels API; metrics; the inbox, event retention and SQL read paths for everything that reads the newest 1000 events (F10).
+3. **SDKs** (milestone 43): TypeScript and Go first, hand-written, held to a shared test contract.
+4. **Security and resilience** (milestones 44 and 45): ingestion rate limits, the critical double send (F2), a trusted proxy, sessions on one site, Java SSRF at connect time, secrets; then the audit gaps.
+5. **Identity, console and scale** (milestones 46 and 47): email verification, password reset and single sign-on in Java; per-person delivery; console screens for the newer features; NATS if polling stops being enough.
+6. **Production readiness** (milestone 48) and the **hosted product** (milestone 49: multi-tenancy, billing, event replay, an agent registry).
 
 **Known issues**
 
-- The Java service covers the core, `/notify`, the rules API, the delivery queue, Redis dedup and accounts (milestones 34 to 36), not SMS, Novu, single sign-on, a language model, traces, MCP, or event retention (rule `payloadMatch` and `channels` work in Java since milestone 37a). Two services sharing one database must be configured alike because both dispatch queued jobs. See [java-service.md](docs/java-service.md).
+- The Java service does not yet have SMS, Novu, the channels API, metrics, the inbox, event retention, single sign-on, a language model or span export (milestones 39c to 46). Two services sharing one database must run one queue dispatcher, one digest schedule and one learning schedule. See [java-service.md](docs/java-service.md).
 - **Sign-up and one workspace:** an approved member sees every event (no tenants); that is why sign-up needs an admin's approval. There is no email verification or password reset yet.
 - **Sessions across sites:** the console on `github.io` and the service elsewhere need `AUTH_COOKIE_SAMESITE=none` (or one shared site); browsers that block third-party cookies still refuse it. Behind a proxy every person shares one address for the per-address sign-in and sign-up limits.
 - **No ingestion rate limiting**, and a critical event can be sent twice if the same delivery arrives twice at once; the full audit list is in [implementation-sync.md](docs/implementation-sync.md).
 - NATS is part of the intended stack but is not used; the worker and delivery poll PostgreSQL.
 - Personal digests are stored and readable but not delivered.
-- Parts that have run only against fakes: PostgreSQL stores (CI only), the Redis budget script (CI only), Ollama, Claude, Novu, SNS, OpenID Connect, the MCP server.
-- Spans are structured log lines, not an OpenTelemetry export.
+- Parts that have run only against fakes: Ollama, Claude, Novu, SNS, OpenID Connect; the MCP server has run only against scripted clients so far (a real client is slice 39d).
+- Spans are structured log lines in Go (none in Java yet), not an OpenTelemetry export (slice 39c).
 - The default attention budget (10 per hour) quiets busy workspaces; set `ATTENTION_BUDGET_PER_HOUR=0` to turn it off.
 
 ---
@@ -431,7 +429,7 @@ Commit messages are short and imperative, and carry no `Co-Authored-By` trailer.
 
 ## Acknowledgements and support
 
-**Built on** the Go standard library, `lib/pq`, `go-redis`, `golang.org/x/crypto`, `yaml.v3`, React, React Router, Vite and Vitest. **Ideas from** Horvitz et al. on intelligent notification platforms, Apple's notification summaries, the Novu design guide on digests and multi-channel delivery, and MagicBell's notification UI patterns; AgentPulse follows the product notes in [docs/agentpulse.md](docs/agentpulse.md).
+**Built on** the Go standard library, `lib/pq`, `go-redis`, `golang.org/x/crypto`, `yaml.v3`, React, React Router, Vite and Vitest. **Ideas from** Horvitz et al. on intelligent notification platforms, Apple's notification summaries, the Novu design guide on digests and multi-channel delivery, and MagicBell's notification UI patterns; AgentPulse began from the product notes now archived as [agentpulse-mvp-vision.md](docs/archived/design-notes/agentpulse-mvp-vision.md).
 
 **Help**
 

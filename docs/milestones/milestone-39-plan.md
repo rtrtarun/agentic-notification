@@ -1,6 +1,6 @@
 # Milestone 39 plan: Observability and MCP
 
-Status: **approved by the owner on 2026-11-21** (decisions and extra guardrails recorded at the end). Build order: 39a, 39b, 39c, 39d, stopping after each slice for review. Follows [milestone 38](milestone-38.md). Roadmap entry: [roadmap.md](../roadmap.md#milestone-39-observability-and-mcp).
+Status: **approved by the owner on 2026-11-21** (decisions and extra guardrails recorded at the end). Build order: 39a, 39b, 39c, 39d, stopping after each slice for review. Follows [milestone 38](../archived/milestones/milestone-38.md). Roadmap entry: [roadmap.md](../roadmap.md#milestone-39-observability-and-mcp).
 
 ## What exists today
 - **Go** (milestones 31 and 32): `pkg/agentevents` normalises an agent step (`POST /api/events`; `GET /api/events?traceId=`), `pkg/traces` groups stored events by `traceId` into runs (`GET /api/traces`, `GET /api/traces/{id}`), `pkg/mcp` is a JSON-RPC 2.0 MCP server (protocol `2024-11-05`; tools `publish_event`, `get_recent_events`, `notify_user`, `explain_decision`) served in process at `POST /api/mcp` and over stdio by `cmd/mcp-server`, which calls the REST API with an API key. `pkg/telemetry` reads and writes the W3C `traceparent` header and records spans (`pipeline.Handle`, `policy.Evaluate`, `dedup.Check`, `attention.Classify`, `delivery.Send`) as debug log records. **Spans are not exported anywhere.** The `events.trace_id` and `events.parent_event_id` columns and their index exist.

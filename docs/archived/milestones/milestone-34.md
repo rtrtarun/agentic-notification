@@ -2,7 +2,7 @@
 
 The Java service (`java-server/notification-service`) now runs the same deterministic core as the Go service, on the same database, and a shared HTTP contract checks that the two behave the same. The rest of the Go service (accounts, Attention Intelligence, feedback, learning, traces, MCP) is not in Java yet; it comes in milestones 35 and later.
 
-Approved scope and decisions are in [implementation-sync.md](../implementation-sync.md) section 10.
+Approved scope and decisions are in [implementation-sync.md](../../implementation-sync.md) section 10.
 
 ## 1. Goals
 1. Fix the build: `mvn verify` passes, the Compose build folder is correct, duplicate classes are gone.

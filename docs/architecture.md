@@ -1,6 +1,6 @@
 # Attention Orchestration Platform: Architecture
 
-*Status as of 2026-11-07, branch `feature/signup-and-sign-in`, after Milestone 36 (sign-in first, sign-up with admin approval, Java accounts, versioned images: [milestones/milestone-36.md](milestones/milestone-36.md); the rest of the Go backend and console are described as of Milestone 33; the Java service is in [java-service.md](java-service.md)). Sections 3, 5, 12, 13, 14, 19 and 22 and the terminology table in section 4 are current. The flows, contracts and diagrams in sections 6 to 11 and 15 to 18 describe the original pipeline; later milestones extended them and the milestone documents are the detailed record, so check a milestone document before relying on a detail there.*
+*Status as of 2026-11-21, `master` after milestone 39b. The Go backend and console are described as of milestone 33, with learning score tuning (milestone 38) in the endpoint list; the Java service, which now matches Go for everything in [java-service.md](java-service.md) "What it does today", is described there, and the live status of both is [implementation-sync.md](implementation-sync.md). Sections 3, 5, 12, 13, 14, 19 and 22 and the terminology table in section 4 are current. The flows, contracts and diagrams in sections 6 to 11 and 15 to 18 describe the original pipeline; later milestones extended them and the milestone records (in [archived/milestones/](archived/milestones/)) are the detailed record, so check one before relying on a detail there.*
 *Scope of this document: the Go backend (`go-server/notification-service`) and the web console (`apps/web`), with the Java service and the deployment files described where they touch them.*
 
 > **Notifications are cheap. Human attention is expensive.**
@@ -46,7 +46,7 @@ This is the single architecture reference for the Go backend of the Attention Or
 It is written to be checked against the code. Every component, route, table and environment variable named here exists on `feature-impl` unless it is explicitly marked **planned**.
 
 **In scope:** the Go service, its data model, its interfaces and its operating model.
-**Out of scope:** AI model design (Layer 2 is not built yet), the Java service internals (not reviewed), and commercial/SaaS concerns.
+**Out of scope:** AI model design, the Java service internals (see [java-service.md](java-service.md)), and commercial/SaaS concerns.
 
 ### 1.1 The 30-second mental model
 
@@ -106,10 +106,9 @@ Current documents are indexed in [README.md](README.md). Superseded notes (the o
 | [`implementation-sync.md`](implementation-sync.md) | What is built, proven, open and decided | Current; the status source of truth |
 | [`roadmap.md`](roadmap.md) | What is not built yet | Current |
 | [`java-service.md`](java-service.md) | The Java service: scope, layout, configuration, tests | Current |
-| [`agentpulse.md`](agentpulse.md) | AgentPulse product framing (agent observability) | Product intent; built as milestone 31 ([record](archived/milestones/milestone-31.md)) |
 | [`frontend.md`](frontend.md) | The console: screens, design language, states, structure | Accurate (component-level audit: [archived/design-notes/ui-architecture.md](archived/design-notes/ui-architecture.md)) |
 | [`contract/`](contract/README.md) | Shared HTTP contract both services pass | Current |
-| [`milestones/`](milestones/README.md) | Records for milestones 34 to 36; milestones 1 to 33 are in [archived/milestones/](archived/milestones/) | Accurate for what each delivered |
+| [`milestones/`](milestones/README.md) | The record of the current milestone (39); finished milestones 1 to 38 are in [archived/milestones/](archived/milestones/) | Accurate for what each delivered |
 | [`rules/coding-standards.md`](rules/coding-standards.md) | Enforced and review-time standards | Accurate; items marked `[Gap]` are tracked |
 | [`deployment.md`](deployment.md), [`runbook.md`](runbook.md) | Going live; symptoms, causes, actions | Accurate |
 | [`CHANGELOG.md`](CHANGELOG.md) | Running index of every change | Accurate |
@@ -145,7 +144,7 @@ The product is **four layers around one invariant**.
 - **Reading:** an inbox with state, filters and bulk actions, all notifications, activity, analytics, traces, digests, explanations, live updates, cursor pagination.
 - **The console** (`apps/web`, React and TypeScript): 15 screens including Traces, five colour themes, nine languages (the newest screens are English only), and a complete demo mode that powers the hosted site.
 - **Operations:** Prometheus metrics, structured logs with request IDs, `traceparent` propagation and span logs, retention, graceful shutdown, Docker Compose, Kubernetes manifests, GitHub Pages and GHCR workflows.
-- **Size:** 33 Go packages and two commands, about 690 Go test functions and 238 Vitest tests (counts from the last local run, milestone 36).
+- **Size:** 33 Go packages and two commands, about 690 Go test functions (milestone 36 count), 238 Vitest tests, and 376 Java tests offline (milestone 39b).
 
 ### What is not as complete as it looks
 
@@ -779,7 +778,7 @@ Local statement coverage by package is in [implementation-sync.md](implementatio
 | Tracing | `traceparent` and span logs only; no collector export |
 | Event window | Digests, traces and learning read the newest 1000 events |
 | Console | Newer screens English only; no screens yet for rule predicates, per-rule channels or personal preferences |
-| Java service | Core, `/notify`, rules API, durable queue, Redis dedup and accounts with sign-up built (milestones 34 to 36, 170 tests with PostgreSQL, ten-file shared contract); **the rest to be brought to parity** (planned) |
+| Java service | Matches Go for the core, `/notify`, rules, queue, dedup, accounts, feedback, heuristic Attention Intelligence, learning, traces and MCP (milestones 34 to 39b, 17-file shared contract); SMS, Novu, metrics, inbox, retention, single sign-on and a language model to follow (milestones 40 to 46) |
 | NATS | In the intended stack only; not in Compose and not used |
 | At-least-once critical delivery | If an alert is delivered but saving fails, the redelivery notifies again. Deliberate: a duplicate beats a lost critical alert |
 
@@ -796,7 +795,7 @@ Local statement coverage by package is in [implementation-sync.md](implementatio
 | **Queue and scale** | Move the worker and delivery from polling to NATS (or another queue) if polling stops being enough; share the circuit breaker across replicas |
 | **Observability** | An OpenTelemetry exporter for the spans already recorded |
 | **Product** | Event replay, an agent registry, multi-tenancy and billing for the hosted offering |
-| **Java parity** | Milestones 34 to 36 built the core, `/notify`, the rules API, the durable queue, Redis dedup and the accounts with sign-up, and the shared contract suite (`docs/contract`, replayed by both services). Next: bring the remaining Go features to Java in an order the project owner chooses, extending the contract each time |
+| **Java parity** | Milestones 34 to 39b brought the core, `/notify`, rules, the durable queue, Redis dedup, accounts, feedback and overrides, heuristic Attention Intelligence, learning, agent traces and MCP to Java, with a 17-file shared contract (`docs/contract`, replayed by both services). Next: span export (39c), then channels, metrics, inbox and retention (milestones 40 to 42), extending the contract each time |
 | **Housekeeping** | Reconcile the two `k8s/` directories; raise packages below 80 percent coverage |
 
 ---
@@ -1157,7 +1156,7 @@ Unit tests use in-memory fakes behind the same interfaces as production. Real-in
 | Layer 3: email (SMTP, Novu), Slack, Teams, SMS, retry queue | **Done** | Locally; Novu and SNS against fakes only |
 | Layer 4: feedback, overrides, audit | **Done** | Locally; PostgreSQL stores in CI |
 | Accounts, sessions, roles, OpenID Connect | **Done** | OIDC against a fake provider only |
-| Agent events, traces, MCP server, Python SDK | **Done** | MCP and SDK against local servers; no real MCP client |
+| Agent events, traces, MCP server, Python SDK | **Done** (Go; Java since milestone 39) | MCP and SDK against local servers and Go's stdio server against Java; no real MCP client yet (slice 39d) |
 | PostgreSQL persistence and retention | **Done** | CI |
 | Redis dedup and budget across replicas | **Done** | CI |
 | Security hardening | **Done** | Lint and vulnerability scan passed in CI |
@@ -1166,7 +1165,7 @@ Unit tests use in-memory fakes behind the same interfaces as production. Real-in
 | Docker, compose, Kubernetes, CI | **Done** | The Go and web CI jobs pass the steps that have run; see section 12.2 |
 | Per-person delivery | Not built | Personal digests are stored, not delivered |
 | NATS | Not used | Named in the intended stack only |
-| Java service | Core parity built; the rest planned | `java-service` job green on GitHub (run 42368107261 on commit b562715) |
+| Java service | Parity through milestone 39b; the rest planned (milestones 40 to 46) | `java-service` job green on `master` (run 44879871735) |
 | Event replay, agent registry | Not planned | Vision documents only |
 
 **One-line summary:** the four layers are built end to end and the critical invariant is tested at every layer; the remaining work is proving the parts that have only run against fakes, per-person delivery, and the console screens that are still API-only.
@@ -1215,4 +1214,4 @@ Layer rules held throughout: Layer 1 stays deterministic (rules, preferences and
 
 ### 23b. Milestones 22 to 33
 
-Milestones 22 to 33 are recorded in [CHANGELOG.md](CHANGELOG.md) and in `docs/milestones/milestone-22.md` to `docs/milestones/milestone-33.md`, and summarised in section 12.1. The shared handshake between design and implementation, including decisions, verification gaps and open questions, is [implementation-sync.md](implementation-sync.md).
+Milestones 22 to 38 are recorded in [CHANGELOG.md](CHANGELOG.md) and in `docs/archived/milestones/milestone-22.md` to `milestone-38.md`, and summarised in section 12.1; milestone 39 is in [milestones/](milestones/README.md). The shared handshake between design and implementation, including decisions, verification gaps and open questions, is [implementation-sync.md](implementation-sync.md).

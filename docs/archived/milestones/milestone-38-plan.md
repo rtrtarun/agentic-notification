@@ -1,6 +1,6 @@
 # Milestone 38 plan: Learning
 
-Status: **approved by the owner on 2026-11-10** (decisions recorded at the end). Build order: 38a, then 38b, then 38c, stopping after each slice for review. Follows [milestone 37](milestone-37.md). Roadmap entry: [roadmap.md](../roadmap.md#milestone-38-learning).
+Status: **approved by the owner on 2026-11-10** (decisions recorded at the end). Build order: 38a, then 38b, then 38c, stopping after each slice for review. Follows [milestone 37](milestone-37.md). Roadmap entry: [roadmap.md](../../roadmap.md#milestone-38-learning).
 
 ## Guardrails (hard-coded into the design, not optional)
 1. **Offline or async only.** Learning is a background process that reads stored feedback and writes proposals. It is never a step in the live event path, adds no latency to it, and never calls a model, a network service or a database from it. The live path only reads a small in-memory snapshot, and if that snapshot is missing or stale the event is decided exactly as it is today.

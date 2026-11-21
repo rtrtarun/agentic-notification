@@ -22,11 +22,11 @@ Written for: you (the project owner) and me, so we share one picture of **what t
 | Service completion | 22 to 26 | Durable delivery queue, SMS, accounts and OpenID Connect, feedback and overrides, Attention Intelligence, Ollama and Claude adapters | `pkg/delivery`, `pkg/auth`, `pkg/feedback`, `pkg/overrides`, `pkg/attention` |
 | Verification and depth | 27 to 33 | Store contract tests, learning engine, attention budget and async worker, payload predicates, AgentPulse traces and MCP, Novu, cursor pagination, tracing, Python SDK | `pkg/learning`, `pkg/budget`, `pkg/traces`, `pkg/mcp`, `sdk/python` |
 | Java parity | 34 and 35 | Java service with the same core, `/notify`, rules API, durable queue, Redis dedup, and a shared HTTP contract | `java-server/notification-service/`, `docs/contract/` |
-| Sign-in and sign-up | 36 | Sign-in first console, sign-up with admin approval, real sign-out, accounts in Java, two versioned images, `/health` version | `pkg/auth`, `apps/web/src`, `java-server/`, `VERSION`, [milestones/milestone-36.md](milestones/milestone-36.md) |
-| Deployment | 2026-11-07 | Console on GitHub Pages, Go service on Render with Neon, public images on GitHub Container Registry | [deployment.md](deployment.md#where-we-have-deployed) |
+| Sign-in and sign-up | 36 | Sign-in first console, sign-up with admin approval, real sign-out, accounts in Java, two versioned images, `/health` version | `pkg/auth`, `apps/web/src`, `java-server/`, `VERSION`, [milestones/milestone-36.md](../milestones/milestone-36.md) |
+| Deployment | 2026-11-07 | Console on GitHub Pages, Go service on Render with Neon, public images on GitHub Container Registry | [deployment.md](../../deployment.md#where-we-have-deployed) |
 | Documentation | cleanup | Current docs focused, history in `docs/archived/` | `docs/` |
 
-**Proven versus only built** (details in [implementation-sync.md](implementation-sync.md)): CI is green on commit `acc8b8c` for the Go, Java, web and Python SDK jobs, including PostgreSQL 16 and Redis 7 integration tests. Ollama, Claude, Novu, SNS, OpenID Connect and a real MCP client have run only against fakes.
+**Proven versus only built** (details in [implementation-sync.md](../../implementation-sync.md)): CI is green on commit `acc8b8c` for the Go, Java, web and Python SDK jobs, including PostgreSQL 16 and Redis 7 integration tests. Ollama, Claude, Novu, SNS, OpenID Connect and a real MCP client have run only against fakes.
 
 > **Your notes.** Add anything you did outside what is listed here under this heading, so this file stays the shared source of truth.
 
@@ -207,7 +207,7 @@ classDiagram
 
 ## 5. Feature flows we support today
 
-Each flow names the entry point, the steps and what is stored. "Go" means the Go service; "Java" is marked where it differs. See [implementation-sync.md](implementation-sync.md) for the Go and Java matrix.
+Each flow names the entry point, the steps and what is stored. "Go" means the Go service; "Java" is marked where it differs. See [implementation-sync.md](../../implementation-sync.md) for the Go and Java matrix.
 
 ### 5.1 Webhook ingestion and the critical path (Go, Java)
 Entry: `POST /webhooks/github`. A critical event is decided by a rule alone and is never touched by AI, merging, muting, delay, budget, deferral or the queue.
@@ -416,7 +416,7 @@ flowchart LR
 
 ## 6. Latency bottlenecks and critical findings
 
-Every finding below has an ID (F1 to F14, L1 to L5; F11 to F14 came from milestone 36: shared per-address limits behind a proxy, sessions across sites, one workspace, and CI not running on `master`) and is logged in [implementation-sync.md](implementation-sync.md) section 6, with the open questions and the work in [roadmap.md](roadmap.md) ("Hardening backlog").
+Every finding below has an ID (F1 to F14, L1 to L5; F11 to F14 came from milestone 36: shared per-address limits behind a proxy, sessions across sites, one workspace, and CI not running on `master`) and is logged in [implementation-sync.md](../../implementation-sync.md) section 6, with the open questions and the work in [roadmap.md](../../roadmap.md) ("Hardening backlog").
 
 Method: I read the routing, middleware, pipeline, delivery, migration and configuration code and searched for timeouts, limiters, loops with queries, and secrets. I did **not** read every line or run load tests; each item says what I saw and what I did not verify. No finding rises to CRITICAL in what I inspected.
 
@@ -437,7 +437,7 @@ Method: I read the routing, middleware, pipeline, delivery, migration and config
 | Network and resilience | **Java SSRF check is pre-flight** (resolve, refuse private addresses, then connect), unlike Go's dial-time check, so a DNS answer that changes in between is not covered. The host allow-list is the first defence in both. |
 | Security and stability | **Fails open by design.** If Redis or the classifier fails the event is treated as unique and unthrottled: no alert is hidden, but duplicates or extra interruptions can occur. Correct for this product; worth knowing. |
 | Security and stability | **Java has no accounts.** Its only gate is the API key; admin-only actions are not separated. |
-| Reliability | **Unverified integrations.** Ollama, Claude, Novu, SNS, OpenID Connect, the SMTP success path in Java and a real MCP client have only run against fakes ([implementation-sync.md](implementation-sync.md)). |
+| Reliability | **Unverified integrations.** Ollama, Claude, Novu, SNS, OpenID Connect, the SMTP success path in Java and a real MCP client have only run against fakes ([implementation-sync.md](../../implementation-sync.md)). |
 
 ### LOW / observations
 - **Hardcoded local secrets** appear only in `docker-compose.yml` (`local-dev-key`, `local-dev-webhook-secret`, `SMTP_PASSWORD: password`), labelled for local use; production values come from `k8s/secret.example.yaml` and the environment. Constant-time comparison is used for keys and CSRF (`pkg/server/middleware.go:136`, `pkg/auth/service.go:219`).
@@ -450,7 +450,7 @@ Method: I read the routing, middleware, pipeline, delivery, migration and config
 
 ## 7. Features we may support (not built)
 
-None of these is started. Each needs its AGENTS.md plan and your approval first; the order is yours. The same list, with open questions, is in [roadmap.md](roadmap.md).
+None of these is started. Each needs its AGENTS.md plan and your approval first; the order is yours. The same list, with open questions, is in [roadmap.md](../../roadmap.md).
 
 | Candidate | What it would add | How it would flow (sketch) | Depends on |
 |---|---|---|---|

@@ -2,7 +2,7 @@
 
 The single place that says **what is built, what was proven, what is open and who decided what**. Rule: the code and tests are the truth; if this file disagrees with them, this file is the bug. Update it in the same commit as any milestone work. Never mark something done that has not been run.
 
-*Last updated: 2026-11-07, after milestone 36 (branch `feature/signup-and-sign-in`, not merged yet; the live service still runs the previous release). The full pre-cleanup version, with the decision log for milestones 26 to 33, is in [archived/design-notes/implementation-sync-through-m35.md](archived/design-notes/implementation-sync-through-m35.md).*
+*Last updated: 2026-11-21, after milestone 39b (merged to `master` as PR #21). The version before the 2026-11-07 cleanup, with the decision log for milestones 26 to 33, is [archived/design-notes/implementation-sync-through-m35.md](archived/design-notes/implementation-sync-through-m35.md).*
 
 ## 1. Ground rules
 1. Critical events never touch AI and are never merged, muted, budgeted, delayed, deferred or queued. They are delivered inline. Every milestone adds a test proving it.
@@ -14,28 +14,29 @@ The single place that says **what is built, what was proven, what is open and wh
 
 | Area | Go service | Java service | Detail |
 |---|---|---|---|
-| Webhook ingestion, normalization, rules (strict YAML, locked critical rules) | Yes | Yes | [architecture.md](architecture.md), [java-service.md](java-service.md) |
-| Dedup and threading (memory, or Redis shared across replicas and services) | Yes | Yes | |
-| Critical path (inline, never suppressed) | Yes | Yes (9 invariant tests) | |
-| `/notify`, rules and policies API, durable delivery queue | Yes | Yes | [contract/](contract/README.md) |
+| Webhook ingestion, normalization, rules (strict YAML, locked critical rules) | Yes | Yes (M34) | [architecture.md](architecture.md), [java-service.md](java-service.md) |
+| Dedup and threading (memory, or Redis shared across replicas and services) | Yes | Yes (M34, M35) | |
+| Critical path (inline, never suppressed) | Yes | Yes (16 invariant tests) | |
+| `/notify`, rules and policies API, durable delivery queue | Yes | Yes (M35, contract 07 to 09) | [contract/](contract/README.md) |
 | Rule `payloadMatch` and per-rule `channels` | Yes | Yes (M37a, contract 11) | |
+| Accounts, sessions, roles, sign-up with admin approval | Yes | Yes (M36, contract 10) | |
+| OpenID Connect single sign-on | Yes | **No** (M46) | |
 | Feedback (`/feedback`) and always/never overrides (`/api/overrides`) | Yes | Yes (M37b, contract 12) | Overrides cache is per process in both |
 | Heuristic Attention Intelligence: classifier, explanations, digests, attention budget | Yes | Yes (M37c, contract 13; digests stored, not delivered; no personal digests) | Budget shared through Redis |
-| Learning suggestions (review, apply, dismiss) | Yes | Yes (M38a, contract 14) | Same suggestion id hash; analysis reads the newest events and feedback (F10) |
+| Language-model classification and digest wording (Ollama, Claude) | Yes | **No** (refused at start) | |
+| Quiet-hours preferences, async attention worker | Yes | **No** | |
+| Learning suggestions (review, apply, dismiss) | Yes | Yes (M38a, contract 14) | Same suggestion id hash |
 | Learning score tuning (offline, approval-gated) | Yes (M38b, contract 15) | Yes (M38c, contract 15) | Same arithmetic, ids and shared tables; one running run across both |
-| Language-model classification (Ollama, Claude) | Yes | **No** (refused at start) | |
-| SMS, Novu, metrics, inbox, channels API, retention | Yes | **No** | |
-| Accounts, sessions, roles | Yes | Yes (milestone 36) | [milestones/milestone-36.md](milestones/milestone-36.md) |
-| Sign-up with admin approval (`AUTH_SIGNUP=approval`, default off) | Yes | Yes | same |
-| OpenID Connect single sign-on | Yes | **No** | |
-| Attention Intelligence (heuristic, Ollama, Claude), digests, budgets, async worker | Yes | **No** | |
-| Feedback, overrides, learning engine | Yes | **No** | |
-| AgentPulse traces | Yes | Yes (milestone 39a, contract file 16) |
-| MCP server | Yes | Yes (milestone 39b, contract file 17; Go's stdio `mcp-server` also works against Java) | [agentpulse.md](agentpulse.md) |
+| Agent steps and traces (`/api/events`, `/api/traces`) | Yes | Yes (M39a, contract 16) | Same tie order; chain columns NULL outside a run |
+| MCP server (`/api/mcp`; stdio through Go's `cmd/mcp-server`) | Yes | Yes (M39b, contract 17; the stdio server also works against Java) | Protocol `2024-11-05` |
+| `traceparent` propagation and span logs | Yes | **No** (M39c) | No export to a collector yet in either service |
+| SMS, Novu, channels API | Yes | **No** (M40) | |
+| Metrics and analytics | Yes | **No** (M41) | |
+| Inbox, event retention | Yes | **No** (M42) | |
 | Web console, 15 screens, demo mode | Talks to Go | Not wired | [frontend.md](frontend.md) |
-| Python SDK | Talks to Go | n/a | [../sdk/python/README.md](../sdk/python/README.md) |
+| Python SDK | Talks to Go | Uses only `/api/events`, which Java serves since M39a; not yet run against Java | [../sdk/python/README.md](../sdk/python/README.md) |
 
-Milestones 1 to 33 (Go, console, SDK) are recorded in [archived/milestones/](archived/milestones/); milestones 34 to 36 in [milestones/](milestones/README.md).
+Finished milestone records, 1 to 38, are in [archived/milestones/](archived/milestones/); the current one is in [milestones/](milestones/README.md).
 
 ## 3. Decisions in force
 | Decision | Why | Source |
@@ -45,83 +46,83 @@ Milestones 1 to 33 (Go, console, SDK) are recorded in [archived/milestones/](arc
 | The attention budget is a rolling window, default 10 standard events per hour | Spec; held events are explained and digested, never dropped | M29 |
 | `ATTENTION_ASYNC` defaults off; the worker always runs | Async was not run against a real database | M29 |
 | Java: plain JDK, Jackson, HikariCP, no Spring; Go owns the schema; Java never migrates | Fast start; two migrators on one schema drift | M34 |
+| Every Java feature is held to a shared contract file written and run against Go first; Go is the reference, and a Go behaviour found wrong is fixed in Go in the same slice | "The same" is proven by tests, not by reading code | M34 onward |
 | Java: PostgreSQL classes and the Redis adapter sit outside the 80 percent coverage gate | Owner decision: `mvn verify` must pass with no database; CI runs the integration tests | M35 |
 | Java: critical delivery fails if any channel fails | A partly delivered security alert must be retried, not recorded as sent | M35 |
-| Java: `payloadMatch` and `channels` rules were refused until M37a | Ignoring a condition would widen a rule; now ported with shared fixtures | M35, M37a |
-| Java SSRF check resolves and refuses private addresses just before connecting | The JDK HTTP client has no dial hook | M35 |
-| Two services on one database must be configured alike, or one turns its dispatcher off (`DISPATCHER_ENABLED=false`) | Both run a dispatcher on `delivery_jobs`; found end to end | M35; setting added in PR #13 |
-| Sign-up is off by default; when on, an account starts **pending** and an admin must approve it | One workspace: everyone signed in sees every event, so sign-up cannot grant access by itself | M36 |
+| Java SSRF check resolves and refuses private addresses just before connecting | The JDK HTTP client has no dial hook (finding F6) | M35 |
+| Two services on one database run one queue dispatcher (`DISPATCHER_ENABLED=false` on the other), one digest schedule and one learning schedule | Each runs its own background loops on shared tables | M35, PR #13, M37c, M38 |
+| Sign-up is off by default; when on, an account starts **pending** and an admin must approve it | One workspace: everyone signed in sees every event | M36 |
 | The API key is for services; the console hides it under "Advanced", and signing out forgets it | People use accounts; a key left in the tab is access | M36 |
 | Java hashes passwords as Go does (argon2id, same format, BouncyCastle) | An account made by one service signs in on the other | M36 |
-| Each release also gets a GitHub Release `v<VERSION>`, created by the publish workflow on the default branch (pre-release while `0.x`, never changed once made) | A readable, linkable record of what shipped, with the images and notes, instead of a bare commit hash | after M36 |
-| Images are published for both services (`notification-service`, `notification-service-java`) tagged with the `VERSION` file (`0.36.0`, `0.36`, `latest`, `sha-<commit>`); `/health` returns the version | A running service can be identified without a commit hash. Pre-1.0 the minor number follows the milestone | M36 |
+| Images are published for both services tagged with the `VERSION` file (`0.36.0`, `0.36`, `latest`, `sha-<commit>`); `/health` returns the version; each new version also gets a GitHub Release | A running service can be identified without a commit hash | M36 |
+| Learning is offline or asynchronous and never in the live path; **every adjustment needs an admin's approval**, whatever its size; defaults ±20 points, 5 signals from 2 people, 30-day lookback, 14-day half-life | Predictability and auditability first | M38 plan |
+| Event lists break `created_at` ties by `id` in every store (PostgreSQL and memory, Go and Java) | One order everywhere, so traces match between services and between test and production | M39a |
+| MCP argument refusals are the service's own words (`unknown argument "x"`, `argument limit must be a whole number`), not `encoding/json`'s text | Go's text named Go types and changed between Go versions | M39b |
+| MCP stays on protocol `2024-11-05` and answers it whatever the client proposes; revisit after the real-client check | Parity first | M39 plan |
+| The OTLP span export is hand-written OTLP/HTTP JSON in both services, off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set, and never carries payloads or secrets | No SDK dependency tree; a collector can never slow a request | M39 plan |
 | Placeholder `example` identity renamed to `agentpulse` (Java package, Go module) | Owner decision after the M34 review | M34 |
 | `PROMPT_SPEC.md` stays untracked | It is an input prompt, not product documentation | M27 |
 
 ## 4. Verification gates
 | Gate | Status |
 |---|---|
-| `gofmt`, `go vet`, `go test -cover ./...` | Pass locally (35 packages) |
-| `go test -race -tags integration`, `golangci-lint`, `govulncheck`, PostgreSQL 16, Redis 7 | Not runnable locally; **green in CI** |
-| `npm test -- --run`, `npm run build` | Pass locally (238 Vitest tests, milestone 36) |
-| `mvn verify` (Maven container) | Pass: 156 tests with no database (95.2 percent in gate scope), 170 with PostgreSQL (3 Redis tests skipped) |
-| Go integration tests (`-tags integration`: `pkg/auth`, `pkg/db`, `pkg/server`) against local PostgreSQL 16 | Pass (milestone 36, local) |
-| Both images built locally with the release version; `/health` returned `0.36.0` | Pass (milestone 36, local) |
-| Shared HTTP contract (10 files) | Pass on Go (`TestContract`) and Java (`ContractTest`) |
-| Latest recorded CI | Run 42370422148 on acc8b8c: `java-service`, `go-service`, `web`, `python-sdk` all green. **Milestone 36, first CI run (pull request 11):** `web`, `python-sdk`, `java-service` passed; `go-service` failed on one lint finding (staticcheck QF1001 at `pkg/auth/service.go`), fixed in `ef6433f` and re-checked locally (all packages with integration tests, 87 percent total coverage); the re-run is pending. The "Publish service images" workflow has not run |
+| `gofmt`, `go vet` (with and without `-tags integration`), `go test ./...` | Pass locally (milestone 39b) |
+| Go integration tests (`-tags integration`) against PostgreSQL 16 and Redis 7 | Pass locally (milestone 39a, 2026-11-21) and in CI |
+| `go test -race`, `golangci-lint`, `govulncheck` | Not runnable locally; **green in CI** |
+| `mvn verify` (Maven container) | Offline: 376 tests, 5 skipped, 90.4 percent (milestone 39b). With PostgreSQL and Redis: 387 tests, none skipped, 94.7 percent (milestone 39a) |
+| `npm test -- --run`, `npm run build` | Pass locally (238 Vitest tests, milestone 36; the console has not changed since) |
+| Shared HTTP contract (17 files) | Pass on Go (`TestContract`) and Java (`ContractTest`) |
+| Go and Java on one PostgreSQL | One agent run published through both gave identical traces (M39a); Go's stdio MCP server answered against the Java jar as against Go (M39b) |
+| Latest recorded CI | `master` after merging PR #20 (run 44879506261) and PR #21 (run 44879871735): `go-service`, `java-service`, `web`, `python-sdk` all green. The "Publish service images" workflow succeeded on both merges (runs 44879506245, 44879871660); `VERSION` is still `0.36.0`, so no new GitHub Release was made |
 | Sign-up, approval and sign-in in a browser against the live service | **Not verified** |
-| Real Ollama, Claude, Novu, SNS, OpenID provider, MCP client | **Not verified.** Fakes and replay tests only |
+| Real Ollama, Claude, Novu, SNS, OpenID provider | **Not verified.** Fakes and replay tests only (milestone 48) |
+| Real MCP client, real trace viewer | **Not verified** (slice 39d) |
 
-Coverage is below 80 percent locally in `db`, `event`, `feedback`, `inbox`, `mail`, `delivery`, `rules` and `auth` (mostly PostgreSQL code that only the integration tests reach). It is not scheduled as its own milestone; new code lands at 80 percent or more.
+Coverage is below 80 percent locally in `db`, `event`, `feedback`, `inbox`, `mail`, `delivery`, `rules` and `auth` (mostly PostgreSQL code only the integration tests reach); raising them is housekeeping in milestone 45. New code lands at 80 percent or more.
 
 ## 5. Open questions for the owner
-1. **Two dispatchers on one database.** Answered: a setting, `DISPATCHER_ENABLED` (default true), turns a service's dispatcher off (PR #13). Run one dispatcher per database, or configure both alike.
-2. **Default budget.** `ATTENTION_BUDGET_PER_HOUR=10` silently quiets busy workspaces after upgrade. Keep it, or default to 0 and announce it?
-3. **Java retention.** Port event purging (Go has it), or leave it Go-only?
-4. **Milestone 37 scope** (Attention Intelligence, feedback, learning in Java) needs its AGENTS.md plan and approval. See [roadmap.md](roadmap.md).
-5. **Per-person delivery.** Personal digests are stored and readable but not delivered, because jobs hold no address. Resolve recipients at send time as its own milestone?
-6. **Inbound rate limiting (F1, high).** Add per-key limits on `/webhooks/github`, `/api/events` and `/notify` in middleware, at the edge, or both? Which limits?
-7. **Double send of a critical event (F2, high).** Reserve the event id before delivering (insert as pending, deliver, mark sent) so concurrent redeliveries cannot both send? This changes the critical path, so it needs your approval and a test that proves the invariant still holds.
-8. **Critical delivery inside the request (F3).** Keep it (a failure makes GitHub retry) or accept a bounded wait? Today the slowest channel sets webhook latency (10 s provider timeout, 40 s server write timeout).
-9. ~~**Java accounts (F8).**~~ Built in milestone 36 (no single sign-on, no CORS).
-10. **Read-path window (F10).** Is a 1000-event window acceptable for now, or should inbox, digests and learning query PostgreSQL with keyset pagination and indexes (a change to Go read paths, no schema change expected)?
-11. **Multi-tenancy.** Sign-up approval is the only gate on a single workspace. Is real separation (tenants) planned? It decides whether sign-up can ever be open.
-12. **Email verification and password reset** are not built (no email provider is configured on the live service). Build them with SMTP or Novu, or keep admin-approved accounts and admin-set passwords?
-13. **Trusted proxy (F11).** Behind Render every person shares one address for the per-address limits. Add a trusted-proxy setting that reads `X-Forwarded-For`?
-14. **Versioning policy.** `VERSION` is `0.36.0` (minor follows the milestone before 1.0). Keep that, or start at `1.0.0` for the first hosted release?
+1. **Default budget.** `ATTENTION_BUDGET_PER_HOUR=10` quietly holds events in busy workspaces after an upgrade. Keep it, or default to 0 and announce it?
+2. **Critical delivery inside the request (F3).** Keep it (a failure makes the sender retry) or accept a bounded wait? Today the slowest channel sets webhook latency (10 s provider timeout, 40 s server write timeout).
+3. **Versioning policy.** `VERSION` is `0.36.0` and was not bumped for milestones 37 to 39, so the images published on those merges carry `0.36.0`. Bump per milestone, or start at `1.0.0` for the first hosted release?
+4. **MCP and notifications.** A `tools/call` sent as a JSON-RPC notification (no id) still runs, in both services, and is locked in contract file 17 for parity. Keep it, or refuse to run tools without an id?
 
-## 6. Audit findings (2026-11-07)
-From the reverse-engineering report in [feature-flows.md](feature-flows.md) section 6. They were read from the code, not reproduced; nothing is fixed yet. "Tracked in" says where the work is recorded; an item is closed only when a milestone changes the code and a test proves it.
+Answered or scheduled: two dispatchers (`DISPATCHER_ENABLED`, PR #13); Java retention and the F10 read window (milestone 42); rate limiting F1, the critical double send F2 and the trusted proxy F11 (milestone 44); per-person delivery, email verification and password reset (milestone 46); multi-tenancy (milestone 49). See [roadmap.md](roadmap.md).
 
-| ID | Severity | Finding | Tracked in |
+## 6. Audit findings
+First logged on 2026-11-07 by a reverse-engineering audit of the code (archived as [archived/design-notes/feature-flows.md](archived/design-notes/feature-flows.md), section 6). They were read from the code, not reproduced. An item is closed only when a milestone changes the code and a test proves it.
+
+| ID | Severity | Finding | State |
 |---|---|---|---|
-| F1 | High | No inbound rate limiting on ingestion endpoints (limiters exist only for sign-in, channel tests, model calls, SMS) | Open question 6; [roadmap.md](roadmap.md) "Hardening backlog" |
-| F2 | High | Check-then-act on duplicate deliveries: two concurrent deliveries of one critical event can both send (`pkg/pipeline/pipeline.go`, `Exists` then `Save`) | Open question 7; roadmap "Hardening backlog" |
-| F3 | Medium | Critical delivery runs inside the webhook request; latency equals the slowest channel | Open question 8 |
-| F4 | Medium | Workers poll PostgreSQL, so deferred and retried work waits up to one interval; NATS unused | roadmap "Queue and scale" |
-| F5 | Medium | Two dispatchers on one database can dead-letter a job for a missing channel | Mitigated by `DISPATCHER_ENABLED` (PR #13); open question 1 answered |
-| F6 | Medium | Java SSRF check is pre-flight, not dial-time, so a changing DNS answer is not covered | Section 3 (decision in force); roadmap "Hardening backlog" |
+| F1 | High | No inbound rate limiting on ingestion endpoints (limiters exist only for sign-in, channel tests, model calls, SMS) | Open; milestone 44 (also `/api/mcp` and `/api/traces`) |
+| F2 | High | Check-then-act on duplicate deliveries: two concurrent deliveries of one critical event can both send (`Exists` then `Save` in the pipeline, both services) | Open; milestone 44 (moved from 45 by the owner, 2026-11-21) |
+| F3 | Medium | Critical delivery runs inside the webhook request; latency equals the slowest channel | Open question 2 |
+| F4 | Medium | Workers poll PostgreSQL, so deferred and retried work waits up to one interval; NATS unused | Milestone 47 |
+| F5 | Medium | Two dispatchers on one database can dead-letter a job for a missing channel | Mitigated by `DISPATCHER_ENABLED` (PR #13) |
+| F6 | Medium | Java SSRF check is pre-flight, not dial-time, so a changing DNS answer is not covered | Open; milestone 44 |
 | F7 | Medium | Dedup, budget and classifier fail open by design: no alert is hidden, duplicates or extra interruptions are possible | Accepted behaviour; documented in [architecture.md](architecture.md) |
-| F8 | Medium | Java has no accounts; the API key is its only gate | Open question 9; milestone 36 in roadmap |
-| F9 | Medium | Ollama, Claude, Novu, SNS, OpenID Connect, a real MCP client and the Java SMTP success path have only run against fakes | Section 4; roadmap "Verify against real services" |
-| F10 | Medium | Inbox, digests and learning read the newest 1000 events (`event.List`, `DefaultListLimit`) and all notification states into memory (`pkg/inbox/service.go load`, `pkg/attention/digest.go`, `pkg/learning/service.go`): older events are invisible to them and cost grows per request | Open question 10; [roadmap.md](roadmap.md) "Hardening backlog" |
-| F11 | Medium | Behind a proxy (Render) every person shares one address, so the per-address sign-up limit (20 per hour) and the per-address sign-in lock are shared by everyone (`clientIP` in `pkg/server/auth_handlers.go`, `clientIp` in `AuthApi.java`) | Open question 13; roadmap "Hardening backlog" |
-| F12 | Medium | Sessions need the console and the API on one site, or `AUTH_COOKIE_SAMESITE=none`; browsers that block third-party cookies still refuse it. The console now explains a blocked cookie | Milestone 36 risks; roadmap |
-| F13 | Medium | An approved member sees every event: one workspace, no tenancy | Open question 11; roadmap "Product" |
-| F14 | Medium | CI did not run on `master`, the default branch (it ran on `main`, `feature/**` and pull requests into `main` only), so merges and pull requests into `master` were unchecked. Fixed in milestone 36: `ci.yml` now also runs on `master` and on pull requests into it; takes effect once merged | Fixed in the milestone 36 branch (unverified until it runs) |
-| L1 | Low | Local secrets are hardcoded in `docker-compose.yml` (`local-dev-key`, webhook secret, SMTP password), local use only | Roadmap "Hardening backlog" (secret management) |
-| L2 | Low | Not audited: every list query for an unbounded `SELECT` (list endpoints take `limit` 1 to 500 and cursors) | Roadmap "Hardening backlog" |
-| L3 | Low | Not profiled: inbox and analytics queries for N+1 patterns; none seen in the pipeline path | Roadmap "Hardening backlog" |
-| L4 | Low | Not inspected: query plans of heavy queries (14 indexes exist, lookup indexes are test-guarded) | Roadmap "Hardening backlog" |
-| L5 | Low | Not searched: every discarded error; known non-critical queue and publish failures are logged and ignored on purpose | Roadmap "Hardening backlog" |
+| F8 | Medium | Java had no accounts; the API key was its only gate | **Closed** in milestone 36 |
+| F9 | Medium | Ollama, Claude, Novu, SNS, OpenID Connect, a real MCP client and the Java SMTP success path have only run against fakes | Open; MCP client in slice 39d, the rest in milestone 48 |
+| F10 | Medium | Inbox, digests, learning, traces, MCP reads and explanations read the newest 1000 events into memory (`event.List` in Go, `listRecent` in Java): older events are invisible to them and cost grows per request | Open; milestone 42 |
+| F11 | Medium | Behind a proxy every person shares one address, so the per-address sign-up and sign-in limits are shared by everyone | Open; milestone 44 |
+| F12 | Medium | Sessions need the console and the API on one site, or `AUTH_COOKIE_SAMESITE=none`; browsers that block third-party cookies still refuse it | Open; milestone 44 |
+| F13 | Medium | An approved member sees every event: one workspace, no tenancy | Open; milestone 49 |
+| F14 | Medium | CI did not run on `master`, the default branch | **Closed** in milestone 36; CI runs on `master` (runs above) |
+| L1 | Low | Local secrets are hardcoded in `docker-compose.yml` (`local-dev-key`, webhook secret, SMTP password), local use only | Milestone 44 (secret management) |
+| L2 | Low | Not audited: every list query for an unbounded `SELECT` | Milestone 45 |
+| L3 | Low | Not profiled: inbox and analytics queries for N+1 patterns | Milestone 45 |
+| L4 | Low | Not inspected: query plans of heavy queries | Milestone 45 |
+| L5 | Low | Not searched: every discarded error | Milestone 45 |
 
 ## 7. Owner decisions (dated)
-- **2026-11-07, SDKs for other languages:** document only, do not build. Proposal and open questions in [roadmap.md](roadmap.md).
-- **2026-11-07, milestone 35:** approved and built (`/notify`, rules API, durable queue, Redis dedup, contract files 07 to 09). Milestone 36 is next and still needs a plan.
-- **2026-11-07, after milestone 34:** push and read the Java CI job before milestone 35 (done, green); rename `example` to `agentpulse` (done); milestone 35 scope approved.
-- **2026-11-07, Java parity:** implement the Java service like the Go service, milestone by milestone, with the same guarantees, API, tests and documentation, and a shared contract extended each time. Branch `feature/java-parity`, Maven built through Docker.
-- **2026-11-07, repository secret:** `API_KEY` was added to the GitHub repository secrets so automation can use it; documented, with where every secret lives and how to rotate them, in [deployment.md](deployment.md#secrets-and-variables). No workflow uses it yet.
-- **2026-11-07, sign-up and sign-in (milestone 36):** the console starts at sign-in, the API key is "Advanced", people can ask for an account and an admin approves it (default off, nothing to see until approved), Java gets the same accounts, and both services are published as versioned images starting at `0.36.0`. Approved in conversation; built on `feature/signup-and-sign-in`.
+- **2026-11-21, milestone 39 plan:** approved with four decisions (hand-written OTLP/HTTP JSON exporter in both services; slices 39a to 39d with a stop after each; Claude Code, the MCP Inspector and Jaeger v2 for the real-client check; MCP protocol `2024-11-05` kept) and extra guardrails per slice, recorded in [milestones/milestone-39-plan.md](milestones/milestone-39-plan.md).
+- **2026-11-21, slice 39a review:** the Go tie-break change and Java's fixed order for two bad ids accepted; the in-memory stores to order like PostgreSQL (done). Merged as PR #20.
+- **2026-11-21, roadmap:** F2 moves into milestone 44; milestone 48 is split into 48 Production readiness and 49 Hosted product; milestone 43 records the SDK leanings (hand-written, TypeScript and Go first, `/notify` covered).
+- **2026-11-21, documentation:** finished milestone records (34 to 38), the AgentPulse MVP vision and the milestone 36 audit moved to the archive; current documents brought up to milestone 39b.
+- **2026-11-10, milestone 38 plan:** approved with six decisions (admin approval for every adjustment; the defaults in section 3; per-person preferences left to milestone 46; manual runs by default; Go changes accepted; three slices).
+- **2026-11-10, milestone 37:** Java parity for rule fields, feedback and overrides, and heuristic Attention Intelligence, built in three slices with a contract file each; merged as PR #14.
+- **2026-11-07, milestone 36:** the console starts at sign-in, the API key is "Advanced", sign-up with admin approval (default off), Java gets the same accounts, and both services are published as versioned images from `0.36.0`.
+- **2026-11-07, Java parity:** implement the Java service like the Go service, milestone by milestone, with the same guarantees, API, tests and documentation, and a shared contract extended each time.
+- **2026-11-07, repository secret:** `API_KEY` added to the GitHub repository secrets; where every secret lives and how to rotate them is in [deployment.md](deployment.md#secrets-and-variables).
 - **2026-11-07, documentation cleanup:** keep a few focused, detailed current documents; move superseded ones to [archived/](archived/README.md).
 
 ## 8. Keeping this honest
