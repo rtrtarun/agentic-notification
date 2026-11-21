@@ -211,7 +211,7 @@ Everything in the earlier steps, as one checklist for going live at `https://rtr
 The budget, the worker, agent traces and the Novu provider are implemented. Their PostgreSQL, Redis and real-service parts have only run in CI or against local fakes; try Novu with one test recipient before relying on it. 
 
 ### Claude Desktop or Cursor (built in milestone 31)
-Build the MCP server once with `go build -o bin/mcp-server ./cmd/mcp-server` in `go-server/notification-service`, then configure the client (the same tools are also served over HTTP at `POST /api/mcp`). It has not been tried with a real MCP client yet:
+Build the MCP server once with `go build -o bin/mcp-server ./cmd/mcp-server` in `go-server/notification-service`, then configure the client (the same tools are also served over HTTP at `POST /api/mcp`, by both the Go and the Java service; `AGENTPULSE_URL` may point at either). It has not been tried with a real MCP client yet:
 
 ```json
 {
@@ -264,5 +264,5 @@ Image: `ghcr.io/rtrtarun/agentic-notification/notification-service-java` (publis
 - **Rules:** it refuses rules that use `payloadMatch` or per-rule `channels` (Go only). Do not share a `rules.yaml` that uses them.
 - **Do not run both services against one database with different delivery settings.** Both run a dispatcher on `delivery_jobs`; a queued job goes to whichever claims it first and can be dead-lettered by a service that lacks the channel. Run one implementation per database, or configure both alike.
 - **Accounts (milestone 36):** the same sign-in, sign-up with admin approval and sessions as Go, shared database tables, settings `AUTH_BOOTSTRAP_EMAIL`, `AUTH_BOOTSTRAP_PASSWORD`, `AUTH_SESSION_TTL`, `AUTH_COOKIE_SECURE`, `AUTH_COOKIE_SAMESITE`, `AUTH_SIGNUP`. No CORS and no single sign-on, so the console uses the Go service.
-- **Not in Java:** single sign-on, Attention Intelligence, feedback, learning, traces, MCP, SMS, Novu, metrics, retention. See [java-service.md](java-service.md).
+- **Not in Java:** single sign-on, a language model for Attention Intelligence, SMS, Novu, metrics, retention (agent traces since milestone 39a, MCP since 39b). See [java-service.md](java-service.md).
 - **Smoke checks:** same as the Go service for `/health`, `/events`, `/webhooks/github` and `/notify`; the shared contract in [contract/](contract/README.md) is the reference for behaviour.

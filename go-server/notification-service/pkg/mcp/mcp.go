@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
+	"strings"
 
 	"github.com/agentpulse/notification-service/pkg/agentevents"
 )
@@ -235,13 +237,60 @@ func toolResult(text string, isError bool) map[string]any {
 }
 
 // decodeStrict refuses unknown fields, so a misspelt argument is an error the client can fix.
+// Its messages are the service's own (milestone 39b), not encoding/json's, which name Go
+// types and change between Go versions; the Java service writes the same words.
 func decodeStrict(raw json.RawMessage, into any) error {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(into); err != nil {
-		return fmt.Errorf("%w: %s", ErrInvalid, err.Error())
+		return fmt.Errorf("%w: %s", ErrInvalid, argumentError(err, into))
 	}
 	return nil
+}
+
+const unknownFieldPrefix = `json: unknown field "`
+
+// argumentError turns a decoding error into a plain sentence naming the argument.
+func argumentError(err error, into any) string {
+	var typeErr *json.UnmarshalTypeError
+	if errors.As(err, &typeErr) {
+		if typeErr.Field == "" {
+			return "arguments must be an object"
+		}
+		name, _, _ := strings.Cut(typeErr.Field, ".")
+		return fmt.Sprintf("argument %s must be %s", name, argumentKind(into, name))
+	}
+	if msg := err.Error(); strings.HasPrefix(msg, unknownFieldPrefix) {
+		return fmt.Sprintf("unknown argument %q", strings.TrimSuffix(strings.TrimPrefix(msg, unknownFieldPrefix), `"`))
+	}
+	return "the arguments could not be read"
+}
+
+// argumentKind says in words what the named argument of the struct behind into holds.
+func argumentKind(into any, name string) string {
+	t := reflect.TypeOf(into)
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t.Kind() == reflect.Struct {
+		for i := 0; i < t.NumField(); i++ {
+			tag, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+			if tag != name {
+				continue
+			}
+			switch f := t.Field(i).Type; {
+			case f.Kind() == reflect.String:
+				return "text"
+			case f.Kind() == reflect.Int:
+				return "a whole number"
+			case f.Kind() == reflect.Map:
+				return "an object"
+			case f.Kind() == reflect.Slice && f.Elem().Kind() == reflect.String:
+				return "a list of text"
+			}
+		}
+	}
+	return "of another type"
 }
 
 func checkNotification(n Notification) error {

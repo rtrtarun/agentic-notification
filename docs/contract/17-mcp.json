@@ -1,0 +1,210 @@
+{
+  "name": "the MCP server answers JSON-RPC 2.0 over POST /api/mcp: protocol 2024-11-05, four tools that act only as the REST API does, notifications get 202 with no body",
+  "steps": [
+    {
+      "name": "MCP needs the API key",
+      "request": { "method": "POST", "path": "/api/mcp", "body": { "jsonrpc": "2.0", "id": 1, "method": "ping" } },
+      "expect": { "status": 401, "json": { "error": "missing or invalid api key" } }
+    },
+    {
+      "name": "only POST is allowed",
+      "request": { "method": "GET", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" } },
+      "expect": { "status": 405, "json": { "error": "method not allowed" } }
+    },
+    {
+      "name": "a client proposing a newer protocol is answered with 2024-11-05",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": {
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": { "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "contract", "version": "1" } } } },
+      "expect": { "status": 200, "json": { "jsonrpc": "2.0", "id": 1, "result": {
+        "protocolVersion": "2024-11-05",
+        "capabilities": { "tools": {} },
+        "serverInfo": { "name": "agentpulse", "version": "service" },
+        "instructions": "AgentPulse decides whether people should be interrupted. Publish each agent step with publish_event, read runs with get_recent_events, and ask why with explain_decision."
+      } }, "absent": ["error"] }
+    },
+    {
+      "name": "an older proposed protocol is also answered with 2024-11-05",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": {
+        "jsonrpc": "2.0", "id": "init-2", "method": "initialize", "params": { "protocolVersion": "2024-10-07" } } },
+      "expect": { "status": 200, "json": { "id": "init-2", "result": { "protocolVersion": "2024-11-05" } } }
+    },
+    {
+      "name": "notifications/initialized is a notification: 202 and no body",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "method": "notifications/initialized" } },
+      "expect": { "status": 202, "bodyEmpty": true }
+    },
+    {
+      "name": "any message without an id is a notification and gets no answer",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "method": "ping" } },
+      "expect": { "status": 202, "bodyEmpty": true }
+    },
+    {
+      "name": "a notification for an unknown method also gets no answer",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "method": "no/such/method" } },
+      "expect": { "status": 202, "bodyEmpty": true }
+    },
+    {
+      "name": "ping answers an empty result and echoes a text id",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": "p-1", "method": "ping" } },
+      "expect": { "status": 200, "json": { "jsonrpc": "2.0", "id": "p-1", "result": {} }, "absent": ["error"] }
+    },
+    {
+      "name": "an id of null is a request, not a notification",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": null, "method": "ping" } },
+      "expect": { "status": 200, "json": { "jsonrpc": "2.0", "id": null, "result": {} } }
+    },
+    {"name": "the four tools are listed with exactly Go's descriptions and schemas", "request": {"method": "POST", "path": "/api/mcp", "headers": {"X-API-Key": "contract-key"}, "body": {"jsonrpc": "2.0", "id": 2, "method": "tools/list"}}, "expect": {"status": 200, "json": {"id": 2, "result": {"tools": [{"name": "publish_event", "description": "Publish one step of an agent run into AgentPulse. Rules decide how important it is and whether anyone is interrupted; the severity you give is only data for those rules and cannot make an event critical. Chain steps with traceId and parentEventId.", "inputSchema": {"additionalProperties": false, "properties": {"agentName": {"description": "Which agent is reporting.", "type": "string"}, "eventType": {"description": "What happened, such as agent.plan, tool.call.failed, agent.retry or agent.complete.", "type": "string"}, "id": {"description": "Optional idempotency key. Sending the same id twice stores one event.", "type": "string"}, "metadata": {"description": "Telemetry: step_kind (plan, tool_call, retry, reflect, human_approval, complete), tool_name, attempt, duration_ms, tokens_in, tokens_out, cost_usd, confidence (0 to 1).", "type": "object"}, "parentEventId": {"description": "The step that led to this one. Needs traceId.", "type": "string"}, "payload": {"description": "Any other details to keep with the event.", "type": "object"}, "repository": {"description": "Optional repository or project the run is about.", "type": "string"}, "severity": {"description": "How serious the agent thinks this is. Data for rules only.", "enum": ["info", "low", "medium", "high", "critical"], "type": "string"}, "source": {"description": "Where the event comes from. Defaults to agent.", "type": "string"}, "traceId": {"description": "Identifies the run. Every step of one run shares it.", "type": "string"}}, "required": ["eventType"], "type": "object"}}, {"name": "get_recent_events", "description": "Read the most recent events, newest first, with the attention class and decision for each. Give traceId to read one agent run.", "inputSchema": {"additionalProperties": false, "properties": {"limit": {"description": "How many to return. Defaults to 20.", "maximum": 50, "minimum": 1, "type": "integer"}, "traceId": {"description": "Only events of this run.", "type": "string"}}, "type": "object"}}, {"name": "notify_user", "description": "Send a notification through the platform. It is validated like any other: only allowed hosts and recipient domains are accepted. Use publish_event instead when you want the rules to decide whether anyone should be interrupted.", "inputSchema": {"additionalProperties": false, "properties": {"agent": {"description": "Which agent is sending it.", "type": "string"}, "emailRecipients": {"description": "Email addresses.", "items": {"type": "string"}, "type": "array"}, "message": {"description": "The message body.", "type": "string"}, "slackWebhookUrls": {"description": "Slack incoming webhook URLs on an allowed host.", "items": {"type": "string"}, "type": "array"}, "teamsWebhookUrls": {"description": "Teams webhook URLs on an allowed host.", "items": {"type": "string"}, "type": "array"}, "title": {"description": "A short headline.", "type": "string"}}, "required": ["title", "message"], "type": "object"}}, {"name": "explain_decision", "description": "Say in plain words why an event was handled the way it was: which rule applied, whether a person's choice or a budget held it, and whether a model took part.", "inputSchema": {"additionalProperties": false, "properties": {"eventId": {"description": "The event to explain.", "type": "string"}}, "required": ["eventId"], "type": "object"}}]}}}},
+    {
+      "name": "batches are refused",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "rawBody": "  [{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}]" },
+      "expect": { "status": 200, "json": { "jsonrpc": "2.0", "id": null, "error": { "code": -32600, "message": "batches are not supported; send one request at a time" } }, "absent": ["result"] }
+    },
+    {
+      "name": "text that is not JSON is a parse error",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "rawBody": "nope" },
+      "expect": { "status": 200, "json": { "id": null, "error": { "code": -32700, "message": "the message is not valid JSON" } } }
+    },
+    {
+      "name": "a method that is not text is a parse error, as Go's decoder reports it",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 9, "method": 5 } },
+      "expect": { "status": 200, "json": { "id": null, "error": { "code": -32700, "message": "the message is not valid JSON" } } }
+    },
+    {
+      "name": "the wrong jsonrpc version is an invalid request, with the id echoed",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "1.0", "id": 3, "method": "ping" } },
+      "expect": { "status": 200, "json": { "id": 3, "error": { "code": -32600, "message": "not a JSON-RPC 2.0 request" } } }
+    },
+    {
+      "name": "a missing method is an invalid request",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 4 } },
+      "expect": { "status": 200, "json": { "id": 4, "error": { "code": -32600, "message": "not a JSON-RPC 2.0 request" } } }
+    },
+    {
+      "name": "an unknown method is named",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 5, "method": "resources/list" } },
+      "expect": { "status": 200, "json": { "id": 5, "error": { "code": -32601, "message": "unknown method resources/list" } } }
+    },
+    {
+      "name": "a tool call needs a tool name",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": { "arguments": {} } } },
+      "expect": { "status": 200, "json": { "id": 6, "error": { "code": -32602, "message": "invalid params: a tool name is required" } } }
+    },
+    {
+      "name": "a tool call with no params at all needs a tool name",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 7, "method": "tools/call" } },
+      "expect": { "status": 200, "json": { "id": 7, "error": { "code": -32602, "message": "invalid params: a tool name is required" } } }
+    },
+    {
+      "name": "an unknown tool is named",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 8, "method": "tools/call", "params": { "name": "delete_everything" } } },
+      "expect": { "status": 200, "json": { "id": 8, "error": { "code": -32602, "message": "invalid params: unknown tool delete_everything" } } }
+    },
+    {
+      "name": "publish_event goes through the rules like any event",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 10, "method": "tools/call", "params": { "name": "publish_event", "arguments": {
+        "id": "m-plan", "traceId": "mcp-run", "eventType": "agent.plan", "agentName": "mcp-agent", "metadata": { "step_kind": "plan", "duration_ms": 50 } } } } },
+      "expect": { "status": 200, "json": { "id": 10, "result": { "isError": false, "content": [ { "type": "text" } ] } },
+        "textJson": { "status": "accepted", "eventId": "m-plan", "traceId": "mcp-run", "attentionClass": "standard", "decisionState": { "status": "queued", "reason": "no matching rule, default standard" } } }
+    },
+    {
+      "name": "the same id again is a duplicate",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 11, "method": "tools/call", "params": { "name": "publish_event", "arguments": { "id": "m-plan", "traceId": "mcp-run", "eventType": "agent.plan" } } } },
+      "expect": { "status": 200, "json": { "result": { "isError": false } }, "textJson": { "status": "duplicate", "eventId": "m-plan" } }
+    },
+    {
+      "name": "an agent saying critical through MCP is still only data",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 12, "method": "tools/call", "params": { "name": "publish_event", "arguments": {
+        "id": "m-call", "traceId": "mcp-run", "parentEventId": "m-plan", "eventType": "tool.call.failed", "severity": "critical", "metadata": { "step_kind": "tool_call" } } } } },
+      "expect": { "status": 200, "textJson": { "eventId": "m-call", "attentionClass": "standard" } }
+    },
+    {
+      "name": "a tool call sent as a notification still runs, and gets no answer",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "method": "tools/call", "params": { "name": "publish_event", "arguments": {
+        "id": "m-silent", "traceId": "mcp-run", "parentEventId": "m-call", "eventType": "agent.retry", "metadata": { "step_kind": "retry" } } } } },
+      "expect": { "status": 202, "bodyEmpty": true }
+    },
+    {
+      "name": "a step the rules refuse is a tool error with the validation message",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 13, "method": "tools/call", "params": { "name": "publish_event", "arguments": { "traceId": "mcp-run" } } } },
+      "expect": { "status": 200, "json": { "id": 13, "result": { "isError": true, "content": [ { "type": "text", "text": "invalid request: invalid agent event: eventType is required, such as tool.call.failed" } ] } } }
+    },
+    {
+      "name": "a misspelt argument is named, not ignored",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 14, "method": "tools/call", "params": { "name": "publish_event", "arguments": { "eventTpye": "agent.plan" } } } },
+      "expect": { "status": 200, "json": { "result": { "isError": true, "content": [ { "text": "invalid request: unknown argument \"eventTpye\"" } ] } } }
+    },
+    {
+      "name": "an argument of the wrong type is named in plain words",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 15, "method": "tools/call", "params": { "name": "get_recent_events", "arguments": { "limit": "3" } } } },
+      "expect": { "status": 200, "json": { "result": { "isError": true, "content": [ { "text": "invalid request: argument limit must be a whole number" } ] } } }
+    },
+    {
+      "name": "arguments that are not an object are refused",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 16, "method": "tools/call", "params": { "name": "publish_event", "arguments": "agent.plan" } } },
+      "expect": { "status": 200, "json": { "result": { "isError": true, "content": [ { "text": "invalid request: arguments must be an object" } ] } } }
+    },
+    {
+      "name": "the recent events limit is 1 to 50",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 17, "method": "tools/call", "params": { "name": "get_recent_events", "arguments": { "limit": 51 } } } },
+      "expect": { "status": 200, "json": { "result": { "isError": true, "content": [ { "text": "invalid request: limit must be between 1 and 50" } ] } } }
+    },
+    {
+      "name": "get_recent_events reads one run, newest first, without payloads",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 18, "method": "tools/call", "params": { "name": "get_recent_events", "arguments": { "traceId": "mcp-run" } } } },
+      "expect": { "status": 200, "json": { "result": { "isError": false } }, "textJson": { "events": [
+        { "id": "m-silent", "eventType": "agent.retry", "traceId": "mcp-run", "parentEventId": "m-call" },
+        { "id": "m-call", "parentEventId": "m-plan", "attentionClass": "standard" },
+        { "id": "m-plan", "source": "agent", "agentName": "mcp-agent", "traceId": "mcp-run", "decisionState": { "status": "queued" } }
+      ] } }
+    },
+    {
+      "name": "get_recent_events with a limit",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 19, "method": "tools/call", "params": { "name": "get_recent_events", "arguments": { "traceId": "mcp-run", "limit": 1 } } } },
+      "expect": { "status": 200, "textJson": { "events": [ { "id": "m-silent" } ] } }
+    },
+    {
+      "name": "notify_user needs a title",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 20, "method": "tools/call", "params": { "name": "notify_user", "arguments": { "message": "hello" } } } },
+      "expect": { "status": 200, "json": { "result": { "isError": true, "content": [ { "text": "invalid request: title is required (at most 200 characters)" } ] } } }
+    },
+    {
+      "name": "notify_user goes through the validating notification service",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 21, "method": "tools/call", "params": { "name": "notify_user", "arguments": { "title": "t", "message": "m", "slackWebhookUrls": ["http://hooks.slack.com/x"] } } } },
+      "expect": { "status": 200, "json": { "result": { "isError": true, "content": [ { "text": "invalid request: invalid notification request: webhook url must be an https url without credentials" } ] } } }
+    },
+    {
+      "name": "a valid notification is accepted",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 22, "method": "tools/call", "params": { "name": "notify_user", "arguments": { "title": "Build finished", "message": "All green" } } } },
+      "expect": { "status": 200, "json": { "result": { "isError": false } }, "textJson": { "status": "accepted" } }
+    },
+    {
+      "name": "explain_decision says why, with the model that explained it",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 23, "method": "tools/call", "params": { "name": "explain_decision", "arguments": { "eventId": "m-plan" } } } },
+      "expect": { "status": 200, "json": { "result": { "isError": false } }, "textJson": { "eventId": "m-plan", "model": "heuristic-v1" } }
+    },
+    {
+      "name": "explaining an unknown event is a tool error",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 24, "method": "tools/call", "params": { "name": "explain_decision", "arguments": { "eventId": "nope" } } } },
+      "expect": { "status": 200, "json": { "result": { "isError": true, "content": [ { "text": "invalid request: event not found" } ] } } }
+    },
+    {
+      "name": "explaining needs an event id",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 25, "method": "tools/call", "params": { "name": "explain_decision", "arguments": {} } } },
+      "expect": { "status": 200, "json": { "result": { "isError": true, "content": [ { "text": "invalid request: eventId is required" } ] } } }
+    },
+    {
+      "name": "a rule that uses the agent's severity",
+      "request": { "method": "POST", "path": "/api/rules", "headers": { "X-API-Key": "contract-key" }, "body": {
+        "name": "agent critical", "when": { "source": "agent", "payloadMatch": [ { "field": "severity", "value": "critical" } ] },
+        "then": { "attentionClass": "critical", "reason": "the agent reported a critical step" } } },
+      "expect": { "status": 201 }
+    },
+    {
+      "name": "with that rule a critical step published through MCP is critical and sent inline",
+      "request": { "method": "POST", "path": "/api/mcp", "headers": { "X-API-Key": "contract-key" }, "body": { "jsonrpc": "2.0", "id": 26, "method": "tools/call", "params": { "name": "publish_event", "arguments": {
+        "id": "m-crit", "traceId": "mcp-run-2", "eventType": "agent.failed", "severity": "critical" } } } },
+      "expect": { "status": 200, "textJson": { "eventId": "m-crit", "attentionClass": "critical", "decisionState": { "status": "sent", "matchedRule": "agent critical" } } }
+    }
+  ]
+}
